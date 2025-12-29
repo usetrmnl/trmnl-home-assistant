@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2025-12-29
+
+### Other
+- Adds type-safe JSON serialization utility
+- Attempt release cache tag fix
 ## [0.2.0] - 2025-12-29
 
 ### Other
@@ -36,4 +41,5 @@ Based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main
 ---
 
 [0.2.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.1.0...v0.2.0
+[0.2.1]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.2.0...v0.2.1
 [0.1.0]: https://github.com/usetrmnl/trmnl-home-assistant/releases/tag/v0.1.0

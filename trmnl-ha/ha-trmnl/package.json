@@ -1,6 +1,6 @@
 {
   "name": "ha-trmnl",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Send dashboard screens to your TRMNL",
   "author": "Ikraam Ghoor (based on puppet by Paulus Schoutsen)",
   "license": "Apache-2.0",

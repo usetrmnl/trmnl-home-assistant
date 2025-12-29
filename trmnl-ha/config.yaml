@@ -1,6 +1,6 @@
 name: "TRMNL HA"
 description: "Send dashboard screens to your TRMNL"
-version: "0.2.0"
+version: "0.2.1"
 slug: "trmnl-ha"
 image: ghcr.io/usetrmnl/trmnl-ha-{arch}
 homeassistant_api: true
