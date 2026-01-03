@@ -124,16 +124,18 @@ profile trmnl-ha flags=(attach_disconnected,mediate_deleted,complain) {
   /var/cache/fontconfig/** rw,
 
   # =============================================================================
-  # GRAPHICSMAGICK
+  # IMAGEMAGICK
   # =============================================================================
 
-  /usr/bin/gm rix,
-  /usr/lib/graphicsmagick*/ r,
-  /usr/lib/graphicsmagick*/** rm,
-  /etc/GraphicsMagick/ r,
-  /etc/GraphicsMagick/** r,
-  /usr/share/GraphicsMagick*/ r,
-  /usr/share/GraphicsMagick*/** r,
+  /usr/bin/convert rix,
+  /usr/bin/identify rix,
+  /usr/bin/mogrify rix,
+  /usr/lib/*/ImageMagick*/ r,
+  /usr/lib/*/ImageMagick*/** rm,
+  /etc/ImageMagick*/ r,
+  /etc/ImageMagick*/** r,
+  /usr/share/ImageMagick*/ r,
+  /usr/share/ImageMagick*/** r,
 
   # =============================================================================
   # NETWORK (allow TCP/UDP for HTTP server & webhooks)

@@ -59,7 +59,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     # CJK font support for international dashboards
     fonts-noto-cjk \
     # Image processing for dithering algorithms
-    graphicsmagick
+    imagemagick
 
 # Copy Bun runtime from builder stage
 COPY --from=builder /root/.bun /root/.bun

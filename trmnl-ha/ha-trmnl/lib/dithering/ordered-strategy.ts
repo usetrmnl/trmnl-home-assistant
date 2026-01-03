@@ -28,26 +28,29 @@ import type {
  */
 export class OrderedStrategy implements DitheringStrategy {
   /**
-   * Applies ordered (Bayer matrix) dithering via GraphicsMagick.
+   * Applies ordered (Bayer matrix) dithering via ImageMagick.
    *
-   * @param image - GraphicsMagick image instance (chainable)
+   * @param image - gm image instance (chainable)
    * @param options - Dithering configuration
-   * @returns Modified GraphicsMagick image instance (chainable)
+   * @returns Modified gm image instance (chainable)
    */
-  call(image: State, options: DitheringStrategyOptions = { mode: 'grayscale' }): State {
+  call(
+    image: State,
+    options: DitheringStrategyOptions = { mode: 'grayscale' }
+  ): State {
     const { mode, colors } = options
 
     if (mode === 'grayscale') {
       if (colors === 2) {
-        // Binary (black & white) with Bayer matrix
-        return image.dither(false).monochrome()
+        // Binary (black & white) with Bayer matrix (ordered2x2)
+        return image.out('-dither', 'None').out('-monochrome')
       } else if (colors !== undefined && colors > 2) {
-        // Multi-level grayscale with Bayer matrix
-        return image.dither(false).colors(colors)
+        // Multi-level grayscale with ordered dithering
+        return image.out('-dither', 'None').out('-colors', String(colors))
       }
     } else if (mode === 'color') {
-      // Color palette with Bayer matrix
-      return image.dither(false)
+      // Color palette with ordered dithering
+      return image.out('-dither', 'None')
     }
 
     // Fallback: return image unchanged

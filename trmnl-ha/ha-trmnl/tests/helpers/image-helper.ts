@@ -1,7 +1,7 @@
 /**
  * Image Helper Utilities
  *
- * Generates minimal valid image buffers for testing without GraphicsMagick
+ * Generates minimal valid image buffers for testing without ImageMagick
  * @module tests/helpers/image-helper
  */
 

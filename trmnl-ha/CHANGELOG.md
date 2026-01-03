@@ -45,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial public release of TRMNL Home Assistant Add-on
 - Screenshot capture of Home Assistant dashboards with headless Chromium
 - Advanced e-ink optimized dithering (Floyd-Steinberg, Ordered algorithms)
-- GraphicsMagick image processing with strategy pattern
+- ImageMagick image processing with strategy pattern
 - Bun runtime for high performance and low memory usage
 - Web UI for interactive screenshot preview and configuration
 - Cron-based schedule management with Web UI

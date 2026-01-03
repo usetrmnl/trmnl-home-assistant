@@ -8,7 +8,7 @@ Home Assistant add-on for TRMNL e-ink displays. Captures HA dashboard screenshot
 
 **Runtime:** Bun 1.3.5+ (not Node.js)
 **Language:** TypeScript with strict type checking
-**Image Processing:** GraphicsMagick via `gm` package
+**Image Processing:** ImageMagick via `gm` package
 
 ## Development Commands
 
@@ -52,7 +52,7 @@ HTTP Request → HttpRouter → RequestHandler → Browser (Puppeteer)
                                 ↓
                         screenshotPage()
                                 ↓
-                    processImage() (dithering via GraphicsMagick)
+                    processImage() (dithering via ImageMagick)
                                 ↓
                         HTTP Response (PNG/JPEG/BMP)
 ```
@@ -65,7 +65,7 @@ HTTP Request → HttpRouter → RequestHandler → Browser (Puppeteer)
 | `screenshot.ts` | Browser class - Puppeteer automation, navigation caching, screenshot capture |
 | `scheduler.ts` | Cron-based automation, delegates to CronJobManager + ScheduleExecutor |
 | `lib/http-router.ts` | HTTP routing for UI, API, health, static files |
-| `lib/dithering.ts` | Image processing pipeline via GraphicsMagick |
+| `lib/dithering.ts` | Image processing pipeline via ImageMagick |
 | `lib/scheduleStore.ts` | Schedule CRUD operations with JSON persistence |
 | `lib/logger.ts` | LogTape-based structured logging with module categories |
 | `const.ts` | All configuration constants, environment detection |
@@ -180,5 +180,5 @@ log.error`Failed: ${error.message}`
 
 - Base: `debian:bookworm-slim` (multi-stage build)
 - Chromium for headless browser
-- GraphicsMagick for image processing
+- ImageMagick for image processing
 - Health check: `GET /health` on port 10000

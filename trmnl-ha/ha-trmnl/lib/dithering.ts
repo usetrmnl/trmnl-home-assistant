@@ -3,12 +3,15 @@
  *
  * Provides high-quality image processing optimized for e-ink displays with limited color
  * palettes. Combines dithering, color reduction, level adjustments, and format conversion
- * into a single GraphicsMagick pipeline for optimal performance.
+ * into a single ImageMagick pipeline for optimal performance.
+ *
  *
  * @module lib/dithering
  */
 
-import gm, { State } from 'gm'
+import gmLib, { State } from 'gm'
+
+const gm = gmLib.subClass({ imageMagick: true })
 import { unlinkSync, existsSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -28,7 +31,10 @@ import type {
   ColorPalette,
   GrayscalePalette,
 } from '../types/domain.js'
-import type { DitheringStrategy, DitheringMode } from '../types/dithering-strategy.js'
+import type {
+  DitheringStrategy,
+  DitheringMode,
+} from '../types/dithering-strategy.js'
 import { ditheringLogger } from './logger.js'
 
 const log = ditheringLogger()
@@ -112,14 +118,17 @@ export interface ImageInfo {
 export function validateDitheringOptions(
   options: Partial<DitheringOptions> = {}
 ): ValidatedDitheringOptions {
-  const palette = (SUPPORTED_PALETTES.includes(options.palette!)
-      ? options.palette
-      : 'gray-4')!
+  const palette = (
+    SUPPORTED_PALETTES.includes(options.palette!) ? options.palette : 'gray-4'
+  )!
   const isColor = isColorPalette(palette)
 
   return {
     method:
-      options.method && ['floyd-steinberg', 'ordered', 'none', 'threshold'].includes(options.method)
+      options.method &&
+      ['floyd-steinberg', 'ordered', 'none', 'threshold'].includes(
+        options.method
+      )
         ? options.method
         : 'floyd-steinberg',
     palette,
@@ -141,7 +150,10 @@ export function validateDitheringOptions(
 // =============================================================================
 
 /** Strategy registry mapping method names to strategy instances */
-const DITHERING_STRATEGIES: Record<DitheringMethodWithAlias, DitheringStrategy> = {
+const DITHERING_STRATEGIES: Record<
+  DitheringMethodWithAlias,
+  DitheringStrategy
+> = {
   'floyd-steinberg': new FloydSteinbergStrategy(),
   ordered: new OrderedStrategy(),
   threshold: new ThresholdStrategy(),
@@ -229,7 +241,9 @@ async function applySimpleProcessing(
       }
 
       stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
-      stdout.on('end', () => { resolve(Buffer.concat(chunks)); })
+      stdout.on('end', () => {
+        resolve(Buffer.concat(chunks))
+      })
       stdout.on('error', reject)
       stderr.on('data', (data: Buffer) => {
         log.warn`ImageMagick stderr: ${data.toString()}`
@@ -240,6 +254,7 @@ async function applySimpleProcessing(
 
 /**
  * Converts image buffer to specified format with e-ink optimizations.
+ * Applies aggressive compression while preserving visual quality for e-ink displays.
  */
 export async function convertToFormat(
   imageBuffer: Buffer,
@@ -250,17 +265,23 @@ export async function convertToFormat(
 
     let image: State = gm(imageBuffer)
 
+    // Strip metadata for smaller files
+    image = image.strip()
+
     let imFormat: string = format
     if (format === 'bmp') {
       imFormat = 'bmp3'
     } else if (format === 'jpeg') {
       imFormat = 'jpeg'
-      image = image.quality(75).interlace('Line')
+      // Lower quality for e-ink (no smooth gradients needed)
+      image = image.quality(60).interlace('Line')
     } else if (format === 'png') {
+      // Maximum PNG compression with all optimizations
       image = image
         .define('png:compression-level=9')
         .define('png:compression-filter=5')
         .define('png:compression-strategy=1')
+        .define('png:exclude-chunks=all') // Remove all ancillary chunks
     }
 
     image.stream(imFormat, (err, stdout, stderr) => {
@@ -330,7 +351,8 @@ export async function applyDithering(
   } = options
 
   const isColorPaletteMode = palette && COLOR_PALETTES[palette as ColorPalette]
-  const isGrayscalePaletteMode = palette && GRAYSCALE_PALETTES[palette as GrayscalePalette]
+  const isGrayscalePaletteMode =
+    palette && GRAYSCALE_PALETTES[palette as GrayscalePalette]
 
   let image: State = gm(imageBuffer)
 
@@ -344,6 +366,9 @@ export async function applyDithering(
     image = image.noProfile()
   }
 
+  // Track bit depth for compression (grayscale only)
+  let bitDepth: number | null = null
+
   // Process based on palette type
   if (isColorPaletteMode) {
     image = await applyColorDithering(image, {
@@ -356,12 +381,14 @@ export async function applyDithering(
     const colors = isGrayscalePaletteMode
       ? GRAYSCALE_PALETTES[palette as GrayscalePalette]
       : GRAYSCALE_PALETTES['gray-4']
-    image = applyGrayscaleDithering(image, {
+    const result = applyGrayscaleDithering(image, {
       method,
       colors,
       blackLevel,
       whiteLevel,
     })
+    image = result.image
+    bitDepth = result.bitDepth
   }
 
   // Apply color inversion if requested
@@ -369,21 +396,34 @@ export async function applyDithering(
     image = image.out('-negate')
   }
 
-  // Strip all metadata
+  // Strip all metadata for smaller file size
   image = image.strip()
 
   // Apply format-specific optimizations
   let outputFormat: string = format
   if (format === 'bmp') {
     outputFormat = 'bmp3'
+    // Apply bit depth for BMP - use -monochrome for 1-bit
+    if (bitDepth === 1) {
+      image = image.out('-monochrome')
+    } else if (bitDepth !== null) {
+      image = image.out('-depth', String(bitDepth))
+    }
   } else if (format === 'jpeg') {
     outputFormat = 'jpeg'
-    image = image.quality(75).interlace('Line')
+    // Lower quality for e-ink (no smooth gradients needed)
+    image = image.quality(60).interlace('Line')
   } else if (format === 'png') {
+    if (bitDepth !== null) {
+      image = image.out('-type', 'Grayscale').out('-depth', String(bitDepth))
+      log.debug`Outputting ${bitDepth}-bit grayscale PNG for e-ink`
+    }
+    // PNG compression settings
     image = image
       .define('png:compression-level=9')
       .define('png:compression-filter=5')
       .define('png:compression-strategy=1')
+      .define('png:exclude-chunks=all')
   }
 
   // Stream to final format
@@ -429,13 +469,30 @@ interface GrayscaleDitheringOptions {
 }
 
 /**
+ * Calculate bit depth from number of colors.
+ * Used for PNG/BMP compression optimization.
+ */
+function getBitDepth(colors: number): number {
+  // 2 colors = 1-bit, 4 = 2-bit, 16 = 4-bit, 256 = 8-bit
+  return Math.ceil(Math.log2(colors))
+}
+
+/** Result from grayscale dithering with bit depth info */
+interface GrayscaleDitheringResult {
+  image: State
+  bitDepth: number
+}
+
+/**
  * Applies grayscale dithering with level adjustments.
+ * Returns both the processed image and the bit depth for compression.
  */
 function applyGrayscaleDithering(
   image: State,
   options: GrayscaleDitheringOptions
-): State {
+): GrayscaleDitheringResult {
   const { method, colors, blackLevel, whiteLevel } = options
+  const bitDepth = getBitDepth(colors)
 
   // Convert to grayscale
   image = image.colorspace('Gray')
@@ -445,11 +502,9 @@ function applyGrayscaleDithering(
     const blackPoint = `${blackLevel}%`
     const whitePoint = `${whiteLevel}%`
     // NOTE: gm .level() accepts strings but @types/gm is incomplete
-    image = (image as State & { level(b: string, g: number, w: string): State }).level(
-      blackPoint,
-      1.0,
-      whitePoint
-    )
+    image = (
+      image as State & { level(b: string, g: number, w: string): State }
+    ).level(blackPoint, 1.0, whitePoint)
   }
 
   // Select and apply dithering strategy
@@ -459,7 +514,7 @@ function applyGrayscaleDithering(
     colors,
   })
 
-  return image
+  return { image, bitDepth }
 }
 
 /** Options for color dithering */
@@ -526,7 +581,10 @@ async function applyColorDithering(
 /**
  * Creates a temporary palette file from color array for ImageMagick color remapping.
  */
-function createPaletteFile(colors: string[], outputPath: string): Promise<void> {
+function createPaletteFile(
+  colors: string[],
+  outputPath: string
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const width = colors.length
     const height = 1

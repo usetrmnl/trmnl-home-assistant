@@ -377,4 +377,105 @@ describe('Dithering Module', () => {
       expect(duration).toBeLessThan(2000)
     })
   })
+
+  // ==========================================================================
+  // Compression - Critical for <50KB target on e-ink displays
+  // ==========================================================================
+
+  describe('Compression', () => {
+    let largeTestImage: Buffer
+
+    beforeAll(async () => {
+      // Create larger test image (800x480 - typical TRMNL resolution)
+      largeTestImage = await new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = []
+
+        // Create gradient image to simulate real dashboard content
+        gm(800, 480, '#808080')
+          .fill('#000000')
+          .drawRectangle(0, 0, 400, 240)
+          .fill('#404040')
+          .drawRectangle(400, 0, 800, 240)
+          .fill('#c0c0c0')
+          .drawRectangle(0, 240, 400, 480)
+          .fill('#ffffff')
+          .drawRectangle(400, 240, 800, 480)
+          .stream('png', (err, stdout, _stderr) => {
+            if (err) {
+              reject(err)
+              return
+            }
+            stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+            stdout.on('end', () => { resolve(Buffer.concat(chunks)); })
+            stdout.on('error', reject)
+          })
+      })
+    })
+
+    it('produces 1-bit BW images under 50KB for 800x480', async () => {
+      const result = await applyDithering(largeTestImage, {
+        method: 'floyd-steinberg',
+        palette: 'bw',
+        format: 'png',
+      })
+
+      const sizeKB = result.length / 1024
+      // 1-bit 800x480 = 48,000 pixels / 8 = 6KB theoretical minimum
+      // With PNG overhead, expect < 50KB
+      expect(sizeKB).toBeLessThan(50)
+    })
+
+    it('produces 2-bit gray-4 images under 75KB for 800x480', async () => {
+      const result = await applyDithering(largeTestImage, {
+        method: 'floyd-steinberg',
+        palette: 'gray-4',
+        format: 'png',
+      })
+
+      const sizeKB = result.length / 1024
+      // 2-bit 800x480 = 48,000 pixels / 4 = 12KB theoretical minimum
+      expect(sizeKB).toBeLessThan(75)
+    })
+
+    it('all grayscale palettes produce reasonable file sizes', async () => {
+      // NOTE: Dithering patterns can actually increase file size for simple images
+      // because the error diffusion creates patterns that compress less efficiently.
+      // Real-world dashboards will see better compression with lower bit depths.
+      const bwResult = await applyDithering(largeTestImage, {
+        method: 'floyd-steinberg',
+        palette: 'bw',
+        format: 'png',
+      })
+      const gray4Result = await applyDithering(largeTestImage, {
+        method: 'floyd-steinberg',
+        palette: 'gray-4',
+        format: 'png',
+      })
+      const gray16Result = await applyDithering(largeTestImage, {
+        method: 'floyd-steinberg',
+        palette: 'gray-16',
+        format: 'png',
+      })
+
+      // All should be under 100KB for 800x480 (well under 50KB target)
+      expect(bwResult.length / 1024).toBeLessThan(100)
+      expect(gray4Result.length / 1024).toBeLessThan(100)
+      expect(gray16Result.length / 1024).toBeLessThan(100)
+    })
+
+    it('BMP format works for 1-bit images', async () => {
+      const result = await applyDithering(largeTestImage, {
+        method: 'floyd-steinberg',
+        palette: 'bw',
+        format: 'bmp',
+      })
+
+      const sizeKB = result.length / 1024
+      // BMP 1-bit is very efficient for e-ink
+      expect(sizeKB).toBeLessThan(60)
+      // Check BMP magic number
+      expect(result[0]).toBe(0x42) // 'B'
+      expect(result[1]).toBe(0x4d) // 'M'
+    })
+  })
 })

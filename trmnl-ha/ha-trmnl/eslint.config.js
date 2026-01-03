@@ -46,7 +46,7 @@ export default tseslint.config(
       'no-var': 'error',
       // Allow non-null assertions (useful for test mocks)
       '@typescript-eslint/no-non-null-assertion': 'off',
-      // Allow any in strategic places (GraphicsMagick bindings)
+      // Allow any in strategic places (ImageMagick bindings)
       '@typescript-eslint/no-explicit-any': 'warn',
       // Allow empty functions (often used as no-op defaults)
       '@typescript-eslint/no-empty-function': 'off',
@@ -54,7 +54,7 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': 'off',
       // Disable misused promises warning (callback patterns in gm/puppeteer)
       '@typescript-eslint/no-misused-promises': 'off',
-      // Allow require for dynamic imports in GraphicsMagick
+      // Allow require for dynamic imports in ImageMagick
       '@typescript-eslint/no-require-imports': 'off',
       // Disable nullish coalescing preference (too noisy for existing codebase)
       '@typescript-eslint/prefer-nullish-coalescing': 'off',

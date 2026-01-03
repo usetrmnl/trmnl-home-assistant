@@ -32,26 +32,31 @@ import type {
  */
 export class FloydSteinbergStrategy implements DitheringStrategy {
   /**
-   * Applies Floyd-Steinberg dithering via GraphicsMagick.
+   * Applies Floyd-Steinberg dithering via ImageMagick.
    *
-   * @param image - GraphicsMagick image instance (chainable)
+   * @param image - gm image instance (chainable)
    * @param options - Dithering configuration
-   * @returns Modified GraphicsMagick image instance (chainable)
+   * @returns Modified gm image instance (chainable)
    */
-  call(image: State, options: DitheringStrategyOptions = { mode: 'grayscale' }): State {
+  call(
+    image: State,
+    options: DitheringStrategyOptions = { mode: 'grayscale' }
+  ): State {
     const { mode, colors } = options
 
     if (mode === 'grayscale') {
       if (colors === 2) {
         // Binary (black & white) with error diffusion
-        return image.dither(true).monochrome()
+        return image.out('-dither', 'FloydSteinberg').out('-monochrome')
       } else if (colors !== undefined && colors > 2) {
         // Multi-level grayscale with error diffusion
-        return image.dither(true).colors(colors)
+        return image
+          .out('-dither', 'FloydSteinberg')
+          .out('-colors', String(colors))
       }
     } else if (mode === 'color') {
       // Color palette with error diffusion
-      return image.dither(true)
+      return image.out('-dither', 'FloydSteinberg')
     }
 
     // Fallback: return image unchanged

@@ -9,7 +9,7 @@ The add-on runs inside your Home Assistant instance as a supervised Docker conta
 1. **Authenticates** using a Home Assistant long-lived access token
 2. **Navigates** to your dashboards using headless Chromium
 3. **Captures** screenshots with configurable viewport, theme, and wait times
-4. **Processes** images with e-ink optimized dithering via GraphicsMagick
+4. **Processes** images with e-ink optimized dithering via ImageMagick
 5. **Uploads** via webhooks at scheduled times
 
 The add-on persists schedules and configuration in the `/data` directory (mounted by Home Assistant Supervisor).
@@ -277,8 +277,8 @@ This add-on is based on the [puppet](https://github.com/balloob/home-assistant-a
 
 - **TypeScript Rewrite:** Full rewrite with strict typing and modern ES modules
 - **Runtime Migration:** Migrated from Node.js to Bun for improved performance
-- **Image Processing Rewrite:** Replaced Sharp with GraphicsMagick, implementing strategy pattern for dithering algorithms
+- **Image Processing Rewrite:** Replaced Sharp with ImageMagick, implementing strategy pattern for dithering algorithms
 - **Scheduler System:** Added cron-based automation with Web UI management and webhook integration
 - **Browser Health & Recovery:** Automatic crash detection and two-stage recovery system
-- **Comprehensive Testing:** 90%+ test coverage with unit and integration tests
+- **Comprehensive Testing:** Unit and integration tests
 - **Expanded Device Support:** Grew from 1 to 24+ device presets

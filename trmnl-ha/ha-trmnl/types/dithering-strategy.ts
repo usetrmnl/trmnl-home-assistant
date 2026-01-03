@@ -30,9 +30,9 @@ export interface DitheringStrategy {
   /**
    * Applies dithering algorithm to image
    *
-   * @param image - GraphicsMagick image instance (chainable)
+   * @param image - ImageMagick image instance (chainable)
    * @param options - Dithering configuration
-   * @returns Modified GraphicsMagick image instance (chainable)
+   * @returns Modified ImageMagick image instance (chainable)
    */
   call(image: State, options: DitheringStrategyOptions): State
 }

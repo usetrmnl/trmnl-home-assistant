@@ -28,23 +28,25 @@ import type {
  */
 export class ThresholdStrategy implements DitheringStrategy {
   /**
-   * Applies threshold-based quantization via GraphicsMagick.
+   * Applies threshold-based quantization via ImageMagick.
    *
-   * @param image - GraphicsMagick image instance (chainable)
+   * @param image - gm image instance (chainable)
    * @param options - Dithering configuration
-   * @returns Modified GraphicsMagick image instance (chainable)
+   * @returns Modified gm image instance (chainable)
    */
-  call(image: State, options: DitheringStrategyOptions = { mode: 'grayscale' }): State {
+  call(
+    image: State,
+    options: DitheringStrategyOptions = { mode: 'grayscale' }
+  ): State {
     const { mode, colors } = options
 
     if (mode === 'grayscale') {
       if (colors === 2) {
         // Binary threshold at 50%
-        // NOTE: GM accepts percentage strings, but @types/gm is incomplete
-        return (image as State & { threshold(value: string): State }).threshold('50%')
+        return image.out('-threshold', '50%')
       } else if (colors !== undefined && colors > 2) {
-        // Multi-level grayscale without dithering
-        return image.colors(colors)
+        // Multi-level grayscale without dithering (posterize)
+        return image.out('-posterize', String(colors))
       }
     } else if (mode === 'color') {
       // Color palette without dithering - return unchanged

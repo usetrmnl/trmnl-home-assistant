@@ -55,8 +55,8 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('trmnl-ha/ha-trmnl/bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
-      - name: Install GraphicsMagick
-        run: sudo apt-get update && sudo apt-get install -y graphicsmagick
+      - name: Install ImageMagick
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
 
       - name: Install dependencies
         working-directory: trmnl-ha/ha-trmnl
