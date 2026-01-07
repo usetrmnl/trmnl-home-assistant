@@ -11,11 +11,11 @@ on:
 jobs:
   claude:
     if: |
-      github.actor == 'ikraamg' && (
-        (github.event_name == 'issues') ||
+      (github.event_name == 'issues') ||
+      (github.actor == 'ikraamg' && (
         (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
         (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
-      )
+      ))
     runs-on: ubuntu-latest
     permissions:
       contents: read
