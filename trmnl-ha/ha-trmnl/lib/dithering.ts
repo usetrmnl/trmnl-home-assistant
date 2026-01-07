@@ -12,9 +12,7 @@
 import gmLib, { State } from 'gm'
 
 const gm = gmLib.subClass({ imageMagick: true })
-import { unlinkSync, existsSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+
 import {
   COLOR_PALETTES,
   GRAYSCALE_PALETTES,
@@ -180,6 +178,120 @@ function getStrategy(method: string): DitheringStrategy {
 }
 
 // =============================================================================
+// STREAM UTILITIES
+// =============================================================================
+
+/** Options for streaming gm image to buffer */
+interface StreamOptions {
+  format: string
+  onCleanup?: () => void
+}
+
+/**
+ * Streams a gm image to a Buffer with consistent error handling.
+ * Extracted to reduce duplication across processing functions.
+ */
+function streamToBuffer(
+  image: State,
+  { format, onCleanup }: StreamOptions
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+
+    const cleanup = () => {
+      if (onCleanup) onCleanup()
+    }
+
+    image.stream(format, (err, stdout, stderr) => {
+      if (err) {
+        cleanup()
+        reject(err)
+        return
+      }
+
+      stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+
+      stdout.on('end', () => {
+        cleanup()
+        const buffer = Buffer.concat(chunks)
+        if (buffer.length === 0) {
+          reject(new Error(`ImageMagick produced empty ${format} output`))
+        } else {
+          resolve(buffer)
+        }
+      })
+
+      stdout.on('error', (err: Error) => {
+        cleanup()
+        reject(err)
+      })
+
+      stderr.on('data', (data: Buffer) => {
+        log.warn`ImageMagick stderr: ${data.toString()}`
+      })
+    })
+  })
+}
+
+// =============================================================================
+// FORMAT CONFIGURATION
+// =============================================================================
+
+/** Format-specific configuration for output */
+interface FormatConfig {
+  format: string
+  compressionLevel?: CompressionLevel
+  isColorPalette?: boolean
+  bitDepth?: number | null
+}
+
+/**
+ * Applies format-specific optimizations to a gm image.
+ * Centralized to avoid duplication between processImage and applyDithering.
+ */
+function configureOutputFormat(
+  image: State,
+  {
+    format,
+    compressionLevel = 9,
+    isColorPalette = false,
+    bitDepth,
+  }: FormatConfig
+): { image: State; outputFormat: string } {
+  let outputFormat: string = format
+
+  if (format === 'bmp') {
+    outputFormat = 'bmp3'
+    if (bitDepth === 1) {
+      image = image.out('-monochrome')
+    } else if (bitDepth !== null && bitDepth !== undefined) {
+      image = image.out('-depth', String(bitDepth))
+    }
+  } else if (format === 'jpeg') {
+    outputFormat = 'jpeg'
+    image = image.quality(60).interlace('Line')
+  } else if (format === 'png') {
+    if (bitDepth !== null && bitDepth !== undefined) {
+      image = image.out('-type', 'Grayscale').out('-depth', String(bitDepth))
+      log.debug`Outputting ${bitDepth}-bit grayscale PNG for e-ink`
+    }
+    // NOTE: Skip exclude-chunks for color palettes - removes PLTE chunk
+    if (isColorPalette) {
+      image = image.define(`png:compression-level=${compressionLevel}`)
+    } else {
+      image = image
+        .define(`png:compression-level=${compressionLevel}`)
+        .define('png:compression-filter=5')
+        .define('png:compression-strategy=1')
+        .define('png:exclude-chunks=all')
+    }
+    log.debug`PNG compression level: ${compressionLevel}`
+  }
+
+  return { image, outputFormat }
+}
+
+// =============================================================================
 // IMAGE PROCESSING PIPELINE
 // =============================================================================
 
@@ -230,34 +342,17 @@ async function applySimpleProcessing(
     return imageBuffer
   }
 
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []
-    let image: State = gm(imageBuffer)
+  let image: State = gm(imageBuffer)
 
-    if (rotate && VALID_ROTATIONS.includes(rotate)) {
-      image = image.rotate('white', rotate)
-    }
+  if (rotate && VALID_ROTATIONS.includes(rotate)) {
+    image = image.rotate('white', rotate)
+  }
 
-    if (invert) {
-      image = image.out('-negate')
-    }
+  if (invert) {
+    image = image.out('-negate')
+  }
 
-    image.stream('png', (err, stdout, stderr) => {
-      if (err) {
-        reject(err)
-        return
-      }
-
-      stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
-      stdout.on('end', () => {
-        resolve(Buffer.concat(chunks))
-      })
-      stdout.on('error', reject)
-      stderr.on('data', (data: Buffer) => {
-        log.warn`ImageMagick stderr: ${data.toString()}`
-      })
-    })
-  })
+  return streamToBuffer(image, { format: 'png' })
 }
 
 /**
@@ -268,51 +363,14 @@ export async function convertToFormat(
   imageBuffer: Buffer,
   format: ImageFormat
 ): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []
+  const image: State = gm(imageBuffer).strip()
 
-    let image: State = gm(imageBuffer)
-
-    // Strip metadata for smaller files
-    image = image.strip()
-
-    let imFormat: string = format
-    if (format === 'bmp') {
-      imFormat = 'bmp3'
-    } else if (format === 'jpeg') {
-      imFormat = 'jpeg'
-      // Lower quality for e-ink (no smooth gradients needed)
-      image = image.quality(60).interlace('Line')
-    } else if (format === 'png') {
-      // Maximum PNG compression with all optimizations
-      image = image
-        .define('png:compression-level=9')
-        .define('png:compression-filter=5')
-        .define('png:compression-strategy=1')
-        .define('png:exclude-chunks=all') // Remove all ancillary chunks
-    }
-
-    image.stream(imFormat, (err, stdout, stderr) => {
-      if (err) {
-        reject(err)
-        return
-      }
-
-      stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
-      stdout.on('end', () => {
-        const buffer = Buffer.concat(chunks)
-        if (buffer.length === 0) {
-          reject(new Error(`ImageMagick produced empty ${format} output`))
-        } else {
-          resolve(buffer)
-        }
-      })
-      stdout.on('error', reject)
-      stderr.on('data', (data: Buffer) => {
-        log.warn`ImageMagick stderr: ${data.toString()}`
-      })
-    })
+  const { image: configured, outputFormat } = configureOutputFormat(image, {
+    format,
+    isColorPalette: false,
   })
+
+  return streamToBuffer(configured, { format: outputFormat })
 }
 
 /**
@@ -361,8 +419,6 @@ export async function applyDithering(
     levelsEnabled = false,
     blackLevel = 0,
     whiteLevel = 100,
-    normalize = false,
-    saturationBoost = false,
     invert = false,
     rotate = 0,
     format = 'png',
@@ -370,9 +426,17 @@ export async function applyDithering(
     compressionLevel = 9,
   } = options
 
-  const isColorPaletteMode = palette && COLOR_PALETTES[palette as ColorPalette]
-  const isGrayscalePaletteMode =
+  const isColorPaletteMode = Boolean(
+    palette && COLOR_PALETTES[palette as ColorPalette]
+  )
+  const isGrayscalePaletteMode = Boolean(
     palette && GRAYSCALE_PALETTES[palette as GrayscalePalette]
+  )
+
+  // Smart defaults: enable normalize and saturationBoost for color palettes
+  // unless explicitly set to false by the caller
+  const normalize = options.normalize ?? isColorPaletteMode
+  const saturationBoost = options.saturationBoost ?? isColorPaletteMode
 
   let image: State = gm(imageBuffer)
 
@@ -391,7 +455,7 @@ export async function applyDithering(
 
   // Process based on palette type
   if (isColorPaletteMode) {
-    image = await applyColorDithering(image, {
+    image = applyColorDithering(image, {
       palette: palette as ColorPalette,
       method,
       normalize,
@@ -422,76 +486,30 @@ export async function applyDithering(
     image = image.out('-negate')
   }
 
-  // Strip all metadata for smaller file size
-  image = image.strip()
-
-  // Apply format-specific optimizations
-  let outputFormat: string = format
-  if (format === 'bmp') {
-    outputFormat = 'bmp3'
-    // Apply bit depth for BMP - use -monochrome for 1-bit
-    if (bitDepth === 1) {
-      image = image.out('-monochrome')
-    } else if (bitDepth !== null) {
-      image = image.out('-depth', String(bitDepth))
-    }
-  } else if (format === 'jpeg') {
-    outputFormat = 'jpeg'
-    // Lower quality for e-ink (no smooth gradients needed)
-    image = image.quality(60).interlace('Line')
-  } else if (format === 'png') {
-    if (bitDepth !== null) {
-      image = image.out('-type', 'Grayscale').out('-depth', String(bitDepth))
-      log.debug`Outputting ${bitDepth}-bit grayscale PNG for e-ink`
-    }
-    // PNG compression settings (configurable level, 1-9)
-    image = image
-      .define(`png:compression-level=${compressionLevel}`)
-      .define('png:compression-filter=5')
-      .define('png:compression-strategy=1')
-      .define('png:exclude-chunks=all')
-    log.debug`PNG compression level: ${compressionLevel}`
+  // Strip metadata for smaller files (skip for color palettes - breaks colormap)
+  if (!isColorPaletteMode) {
+    image = image.strip()
   }
 
-  // Stream to final format
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []
-
-    image.stream(outputFormat, (err, stdout, stderr) => {
-      if (err) {
-        reject(err)
-        return
-      }
-
-      stdout.on('data', (chunk: Buffer) => {
-        chunks.push(chunk)
-      })
-
-      stdout.on('end', () => {
-        const buffer = Buffer.concat(chunks)
-        if (buffer.length === 0) {
-          reject(new Error(`ImageMagick produced empty ${format} output`))
-        } else {
-          const sizeKB = (buffer.length / 1024).toFixed(1)
-          const status = buffer.length > 50 * 1024 ? '⚠️ OVER 50KB' : '✓'
-          log.info`Output: ${
-            buffer.length
-          } bytes (${sizeKB}KB) ${status} [depth:${
-            bitDepth ?? 'auto'
-          }, compression:${compressionLevel}]`
-          resolve(buffer)
-        }
-      })
-
-      stdout.on('error', (err: Error) => {
-        reject(err)
-      })
-
-      stderr.on('data', (data: Buffer) => {
-        log.warn`ImageMagick stderr: ${data.toString()}`
-      })
-    })
+  // Apply format-specific optimizations
+  const { image: configured, outputFormat } = configureOutputFormat(image, {
+    format,
+    compressionLevel,
+    isColorPalette: isColorPaletteMode,
+    bitDepth,
   })
+
+  // Stream to final format
+  const buffer = await streamToBuffer(configured, { format: outputFormat })
+
+  // Log output size
+  const sizeKB = (buffer.length / 1024).toFixed(1)
+  const status = buffer.length > 50 * 1024 ? '⚠️ OVER 50KB' : '✓'
+  log.info`Output: ${buffer.length} bytes (${sizeKB}KB) ${status} [depth:${
+    bitDepth ?? 'auto'
+  }, compression:${compressionLevel}]`
+
+  return buffer
 }
 
 /** Options for grayscale dithering */
@@ -569,11 +587,19 @@ interface ColorDitheringOptions {
 
 /**
  * Applies color palette dithering with saturation boost and normalization.
+ * Uses ImageMagick's mpr: (memory program register) to create inline palette,
+ * avoiding temp file creation and cleanup.
+ *
+ * NOTE: This function returns a lazy pipeline (gm State object), not a Promise.
+ * The ImageMagick commands are queued but not executed until the pipeline is
+ * streamed via streamToBuffer(). This is intentional - no async/await needed.
+ *
+ * @see https://github.com/ImageMagick/ImageMagick/discussions/6332
  */
-async function applyColorDithering(
+function applyColorDithering(
   image: State,
   options: ColorDitheringOptions
-): Promise<State> {
+): State {
   const { palette, method, normalize, saturationBoost } = options
   const colors = COLOR_PALETTES[palette]
 
@@ -581,70 +607,40 @@ async function applyColorDithering(
     throw new Error(`Unknown color palette: ${palette}`)
   }
 
+  // Boost saturation for more vivid colors on e-ink
+  // NOTE: Must be applied BEFORE normalize, otherwise normalize cancels the effect
+  if (saturationBoost) {
+    image = image.modulate(110, 150)
+  }
+
   // Normalize brightness for better color mapping
   if (normalize) {
     image = image.normalize()
   }
 
-  // Boost saturation for more vivid colors on e-ink
-  if (saturationBoost) {
-    image = image.modulate(110, 150)
-  }
-
   // Convert to RGB colorspace for color processing
   image = image.colorspace('RGB')
 
-  // Create temporary palette file for remapping
-  const paletteFile = join(tmpdir(), `palette_${Date.now()}.png`)
-
-  try {
-    await createPaletteFile(colors, paletteFile)
-
-    const strategy = getStrategy(method)
-    image = strategy.call(image, {
-      mode: 'color' as DitheringMode,
-    })
-
-    image = image.map(paletteFile)
-    image = image.colorspace('sRGB')
-
-    return image
-  } finally {
-    if (existsSync(paletteFile)) {
-      try {
-        unlinkSync(paletteFile)
-      } catch (_e) {
-        // Ignore cleanup errors
-      }
-    }
+  // Build inline palette using mpr: (memory program register)
+  // This avoids temp file creation - palette exists only in memory
+  // Lifecycle: mpr:palette is scoped to this ImageMagick command and freed on completion
+  image = image.out('(')
+  for (const color of colors) {
+    image = image.out(`xc:${color}`)
   }
-}
+  image = image
+    .out('+append')
+    .out('-write', 'mpr:palette')
+    .out('+delete')
+    .out(')')
 
-/**
- * Creates a temporary palette file from color array for ImageMagick color remapping.
- */
-function createPaletteFile(
-  colors: string[],
-  outputPath: string
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const width = colors.length
-    const height = 1
+  // Apply dithering strategy
+  const strategy = getStrategy(method)
+  image = strategy.call(image, { mode: 'color' as DitheringMode })
 
-    let paletteImage: State = gm(width, height, colors[0])
+  // Remap to the in-memory palette
+  image = image.out('-remap', 'mpr:palette')
+  image = image.colorspace('sRGB')
 
-    colors.forEach((color, i) => {
-      if (i > 0) {
-        paletteImage = paletteImage.fill(color).drawPoint(i, 0)
-      }
-    })
-
-    paletteImage.write(outputPath, (err) => {
-      if (err) {
-        reject(err)
-      } else {
-        resolve()
-      }
-    })
-  })
+  return image
 }

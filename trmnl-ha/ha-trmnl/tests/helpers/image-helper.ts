@@ -1,18 +1,119 @@
 /**
  * Image Helper Utilities
  *
- * Generates minimal valid image buffers for testing without ImageMagick
+ * Generates minimal valid image buffers for testing without ImageMagick,
+ * plus ImageMagick-based colorful test images for integration tests.
+ *
  * @module tests/helpers/image-helper
  */
 
+import gmLib from 'gm'
+
+const gm = gmLib.subClass({ imageMagick: true })
+
 /** Supported image format types */
 type ImageFormat = 'png' | 'jpeg' | 'bmp' | 'unknown'
+
+// =============================================================================
+// IMAGEMAGICK-BASED TEST IMAGES (for integration tests)
+// =============================================================================
+
+/**
+ * Creates a colorful test image with 4 distinct color quadrants
+ * Tests that palette remapping constrains diverse colors
+ */
+export async function createColorfulTestImage(): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+
+    gm(100, 100, '#FFFFFF')
+      .fill('#FF0000')
+      .drawRectangle(0, 0, 49, 49)
+      .fill('#00FF00')
+      .drawRectangle(50, 0, 99, 49)
+      .fill('#0000FF')
+      .drawRectangle(0, 50, 49, 99)
+      .fill('#FFFF00')
+      .drawRectangle(50, 50, 99, 99)
+      .stream('png', (err, stdout, stderr) => {
+        if (err) {
+          reject(err)
+          return
+        }
+        stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+        stdout.on('end', () => resolve(Buffer.concat(chunks)))
+        stdout.on('error', reject)
+        stderr.on('data', () => {})
+      })
+  })
+}
+
+/**
+ * Creates a gradient-like test image with multiple color bands
+ */
+export async function createGradientTestImage(): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+
+    gm(200, 100, '#FF0000')
+      .fill('#CC0033')
+      .drawRectangle(40, 0, 79, 99)
+      .fill('#990066')
+      .drawRectangle(80, 0, 119, 99)
+      .fill('#660099')
+      .drawRectangle(120, 0, 159, 99)
+      .fill('#3300CC')
+      .drawRectangle(160, 0, 199, 99)
+      .stream('png', (err, stdout, stderr) => {
+        if (err) {
+          reject(err)
+          return
+        }
+        stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+        stdout.on('end', () => resolve(Buffer.concat(chunks)))
+        stdout.on('error', reject)
+        stderr.on('data', () => {})
+      })
+  })
+}
+
+/**
+ * Creates a solid color test image
+ * @param color - Hex color (e.g., '#FFA500')
+ * @param size - Image dimensions (default: 50x50)
+ */
+export async function createSolidColorImage(
+  color: string,
+  size: number = 50
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+
+    gm(size, size, color).stream('png', (err, stdout, stderr) => {
+      if (err) {
+        reject(err)
+        return
+      }
+      stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+      stdout.on('end', () => resolve(Buffer.concat(chunks)))
+      stdout.on('error', reject)
+      stderr.on('data', () => {})
+    })
+  })
+}
+
+// =============================================================================
+// MINIMAL BUFFERS (for unit tests without ImageMagick)
+// =============================================================================
 
 /**
  * Creates a minimal valid PNG buffer
  * Uses PNG file format specification with smallest possible image (1x1 pixel)
  */
-export function createPNGBuffer(_width: number = 1, _height: number = 1): Buffer {
+export function createPNGBuffer(
+  _width: number = 1,
+  _height: number = 1
+): Buffer {
   // Minimal 1x1 black PNG (67 bytes)
   // PNG signature + IHDR + IDAT + IEND chunks
   const pngData = Buffer.from([
@@ -102,21 +203,24 @@ export function createJPEGBuffer(): Buffer {
     // SOI (Start of Image)
     0xff, 0xd8,
     // APP0 (JFIF marker)
-    0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00,
-    0x01, 0x00, 0x00,
+    0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00,
+    0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
     // DQT (Define Quantization Table)
-    0xff, 0xdb, 0x00, 0x43, 0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08, 0x07, 0x07, 0x07,
-    0x09, 0x09, 0x08, 0x0a, 0x0c, 0x14, 0x0d, 0x0c, 0x0b, 0x0b, 0x0c, 0x19, 0x12, 0x13, 0x0f,
-    0x14, 0x1d, 0x1a, 0x1f, 0x1e, 0x1d, 0x1a, 0x1c, 0x1c, 0x20, 0x24, 0x2e, 0x27, 0x20, 0x22,
-    0x2c, 0x23, 0x1c, 0x1c, 0x28, 0x37, 0x29, 0x2c, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1f, 0x27,
+    0xff, 0xdb, 0x00, 0x43, 0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08,
+    0x07, 0x07, 0x07, 0x09, 0x09, 0x08, 0x0a, 0x0c, 0x14, 0x0d, 0x0c, 0x0b,
+    0x0b, 0x0c, 0x19, 0x12, 0x13, 0x0f, 0x14, 0x1d, 0x1a, 0x1f, 0x1e, 0x1d,
+    0x1a, 0x1c, 0x1c, 0x20, 0x24, 0x2e, 0x27, 0x20, 0x22, 0x2c, 0x23, 0x1c,
+    0x1c, 0x28, 0x37, 0x29, 0x2c, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1f, 0x27,
     0x39, 0x3d, 0x38, 0x32, 0x3c, 0x2e, 0x33, 0x34, 0x32,
     // SOF0 (Start of Frame)
-    0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11, 0x00,
+    0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11,
+    0x00,
     // DHT (Define Huffman Table)
-    0xff, 0xc4, 0x00, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xff, 0xc4, 0x00, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     // SOS (Start of Scan)
-    0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3f, 0x00, 0xd2, 0xcf, 0x20,
+    0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3f, 0x00, 0xd2, 0xcf,
+    0x20,
     // EOI (End of Image)
     0xff, 0xd9,
   ])
@@ -242,7 +346,10 @@ export function getImageFormat(buffer: Buffer): ImageFormat {
 /**
  * Asserts that a buffer is a valid image of the expected format
  */
-export function assertValidImage(buffer: Buffer, expectedFormat: ImageFormat): void {
+export function assertValidImage(
+  buffer: Buffer,
+  expectedFormat: ImageFormat
+): void {
   const actualFormat = getImageFormat(buffer)
 
   if (actualFormat === 'unknown') {
