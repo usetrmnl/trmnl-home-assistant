@@ -183,6 +183,7 @@ export class MockHAServer {
       '/': 'base.html',
       '/lovelace/0': 'lovelace-0.html',
       '/lovelace/1': 'lovelace-1.html',
+      '/lovelace/slow': 'lovelace-slow.html',
       '/home': 'lovelace-0.html', // Alias for default dashboard
     }
 
