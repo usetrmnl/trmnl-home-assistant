@@ -22,6 +22,7 @@ interface Options {
   chromium_executable?: string
   keep_browser_open?: boolean
   debug_logging?: boolean
+  ignore_ssl_errors?: boolean
 }
 
 /**
@@ -116,6 +117,21 @@ export const keepBrowserOpen: boolean = options.keep_browser_open ?? false
  * Default: true for development, controlled by options in production
  */
 export const debugLogging: boolean = options.debug_logging ?? true
+
+/**
+ * Ignore SSL certificate errors (from HA add-on configuration)
+ * When true, accepts self-signed certificates for HTTPS connections
+ * Required for users with custom SSL certs on their HA instance
+ * Default: false (strict SSL validation)
+ */
+export const ignoreSslErrors: boolean = options.ignore_ssl_errors ?? false
+
+// Apply SSL settings to Node/Bun TLS stack (affects fetch, WebSocket, etc.)
+// NOTE: Must be set before any TLS connections are made
+if (ignoreSslErrors) {
+  process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0'
+  console.log('[SSL] Ignoring SSL certificate errors (configured in add-on settings)')
+}
 
 // =============================================================================
 // SERVER CONFIGURATION
