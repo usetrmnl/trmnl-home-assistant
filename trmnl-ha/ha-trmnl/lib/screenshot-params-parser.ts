@@ -180,7 +180,7 @@ export class ScreenshotParamsParser {
     if (isNaN(whiteLevel) || whiteLevel < 0 || whiteLevel > 100)
       whiteLevel = 100
 
-    const normalize = url.searchParams.has('normalize')
+    const normalize = !url.searchParams.has('no_normalize')
     const saturationBoost = url.searchParams.has('saturation_boost')
 
     let bitDepth: BitDepth | undefined

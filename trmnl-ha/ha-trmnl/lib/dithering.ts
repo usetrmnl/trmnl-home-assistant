@@ -142,7 +142,9 @@ export function validateDitheringOptions(
       options.gammaCorrection !== undefined ? options.gammaCorrection : true,
     blackLevel: Math.max(0, Math.min(100, options.blackLevel ?? 0)),
     whiteLevel: Math.max(0, Math.min(100, options.whiteLevel ?? 100)),
-    normalize: options.normalize !== undefined ? options.normalize : isColor,
+    // NOTE: normalize defaults to true for ALL palettes (including grayscale)
+    // to prevent washed-out gray output. See GitHub issue #9.
+    normalize: options.normalize ?? true,
     saturationBoost:
       options.saturationBoost !== undefined ? options.saturationBoost : isColor,
     rotate: VALID_ROTATIONS.includes(options.rotate as RotationAngle)
@@ -433,9 +435,11 @@ export async function applyDithering(
     palette && GRAYSCALE_PALETTES[palette as GrayscalePalette]
   )
 
-  // Smart defaults: enable normalize and saturationBoost for color palettes
-  // unless explicitly set to false by the caller
-  const normalize = options.normalize ?? isColorPaletteMode
+  // Smart defaults:
+  // - normalize: enabled by default for ALL palettes to prevent gray/washed-out output
+  // - saturationBoost: enabled by default only for color palettes
+  // See GitHub issue #9 for gray background root cause analysis.
+  const normalize = options.normalize ?? true
   const saturationBoost = options.saturationBoost ?? isColorPaletteMode
 
   let image: State = gm(imageBuffer)

@@ -12,7 +12,11 @@ import {
   UpdateSchedule,
   DeleteSchedule,
 } from './api-client.js'
-import type { Schedule, ScheduleInput, ScheduleUpdate } from '../../types/domain.js'
+import type {
+  Schedule,
+  ScheduleInput,
+  ScheduleUpdate,
+} from '../../types/domain.js'
 
 /**
  * Schedule state manager coordinating CRUD operations and selection.
@@ -101,7 +105,7 @@ export class ScheduleManager {
         gammaCorrection: true,
         blackLevel: 0,
         whiteLevel: 100,
-        normalize: false,
+        normalize: true, // Enabled by default to prevent gray/washed-out output (issue #9)
         saturationBoost: false,
       },
     }

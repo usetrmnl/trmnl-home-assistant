@@ -11,7 +11,11 @@ import fs from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Schedule, ScheduleInput, ScheduleUpdate } from '../types/domain.js'
+import type {
+  Schedule,
+  ScheduleInput,
+  ScheduleUpdate,
+} from '../types/domain.js'
 import { schedulerLogger } from './logger.js'
 
 const log = schedulerLogger()
@@ -32,7 +36,10 @@ const fileLocks = new Map<string, Promise<unknown>>()
  * NOTE: This is a proper mutex using promise chaining. Each new operation
  * extends the chain atomically, ensuring serial execution order.
  */
-async function withLock<T>(filePath: string, operation: () => Promise<T>): Promise<T> {
+async function withLock<T>(
+  filePath: string,
+  operation: () => Promise<T>
+): Promise<T> {
   // Get current chain and immediately extend it with our operation
   // This is atomic - no await between get and set
   const previousOperation = fileLocks.get(filePath) ?? Promise.resolve()
@@ -78,10 +85,22 @@ async function fileExists(filePath: string): Promise<boolean> {
  * Ensures backward compatibility when new fields are added.
  */
 function migrateSchedule(schedule: Partial<Schedule>): Schedule {
+  // Migrate dithering.normalize to true for existing schedules (issue #9)
+  // This ensures the UI checkbox matches the backend default behavior
+  // NOTE: dithering can be a boolean (legacy) or an object (current format)
+  const dithering =
+    schedule.dithering && typeof schedule.dithering === 'object'
+      ? {
+          ...schedule.dithering,
+          normalize: schedule.dithering.normalize ?? true,
+        }
+      : schedule.dithering
+
   return {
     ...schedule,
     // Default ha_mode based on whether target_url is set (for existing schedules)
     ha_mode: schedule.ha_mode ?? !schedule.target_url,
+    dithering,
   } as Schedule
 }
 
@@ -143,7 +162,8 @@ export async function getSchedule(
   filePathOrId: string,
   id?: string
 ): Promise<Schedule | null> {
-  const filePath = typeof id === 'string' ? filePathOrId : DEFAULT_SCHEDULES_FILE
+  const filePath =
+    typeof id === 'string' ? filePathOrId : DEFAULT_SCHEDULES_FILE
   const scheduleId = typeof id === 'string' ? id : filePathOrId
 
   const schedules = await loadSchedules(filePath)
@@ -202,8 +222,10 @@ export async function updateSchedule(
 ): Promise<Schedule | null> {
   const filePath =
     typeof updates !== 'undefined' ? filePathOrId : DEFAULT_SCHEDULES_FILE
-  const id = typeof updates !== 'undefined' ? (idOrUpdates as string) : filePathOrId
-  const data = typeof updates !== 'undefined' ? updates : (idOrUpdates as ScheduleUpdate)
+  const id =
+    typeof updates !== 'undefined' ? (idOrUpdates as string) : filePathOrId
+  const data =
+    typeof updates !== 'undefined' ? updates : (idOrUpdates as ScheduleUpdate)
 
   return withLock(filePath, async () => {
     const schedules = await loadSchedules(filePath)
@@ -236,7 +258,8 @@ export async function deleteSchedule(
   filePathOrId: string,
   id?: string
 ): Promise<boolean> {
-  const filePath = typeof id === 'string' ? filePathOrId : DEFAULT_SCHEDULES_FILE
+  const filePath =
+    typeof id === 'string' ? filePathOrId : DEFAULT_SCHEDULES_FILE
   const scheduleId = typeof id === 'string' ? id : filePathOrId
 
   return withLock(filePath, async () => {

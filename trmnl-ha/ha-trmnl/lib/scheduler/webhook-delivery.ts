@@ -61,11 +61,33 @@ export async function uploadToWebhook(
 
   if (!response.ok) {
     log.error`Webhook failed: ${response.status} ${response.statusText}`
+
+    // Extract error message from response body for better UI feedback
+    let errorDetail = ''
     if (responseText) {
-      const truncated = responseText.substring(0, SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH)
+      const truncated = responseText.substring(
+        0,
+        SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH
+      )
       log.error`Response body: ${truncated}`
+
+      // Try to parse JSON error response (e.g., {"error": "Image bit depth..."})
+      try {
+        const parsed = JSON.parse(responseText)
+        if (parsed.error) {
+          errorDetail = ` - ${parsed.error}`
+        } else if (parsed.message) {
+          errorDetail = ` - ${parsed.message}`
+        }
+      } catch {
+        // Not JSON, use raw text if short enough
+        if (responseText.length <= 100) {
+          errorDetail = ` - ${responseText}`
+        }
+      }
     }
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+
+    throw new Error(`HTTP ${response.status}: ${response.statusText}${errorDetail}`)
   }
 
   log.info`Webhook success: ${response.status} ${response.statusText}`

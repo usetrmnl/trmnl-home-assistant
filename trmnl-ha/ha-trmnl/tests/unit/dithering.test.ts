@@ -136,11 +136,25 @@ describe.skip('Dithering Module', () => {
       expect(result.whiteLevel).toBe(100)
     })
 
-    it('enables normalize and saturationBoost for color palettes', () => {
-      const result = validateDitheringOptions({ palette: 'color-7a' })
+    it('enables normalize by default for all palettes (fix for gray background issue #9)', () => {
+      // Grayscale palette - normalize should be true by default
+      const grayscaleResult = validateDitheringOptions({ palette: 'gray-4' })
+      expect(grayscaleResult.normalize).toBe(true)
+      expect(grayscaleResult.saturationBoost).toBe(false) // Only for color
 
-      expect(result.normalize).toBe(true)
-      expect(result.saturationBoost).toBe(true)
+      // Color palette - both normalize and saturationBoost should be true
+      const colorResult = validateDitheringOptions({ palette: 'color-7a' })
+      expect(colorResult.normalize).toBe(true)
+      expect(colorResult.saturationBoost).toBe(true)
+    })
+
+    it('respects explicit normalize=false override', () => {
+      const result = validateDitheringOptions({
+        palette: 'gray-4',
+        normalize: false,
+      })
+
+      expect(result.normalize).toBe(false)
     })
   })
 

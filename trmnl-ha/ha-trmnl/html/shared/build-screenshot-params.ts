@@ -111,9 +111,9 @@ export function buildScreenshotParams(
       }
     }
 
-    // Normalize
-    if (schedule.dithering.normalize) {
-      params.append('normalize', '')
+    // Normalize (default is enabled, so we send no_normalize when disabled)
+    if (schedule.dithering.normalize === false) {
+      params.append('no_normalize', '')
     }
 
     // Saturation boost

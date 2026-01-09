@@ -522,16 +522,27 @@ describe('ScreenshotParamsParser', () => {
       expect(result!.dithering!.whiteLevel).toBe(100)
     })
 
-    it('parses normalize flag when present', () => {
+    it('defaults normalize to true when no_normalize is absent', () => {
       const url = createUrl('/lovelace/0', {
         viewport: '800x600',
         dithering: true,
-        normalize: true,
       })
 
       const result = parser.call(url)
 
       expect(result!.dithering!.normalize).toBe(true)
+    })
+
+    it('parses no_normalize flag to disable normalization', () => {
+      const url = createUrl('/lovelace/0', {
+        viewport: '800x600',
+        dithering: true,
+        no_normalize: true,
+      })
+
+      const result = parser.call(url)
+
+      expect(result!.dithering!.normalize).toBe(false)
     })
 
     it('parses saturationBoost flag when present', () => {
