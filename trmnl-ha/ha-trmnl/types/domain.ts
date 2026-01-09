@@ -39,7 +39,11 @@ export type RotationAngle = 90 | 180 | 270
 export type GrayscalePalette = 'bw' | 'gray-4' | 'gray-16' | 'gray-256'
 
 /** Color palette types for color e-ink displays */
-export type ColorPalette = 'color-6a' | 'color-7a'
+export type ColorPalette =
+  | 'color-6a' // 6-color: R, G, B, Y, Black, White
+  | 'color-7a' // 7-color ACeP/Gallery with Orange
+  | 'color-7b' // 7-color with Cyan (instead of Orange)
+  | 'color-8a' // 8-color Spectra 6 T2000 (both Cyan + Orange)
 
 /** All supported palettes */
 export type Palette = GrayscalePalette | ColorPalette

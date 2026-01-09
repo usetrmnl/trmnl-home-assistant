@@ -371,6 +371,56 @@
     "createdAt": "2025-11-19T00:00:00.000Z",
     "updatedAt": "2025-11-19T00:00:00.000Z"
   },
+  "schedule_7color_cyan": {
+    "name": "7-Color (Cyan)",
+    "cron": "0 * * * *",
+    "dashboard_path": "/lovelace/0",
+    "viewport": {
+      "width": 800,
+      "height": 480
+    },
+    "webhook_url": "",
+    "format": "png",
+    "rotate": 0,
+    "dithering": {
+      "enabled": true,
+      "method": "floyd-steinberg",
+      "palette": "color-7b",
+      "gammaCorrection": true,
+      "blackLevel": 0,
+      "whiteLevel": 100,
+      "normalize": true,
+      "saturationBoost": true
+    },
+    "id": "schedule_7color_cyan",
+    "createdAt": "2025-11-19T00:00:00.000Z",
+    "updatedAt": "2025-11-19T00:00:00.000Z"
+  },
+  "schedule_spectra6_t2000": {
+    "name": "Spectra 6 T2000 (8-color)",
+    "cron": "0 * * * *",
+    "dashboard_path": "/lovelace/0",
+    "viewport": {
+      "width": 800,
+      "height": 480
+    },
+    "webhook_url": "",
+    "format": "png",
+    "rotate": 0,
+    "dithering": {
+      "enabled": true,
+      "method": "floyd-steinberg",
+      "palette": "color-8a",
+      "gammaCorrection": true,
+      "blackLevel": 0,
+      "whiteLevel": 100,
+      "normalize": true,
+      "saturationBoost": true
+    },
+    "id": "schedule_spectra6_t2000",
+    "createdAt": "2025-11-19T00:00:00.000Z",
+    "updatedAt": "2025-11-19T00:00:00.000Z"
+  },
   "schedule_inkplate_10": {
     "name": "Inkplate 10",
     "cron": "0 * * * *",

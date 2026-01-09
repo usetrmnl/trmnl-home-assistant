@@ -176,24 +176,50 @@ export const VALID_ROTATIONS: readonly RotationAngle[] = [90, 180, 270] as const
 
 /**
  * Color palette definitions for e-ink displays
+ *
+ * @see https://www.eink.com/brand/detail/Spectra6
+ * @see https://shop.pimoroni.com/products/inky-impression-7-3
  */
 export const COLOR_PALETTES: ColorPaletteDefinition = {
+  // 6-color: Basic RGB + Yellow + Black/White
   'color-6a': [
-    '#FF0000',
-    '#00FF00',
-    '#0000FF',
-    '#FFFF00',
-    '#000000',
-    '#FFFFFF',
+    '#000000', // Black
+    '#FFFFFF', // White
+    '#FF0000', // Red
+    '#00FF00', // Green
+    '#0000FF', // Blue
+    '#FFFF00', // Yellow
   ],
+  // 7-color ACeP/Gallery with Orange (Waveshare, Pimoroni Inky Impression)
   'color-7a': [
-    '#000000',
-    '#FFFFFF',
-    '#FF0000',
-    '#00FF00',
-    '#0000FF',
-    '#FFFF00',
-    '#FFA500',
+    '#000000', // Black
+    '#FFFFFF', // White
+    '#FF0000', // Red
+    '#00FF00', // Green
+    '#0000FF', // Blue
+    '#FFFF00', // Yellow
+    '#FF8C00', // Orange (Dark Orange - per Pimoroni spec)
+  ],
+  // 7-color with Cyan (for displays that have Cyan instead of Orange)
+  'color-7b': [
+    '#000000', // Black
+    '#FFFFFF', // White
+    '#FF0000', // Red
+    '#00FF00', // Green
+    '#0000FF', // Blue
+    '#FFFF00', // Yellow
+    '#00FFFF', // Cyan
+  ],
+  // 8-color Spectra 6 T2000 (2025+) - has both Cyan AND Orange
+  'color-8a': [
+    '#000000', // Black
+    '#FFFFFF', // White
+    '#FF0000', // Red
+    '#00FF00', // Green
+    '#0000FF', // Blue
+    '#FFFF00', // Yellow
+    '#00FFFF', // Cyan
+    '#FF8C00', // Orange
   ],
 }
 
