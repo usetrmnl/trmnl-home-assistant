@@ -20,14 +20,20 @@ OPTIONS_MOUNT=""
 echo -e "${BLUE}🚀 Starting TRMNL HA container...${NC}"
 echo ""
 
-# Check for options-dev.json and mount it if present
+# Check for options-dev.json, auto-copy from example if missing
+OPTIONS_EXAMPLE="${SCRIPT_DIR}/../options-dev.json.example"
+if [ ! -f "$OPTIONS_DEV" ] && [ -f "$OPTIONS_EXAMPLE" ]; then
+  echo -e "${YELLOW}📄 Creating options-dev.json from example...${NC}"
+  cp "$OPTIONS_EXAMPLE" "$OPTIONS_DEV"
+  echo "   Please configure ${OPTIONS_DEV} with your settings"
+  echo ""
+fi
+
 if [ -f "$OPTIONS_DEV" ]; then
   echo -e "${GREEN}📄 Using local options-dev.json${NC}"
   OPTIONS_MOUNT="-v ${OPTIONS_DEV}:/data/options.json:ro"
 else
-  echo -e "${YELLOW}⚠️  No options-dev.json found${NC}"
-  echo "   Copy options-dev.json.example to options-dev.json and configure it"
-  echo "   The file should be at: ${OPTIONS_DEV}"
+  echo -e "${YELLOW}⚠️  No options-dev.json found and no example to copy${NC}"
   echo ""
 fi
 

@@ -25,9 +25,16 @@ echo ""
 # CONFIGURATION CHECK
 # =============================================================================
 
+OPTIONS_EXAMPLE="${APP_DIR}/options-dev.json.example"
+if [ ! -f "$OPTIONS_DEV" ] && [ -f "$OPTIONS_EXAMPLE" ]; then
+  echo -e "${YELLOW}📄 Creating options-dev.json from example...${NC}"
+  cp "$OPTIONS_EXAMPLE" "$OPTIONS_DEV"
+  echo "   Please configure ${OPTIONS_DEV} with your settings"
+  echo ""
+fi
+
 if [ ! -f "$OPTIONS_DEV" ]; then
-  echo -e "${YELLOW}⚠️  No options-dev.json found${NC}"
-  echo "   Copy options-dev.json.example to options-dev.json"
+  echo -e "${YELLOW}⚠️  No options-dev.json found and no example to copy${NC}"
   exit 1
 fi
 
