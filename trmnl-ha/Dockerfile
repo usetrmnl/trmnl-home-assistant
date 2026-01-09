@@ -10,15 +10,16 @@ FROM debian:bookworm-slim AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install Bun and prepare dependencies
-# NOTE: Using BuildKit cache mounts for apt to speed up rebuilds
+# Install Bun (baseline version for maximum CPU compatibility)
+# NOTE: Using baseline build to support CPUs without AVX2 (e.g., Synology DS918+, older Proxmox VMs)
+# See: https://github.com/usetrmnl/trmnl-home-assistant/issues/5
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     curl \
     unzip \
     ca-certificates \
-    && curl -fsSL https://bun.sh/install | bash
+    && curl -fsSL https://bun.sh/install | BUN_RUNTIME=baseline bash
 
 # Add Bun to PATH for this stage
 ENV BUN_INSTALL="/root/.bun"
