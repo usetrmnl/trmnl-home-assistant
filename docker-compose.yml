@@ -1,0 +1,88 @@
+# TRMNL HA - Standalone Docker Compose Setup
+# For Home Assistant Container (Docker) installations that don't support add-ons
+#
+# Quick Start:
+#   1. Copy .env.example to .env
+#   2. Edit .env with your Home Assistant URL and token
+#   3. Run: docker compose up -d
+#   4. Access UI: http://localhost:10000
+
+services:
+  trmnl-ha:
+    image: ghcr.io/usetrmnl/trmnl-ha-amd64:latest
+    container_name: trmnl-ha
+    restart: unless-stopped
+
+    # Environment variables for configuration (simpler than options.json)
+    environment:
+      # Home Assistant connection
+      - HA_URL=${HA_URL:-http://homeassistant:8123}
+      - HA_TOKEN=${HA_TOKEN}
+
+      # Browser settings
+      - KEEP_BROWSER_OPEN=${KEEP_BROWSER_OPEN:-false}
+      - BROWSER_TIMEOUT=${BROWSER_TIMEOUT:-60000}
+      - MAX_SCREENSHOTS_BEFORE_RESTART=${MAX_SCREENSHOTS_BEFORE_RESTART:-100}
+
+      # Logging
+      - DEBUG_LOGGING=${DEBUG_LOGGING:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+    # Port mapping
+    ports:
+      - "${PORT:-10000}:10000"
+
+    # Data persistence
+    volumes:
+      - trmnl-data:/data
+      - trmnl-logs:/app/logs
+      - trmnl-output:/app/output
+
+    # Resource limits (recommended)
+    mem_limit: 1g
+    mem_reservation: 512m
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+    # Network configuration
+    # If your HA container is on a custom network, add it here:
+    # networks:
+    #   - homeassistant
+
+    # Security options (optional hardening)
+    security_opt:
+      - no-new-privileges:true
+
+    # Read-only root filesystem (data written to volumes only)
+    # Uncomment if you want extra security:
+    # read_only: true
+    # tmpfs:
+    #   - /tmp
+    #   - /app/logs
+    #   - /app/output
+
+volumes:
+  trmnl-data:
+    driver: local
+  trmnl-logs:
+    driver: local
+  trmnl-output:
+    driver: local
+
+# If your Home Assistant container uses a custom network, define it here:
+# networks:
+#   homeassistant:
+#     external: true

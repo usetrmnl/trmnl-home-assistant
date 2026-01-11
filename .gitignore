@@ -1,2 +1,5 @@
 trmnl-ha/ha-trmnl/data/schedules.json
 trmnl-ha/ha-trmnl/output/**/*
+
+# Docker Compose environment files (contains secrets)
+.env

@@ -27,19 +27,32 @@ interface Options {
 /**
  * Searches for and loads the first available options file
  * Priority: local dev file first, then add-on data path
+ * Falls back to empty options if no file found (allows env-only config)
  */
 const optionsFile = ['./options-dev.json', '/data/options.json'].find(
   existsSync
 )
 
-if (!optionsFile) {
-  console.error(
-    'No options file found. Please copy options-dev.json.example to options-dev.json'
-  )
-  process.exit(1)
-}
+let options: Options = {}
 
-const options = JSON.parse(readFileSync(optionsFile, 'utf-8')) as Options
+if (optionsFile) {
+  options = JSON.parse(readFileSync(optionsFile, 'utf-8')) as Options
+} else {
+  // No options file found - check if running with environment variables
+  const hasEnvConfig = process.env['HA_URL'] || process.env['HA_TOKEN']
+  if (!hasEnvConfig) {
+    console.error(
+      'No configuration found. Either:\n' +
+        '  1. Copy options-dev.json.example to options-dev.json (for dev)\n' +
+        '  2. Set HA_URL and HA_TOKEN environment variables (for docker-compose)\n' +
+        '  3. Use docker-compose.yml with .env file (recommended for Docker Container users)'
+    )
+    process.exit(1)
+  }
+  console.log(
+    '[Config] Using environment variables (no options.json file found)'
+  )
+}
 
 // =============================================================================
 // ENVIRONMENT DETECTION
@@ -69,21 +82,23 @@ if (useMockHA) {
 
 /**
  * Home Assistant base URL
+ * Priority: Environment variable > options file > defaults
  * Automatically switches to mock server when MOCK_HA=true
  */
 export const hassUrl: string = useMockHA
   ? 'http://localhost:8123' // Mock HA server
-  : isAddOn
-  ? options.home_assistant_url || 'http://homeassistant:8123'
-  : options.home_assistant_url || 'http://localhost:8123'
+  : process.env['HA_URL'] ||
+    options.home_assistant_url ||
+    (isAddOn ? 'http://homeassistant:8123' : 'http://localhost:8123')
 
 /**
  * Long-lived access token for Home Assistant authentication
- * Uses mock token when MOCK_HA=true, otherwise reads from options
+ * Priority: Environment variable > options file
+ * Uses mock token when MOCK_HA=true
  */
 export const hassToken: string | undefined = useMockHA
   ? 'mock-token-for-testing' // Any token works with mock server
-  : options.access_token
+  : process.env['HA_TOKEN'] || options.access_token
 
 // Only warn about missing token when running as HA add-on (where it's required)
 // Standalone users may intentionally skip the token for generic URL screenshots
@@ -107,15 +122,26 @@ export const chromiumExecutable: string = isAddOn
 
 /**
  * Keep browser instance open between requests for performance
+ * Priority: Environment variable > options file > default (false)
  */
-export const keepBrowserOpen: boolean = options.keep_browser_open ?? false
+export const keepBrowserOpen: boolean =
+  process.env['KEEP_BROWSER_OPEN'] === 'true'
+    ? true
+    : process.env['KEEP_BROWSER_OPEN'] === 'false'
+    ? false
+    : options.keep_browser_open ?? false
 
 /**
- * Enable debug logging (from HA add-on configuration)
+ * Enable debug logging (from HA add-on configuration or environment)
+ * Priority: Environment variable > options file > default (true)
  * When true, sets log level to 'debug' for verbose output
- * Default: true for development, controlled by options in production
  */
-export const debugLogging: boolean = options.debug_logging ?? true
+export const debugLogging: boolean =
+  process.env['DEBUG_LOGGING'] === 'true'
+    ? true
+    : process.env['DEBUG_LOGGING'] === 'false'
+    ? false
+    : options.debug_logging ?? true
 
 // =============================================================================
 // SERVER CONFIGURATION
