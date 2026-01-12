@@ -16,14 +16,94 @@ Schedules and configuration persist in `/data` (mounted by Home Assistant Superv
 
 ## Quick Start
 
-### Home Assistant Add-on
+### Home Assistant Add-on (HA OS)
 
 1. Install from the add-on store
 2. Create token: **Profile** → **Long-Lived Access Tokens** → **Create Token**
 3. Add token to add-on configuration
 4. Start add-on and open Web UI
 
-### Docker (Standalone)
+> **⚠️ Connection Issues?** If you can't connect, check the `home_assistant_url` in your add-on config. Use the default `http://homeassistant:8123` (internal Docker name) — NOT `homeassistant.local:8123` (mDNS name). If that still fails, use your device's IP address: `http://192.168.x.x:8123`
+
+### Home Assistant Container (Docker)
+
+> **Note:** HA Container doesn't have an add-on store. Like other add-ons (Mosquitto, Zigbee2MQTT, Node-RED), you run TRMNL HA as a separate container alongside Home Assistant.
+
+> **⚠️ Important: Use IP Address, Not Hostname**
+>
+> You MUST use your device's actual IP address (e.g., `http://192.168.1.100:8123`), NOT `homeassistant.local:8123`. The `.local` mDNS name doesn't resolve from inside Docker containers.
+>
+> **Find your IP:** Run `hostname -I` on Linux/Pi, or check your router's device list.
+
+**Add to your existing `docker-compose.yml`:**
+
+Most HA Container users manage services via docker-compose. Just add TRMNL HA as another service:
+
+```yaml
+services:
+  # Your existing HA service (typically uses network_mode: host)
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    volumes:
+      - /PATH_TO_YOUR_CONFIG:/config
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+
+  # Add TRMNL HA alongside your other services
+  trmnl-ha:
+    image: ghcr.io/usetrmnl/trmnl-ha-amd64:latest
+    # ARM64 (Pi 4/5, Apple Silicon): ghcr.io/usetrmnl/trmnl-ha-aarch64:latest
+    container_name: trmnl-ha
+    restart: unless-stopped
+    ports:
+      - "10000:10000"
+    environment:
+      # Use your host's IP since HA uses network_mode: host (see note below)
+      - HOME_ASSISTANT_URL=http://192.168.1.x:8123
+      - ACCESS_TOKEN=your_long_lived_access_token
+      - KEEP_BROWSER_OPEN=true
+      - TZ=America/New_York
+    volumes:
+      - ./trmnl-data:/data
+
+volumes:
+  trmnl-data:
+```
+
+Then run:
+```bash
+docker compose up -d
+```
+
+**Or quick setup with `docker run`:**
+
+```bash
+docker run -d --name trmnl-ha \
+  --restart unless-stopped \
+  -e HOME_ASSISTANT_URL=http://192.168.1.x:8123 \
+  -e ACCESS_TOKEN=your_long_lived_access_token \
+  -e TZ=America/New_York \
+  -p 10000:10000 \
+  -v ./trmnl-data:/data \
+  ghcr.io/usetrmnl/trmnl-ha-amd64:latest
+```
+
+**Environment Variables:**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `HOME_ASSISTANT_URL` | Yes | Your HA URL (use host IP, e.g., `http://192.168.1.100:8123`) |
+| `ACCESS_TOKEN` | Yes* | Long-lived access token (*optional for non-HA sites) |
+| `KEEP_BROWSER_OPEN` | No | Keep browser alive between requests (default: `false`) |
+| `TZ` | No | Timezone for scheduled captures (e.g., `America/New_York`) |
+| `DEBUG_LOGGING` | No | Enable verbose logging (default: `false`) |
+
+Access the Web UI at `http://localhost:10000/`
+
+### Docker (Standalone - Development)
 
 ```bash
 cd trmnl-ha
@@ -65,7 +145,10 @@ bun run dev
 |--------|------|---------|-------------|
 | `access_token` | string | *required* | HA long-lived access token |
 | `home_assistant_url` | string | `http://homeassistant:8123` | Base URL (works with any website) |
+| `timezone` | string | (system) | Timezone for scheduled captures (e.g., `America/New_York`) |
 | `keep_browser_open` | bool | `false` | Keep browser alive between requests (faster, more memory) |
+
+> **Timezone Note:** Without a timezone set, scheduled captures run in UTC. Use an [IANA timezone name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) like `America/New_York`, `Europe/London`, or `Asia/Tokyo`. Invalid values silently fall back to UTC (check logs for warnings).
 
 ---
 
@@ -216,6 +299,19 @@ Set VM CPU type to `host` (not `kvm64`) for Chromium sandbox compatibility.
 3. Increase `wait` for complex dashboards
 
 ### HA Connection Issues
+
+**Most common cause:** Using `homeassistant.local:8123` instead of the IP address.
+
+| URL Type | Works? | Use Case |
+|----------|--------|----------|
+| `http://192.168.x.x:8123` | ✅ Yes | Always works (recommended) |
+| `http://homeassistant:8123` | ✅ Yes | HA OS add-on only (internal Docker name) |
+| `http://homeassistant.local:8123` | ❌ No | mDNS doesn't resolve inside containers |
+
+**To find your IP:**
+- Linux/Pi: `hostname -I`
+- macOS: `ipconfig getifaddr en0`
+- Or check your router's connected devices list
 
 The Web UI shows diagnostic banner with status, URL, and masked token. Add `?refresh=1` to force reconnection.
 

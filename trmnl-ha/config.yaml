@@ -33,6 +33,7 @@ ports_description:
 options:
   access_token: ""
   home_assistant_url: "http://homeassistant:8123"
+  timezone: ""
   keep_browser_open: false
   debug_logging: false
 
@@ -40,6 +41,7 @@ options:
 schema:
   access_token: str
   home_assistant_url: str?
+  timezone: str?
   keep_browser_open: bool?
   debug_logging: bool?
 

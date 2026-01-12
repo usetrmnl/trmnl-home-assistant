@@ -21,6 +21,8 @@ Send Home Assistant dashboard screenshots to your TRMNL e-ink display with advan
 
 ## Installation
 
+### Home Assistant OS (Recommended)
+
 1. Add this repository to Home Assistant:
    - Go to **Settings** → **Add-ons** → **Add-on Store** → **⋮** → **Repositories**
    - Add: `https://github.com/usetrmnl/trmnl-home-assistant`
@@ -32,6 +34,26 @@ Send Home Assistant dashboard screenshots to your TRMNL e-ink display with advan
    - Add to the add-on configuration
 
 4. Start the add-on and open the Web UI
+
+### Home Assistant Container (Docker)
+
+Running HA as a Docker container? No problem! Just one command:
+
+```bash
+docker run -d --name trmnl-ha \
+  --restart unless-stopped \
+  -e HOME_ASSISTANT_URL=http://YOUR_HOST_IP:8123 \
+  -e ACCESS_TOKEN=your_token_here \
+  -p 10000:10000 \
+  -v ./trmnl-data:/data \
+  ghcr.io/usetrmnl/trmnl-ha-amd64:latest # ARM64 (Pi 4/5, Apple Silicon): ghcr.io/usetrmnl/trmnl-ha-aarch64:latest
+```
+
+> **Note:** Replace `YOUR_HOST_IP` with your machine's IP (e.g., `192.168.1.100`). Container names like `homeassistant` won't work since HA uses host networking.
+
+Then open `http://localhost:10000` - that's it!
+
+See [full Docker setup](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#home-assistant-container-docker) for Docker Compose and timezone configuration.
 
 ### Proxmox Users
 

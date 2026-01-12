@@ -11,44 +11,139 @@ import type {
   ColorPaletteDefinition,
   GrayscalePaletteDefinition,
 } from './types/domain.js'
+import {
+  isValidTimezone,
+  hasEnvConfig as checkEnvConfig,
+  detectIsAddOn,
+  findBrowser,
+  isNetworkError,
+  NETWORK_ERROR_PATTERNS as SCHEDULER_NETWORK_ERROR_PATTERNS_IMPORT,
+} from './lib/config-helpers.js'
 
 // =============================================================================
-// OPTIONS FILE LOADING
+// OPTIONS LOADING (ENV VARS → JSON FILE)
 // =============================================================================
 
 interface Options {
   home_assistant_url?: string
   access_token?: string
+  timezone?: string
   chromium_executable?: string
   keep_browser_open?: boolean
   debug_logging?: boolean
 }
 
 /**
+ * Check if running with environment variable configuration
+ * Supports simplified Docker deployment without config files
+ */
+const hasEnvConfig = checkEnvConfig(process.env)
+
+/**
  * Searches for and loads the first available options file
  * Priority: local dev file first, then add-on data path
+ * Optional when using environment variables
  */
 const optionsFile = ['./options-dev.json', '/data/options.json'].find(
   existsSync
 )
 
-if (!optionsFile) {
+// Require config file OR environment variables
+if (!optionsFile && !hasEnvConfig) {
   console.error(
-    'No options file found. Please copy options-dev.json.example to options-dev.json'
+    'No configuration found. Either:\n' +
+      '  1. Set HOME_ASSISTANT_URL and ACCESS_TOKEN environment variables, or\n' +
+      '  2. Create options-dev.json (copy from options-dev.json.example)'
   )
   process.exit(1)
 }
 
-const options = JSON.parse(readFileSync(optionsFile, 'utf-8')) as Options
+/**
+ * Load options from JSON file (if present)
+ */
+const fileOptions: Options = optionsFile
+  ? (JSON.parse(readFileSync(optionsFile, 'utf-8')) as Options)
+  : {}
+
+/**
+ * Merged options: environment variables take precedence over file config
+ * This allows Docker users to override settings without modifying files
+ */
+const options: Options = {
+  home_assistant_url:
+    process.env['HOME_ASSISTANT_URL'] ?? fileOptions.home_assistant_url,
+  access_token: process.env['ACCESS_TOKEN'] ?? fileOptions.access_token,
+  chromium_executable:
+    process.env['CHROMIUM_EXECUTABLE'] ?? fileOptions.chromium_executable,
+  keep_browser_open:
+    process.env['KEEP_BROWSER_OPEN'] !== undefined
+      ? process.env['KEEP_BROWSER_OPEN'] === 'true'
+      : fileOptions.keep_browser_open,
+  debug_logging:
+    process.env['DEBUG_LOGGING'] !== undefined
+      ? process.env['DEBUG_LOGGING'] === 'true'
+      : fileOptions.debug_logging,
+}
+
+// Log configuration source for debugging
+if (hasEnvConfig) {
+  console.log('[Config] Using environment variables')
+} else if (optionsFile) {
+  console.log(`[Config] Using ${optionsFile}`)
+}
+
+/**
+ * Set timezone from config (TZ env var takes precedence)
+ * Important for scheduled captures to fire at correct local time
+ *
+ * Valid values: IANA timezone names like "America/New_York", "Europe/London"
+ * @see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+ */
+const timezone = process.env.TZ ?? options.timezone ?? fileOptions.timezone
+if (timezone) {
+  // Validate timezone - invalid values silently fall back to UTC
+  const isValid = isValidTimezone(timezone)
+
+  if (!isValid) {
+    console.warn(
+      `[Config] ⚠️ Invalid timezone "${timezone}" - will fall back to UTC!`
+    )
+    console.warn(
+      '[Config] Valid examples: America/New_York, Europe/London, Asia/Tokyo'
+    )
+    console.warn(
+      '[Config] Full list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones'
+    )
+  }
+
+  process.env.TZ = timezone
+  console.log(`[Config] Timezone: ${timezone}${isValid ? '' : ' (INVALID)'}`)
+}
 
 // =============================================================================
 // ENVIRONMENT DETECTION
 // =============================================================================
 
 /**
- * Whether running as Home Assistant add-on (true) or local development (false)
+ * Whether running as Home Assistant add-on (true) or standalone (false)
+ *
+ * Detection methods (in order of reliability):
+ * 1. SUPERVISOR_TOKEN env var - injected by HA Supervisor into all add-ons
+ * 2. /data/options.json exists without env config - fallback for edge cases
+ *
+ * Standalone includes: Docker with env vars, Docker with mounted config, local dev
  */
-export const isAddOn: boolean = optionsFile === '/data/options.json'
+export const isAddOn: boolean = detectIsAddOn(process.env, optionsFile)
+
+// Log running mode for debugging
+if (isAddOn) {
+  const detectedBy = process.env['SUPERVISOR_TOKEN']
+    ? 'SUPERVISOR_TOKEN'
+    : 'options file'
+  console.log(`[Config] Running as HA add-on (detected via ${detectedBy})`)
+} else {
+  console.log('[Config] Running in standalone mode')
+}
 
 /**
  * Whether to use mock Home Assistant for testing and local development
@@ -99,11 +194,12 @@ if (!hassToken && !useMockHA && isAddOn) {
 
 /**
  * Path to Chromium/Chrome executable
+ * Priority: user config → auto-detected → Puppeteer bundled (undefined)
+ *
+ * Browser detection uses platform-agnostic path list from config-helpers.ts
  */
-export const chromiumExecutable: string = isAddOn
-  ? '/usr/bin/chromium'
-  : options.chromium_executable ||
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+export const chromiumExecutable: string | undefined =
+  options.chromium_executable ?? findBrowser()
 
 /**
  * Keep browser instance open between requests for performance
@@ -295,19 +391,13 @@ export const SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH: number = 200
 
 /**
  * Network error detection patterns
+ * Re-exported from config-helpers for backward compatibility
  */
-export const SCHEDULER_NETWORK_ERROR_PATTERNS: readonly string[] = [
-  'Network error',
-  'ERR_NAME_NOT_RESOLVED',
-  'ERR_CONNECTION_REFUSED',
-  'ERR_INTERNET_DISCONNECTED',
-] as const
+export const SCHEDULER_NETWORK_ERROR_PATTERNS: readonly string[] =
+  SCHEDULER_NETWORK_ERROR_PATTERNS_IMPORT
 
 /**
  * Check if error is a network error
+ * Re-exported from config-helpers for backward compatibility
  */
-export function isSchedulerNetworkError(error: Error): boolean {
-  return SCHEDULER_NETWORK_ERROR_PATTERNS.some((pattern) =>
-    error.message?.includes(pattern)
-  )
-}
+export const isSchedulerNetworkError = isNetworkError
