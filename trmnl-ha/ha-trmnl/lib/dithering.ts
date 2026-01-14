@@ -565,10 +565,8 @@ function applyGrayscaleDithering(
   if (levelsEnabled && (blackLevel > 0 || whiteLevel < 100)) {
     const blackPoint = `${blackLevel}%`
     const whitePoint = `${whiteLevel}%`
-    // NOTE: gm .level() accepts strings but @types/gm is incomplete
-    image = (
-      image as State & { level(b: string, g: number, w: string): State }
-    ).level(blackPoint, 1.0, whitePoint)
+    // NOTE: gm.level() uses GraphicsMagick arg order; ImageMagick expects black,white,gamma.
+    image = image.out('-level', `${blackPoint},${whitePoint}`)
   }
 
   // Select and apply dithering strategy
