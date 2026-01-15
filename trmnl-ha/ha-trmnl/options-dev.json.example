@@ -5,5 +5,8 @@
   "access_token": "",
 
   "keep_browser_open": true,
-  "chromium_executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  "chromium_executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+
+  "_ssl_readme": "Set to true if using self-signed SSL certificates",
+  "ignore_ssl_errors": false
 }

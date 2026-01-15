@@ -147,6 +147,7 @@ bun run dev
 | `home_assistant_url` | string | `http://homeassistant:8123` | Base URL (works with any website) |
 | `timezone` | string | (system) | Timezone for scheduled captures (e.g., `America/New_York`) |
 | `keep_browser_open` | bool | `false` | Keep browser alive between requests (faster, more memory) |
+| `ignore_ssl_errors` | bool | `false` | Accept self-signed SSL certificates (for HTTPS with custom certs) |
 
 > **Timezone Note:** Without a timezone set, scheduled captures run in UTC. Use an [IANA timezone name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) like `America/New_York`, `Europe/London`, or `Asia/Tokyo`. Invalid values silently fall back to UTC (check logs for warnings).
 
@@ -314,6 +315,30 @@ Set VM CPU type to `host` (not `kvm64`) for Chromium sandbox compatibility.
 - Or check your router's connected devices list
 
 The Web UI shows diagnostic banner with status, URL, and masked token. Add `?refresh=1` to force reconnection.
+
+### HTTPS / SSL Certificate Issues
+
+If you're using HTTPS with a self-signed certificate (common with nginx/Caddy reverse proxies):
+
+**Symptoms:**
+- "Home Assistant not connected"
+- "Connection failed - could not reach HA"
+- Webhook delivery fails to local endpoints
+
+**Solution:** Enable the `ignore_ssl_errors` option in add-on configuration:
+
+1. Go to add-on **Configuration** tab
+2. Set `ignore_ssl_errors: true`
+3. Save and restart the add-on
+
+For standalone Docker users, add to `options-dev.json`:
+```json
+{
+  "ignore_ssl_errors": true
+}
+```
+
+**Note:** This is safe for home network use since you're connecting to your own Home Assistant instance.
 
 ---
 

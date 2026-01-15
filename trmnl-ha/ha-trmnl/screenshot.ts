@@ -18,7 +18,13 @@
 
 import puppeteer from 'puppeteer'
 import type { Browser as PuppeteerBrowser, Page, Viewport } from 'puppeteer'
-import { debugLogging, isAddOn, chromiumExecutable, HEADER_HEIGHT } from './const.js'
+import {
+  debugLogging,
+  isAddOn,
+  chromiumExecutable,
+  HEADER_HEIGHT,
+  ignoreSslErrors,
+} from './const.js'
 import {
   CannotOpenPageError,
   BrowserCrashError,
@@ -121,6 +127,10 @@ const PUPPETEER_ARGS: string[] = [
 
   // Add low-end device mode for resource-constrained environments
   ...(isAddOn ? ['--enable-low-end-device-mode'] : []),
+
+  // SSL certificate handling (allows self-signed certs for local HA instances)
+  // Controlled via ignore_ssl_errors option in add-on configuration
+  ...(ignoreSslErrors ? ['--ignore-certificate-errors'] : []),
 ]
 
 // =============================================================================
@@ -283,7 +293,10 @@ export class Browser {
         browserLog.trace`Frame navigated: ${frame.url()}`
       })
       .on('console', (message) => {
-        browserLog.trace`CONSOLE ${message.type().slice(0, 3).toUpperCase()} ${message.text()}`
+        browserLog.trace`CONSOLE ${message
+          .type()
+          .slice(0, 3)
+          .toUpperCase()} ${message.text()}`
       })
       .on('error', (err) => {
         browserLog.error`Page error: ${err}`
@@ -303,7 +316,9 @@ export class Browser {
         this.#pageErrorDetected = true
       })
       .on('requestfailed', (request) => {
-        browserLog.debug`Request failed: ${request.failure()?.errorText} ${request.url()}`
+        browserLog.debug`Request failed: ${
+          request.failure()?.errorText
+        } ${request.url()}`
       })
 
     // Verbose response logging in debug mode

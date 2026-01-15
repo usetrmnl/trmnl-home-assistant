@@ -36,6 +36,7 @@ options:
   timezone: ""
   keep_browser_open: false
   debug_logging: false
+  ignore_ssl_errors: false
 
 # Schema for options validation
 schema:
@@ -44,6 +45,7 @@ schema:
   timezone: str?
   keep_browser_open: bool?
   debug_logging: bool?
+  ignore_ssl_errors: bool?
 
 # Exclude regeneratable data from HA backups
 backup_exclude:
