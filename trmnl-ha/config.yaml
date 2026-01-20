@@ -1,6 +1,6 @@
 name: "TRMNL HA"
 description: "Send dashboard screens to your TRMNL"
-version: "0.4.10"
+version: "0.4.11"
 slug: "trmnl-ha"
 url: "https://github.com/usetrmnl/trmnl-home-assistant"
 image: ghcr.io/usetrmnl/trmnl-ha-{arch}
