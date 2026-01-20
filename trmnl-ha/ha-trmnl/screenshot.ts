@@ -442,25 +442,39 @@ export class Browser {
         this.#lastRequestedDarkMode = dark
       }
 
-      // Smart wait: network idle + loading indicators + stability
-      // User can override timeout via 'wait' parameter (default: 15 seconds)
-      const maxWait = extraWait && extraWait > 0 ? extraWait : 15000
+      // Wait strategy: explicit fixed wait OR automatic smart detection
+      // - If user provides 'wait' param: use fixed wait (bypasses smart detection)
+      // - Otherwise: use smart wait (network idle + loading indicators + stability)
+      if (extraWait && extraWait > 0) {
+        // Explicit fixed wait - user knows how long their page needs
+        log.debug`Explicit wait: ${extraWait}ms`
+        await new Promise((resolve) => setTimeout(resolve, extraWait))
+      } else {
+        // Automatic smart wait (default: 15 seconds max)
+        const maxWait = 15000
 
-      // Step 1: Wait for network activity to settle (catches async API calls)
-      const networkCmd = new WaitForNetworkIdle(page, maxWait, 500)
-      const networkWait = await networkCmd.call()
-      log.debug`Network idle after ${networkWait}ms`
+        // Step 1: Wait for network activity to settle (catches async API calls)
+        const networkCmd = new WaitForNetworkIdle(page, maxWait, 500)
+        const networkWait = await networkCmd.call()
+        log.debug`Network idle after ${networkWait}ms`
 
-      // Step 2: Wait for loading indicators to disappear
-      const loadingCmd = new WaitForLoadingComplete(page, Math.max(1000, maxWait - networkWait))
-      const loadingWait = await loadingCmd.call()
-      log.debug`Loading complete after ${loadingWait}ms`
+        // Step 2: Wait for loading indicators to disappear
+        const loadingCmd = new WaitForLoadingComplete(
+          page,
+          Math.max(1000, maxWait - networkWait)
+        )
+        const loadingWait = await loadingCmd.call()
+        log.debug`Loading complete after ${loadingWait}ms`
 
-      // Step 3: Final stability check (content stops changing)
-      const remainingTime = Math.max(1000, maxWait - networkWait - loadingWait)
-      const stableCmd = new WaitForPageStable(page, remainingTime)
-      const stableWait = await stableCmd.call()
-      log.debug`Smart wait total: ${networkWait + loadingWait + stableWait}ms`
+        // Step 3: Final stability check (content stops changing)
+        const remainingTime = Math.max(
+          1000,
+          maxWait - networkWait - loadingWait
+        )
+        const stableCmd = new WaitForPageStable(page, remainingTime)
+        const stableWait = await stableCmd.call()
+        log.debug`Smart wait total: ${networkWait + loadingWait + stableWait}ms`
+      }
 
       return { time: Date.now() - start }
     } catch (err) {
