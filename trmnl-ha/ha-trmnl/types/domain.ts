@@ -282,10 +282,33 @@ export interface RecoveryStats {
 /** Content-Type headers for output formats */
 export type ContentTypeMap = Record<ImageFormat, string>
 
-/** Color palette definitions (hex color arrays) */
+/** Grayscale palette config (for unified PALETTES) */
+export interface GrayscalePaletteConfig {
+  label: string
+  levels: number
+}
+
+/** Color palette config (for unified PALETTES) */
+export interface ColorPaletteConfig {
+  label: string
+  colors: string[]
+}
+
+/** Unified palette configuration (single source of truth) */
+export type PaletteConfig = GrayscalePaletteConfig | ColorPaletteConfig
+
+/** Type guard: is this a color palette config? */
+export const isColorPalette = (c: PaletteConfig): c is ColorPaletteConfig =>
+  'colors' in c
+
+/** Type guard: is this a grayscale palette config? */
+export const isGrayscalePalette = (c: PaletteConfig): c is GrayscalePaletteConfig =>
+  'levels' in c
+
+/** Color palette definitions (hex color arrays) - derived from PALETTES */
 export type ColorPaletteDefinition = Record<ColorPalette, string[]>
 
-/** Grayscale palette definitions (number of gray levels) */
+/** Grayscale palette definitions (number of gray levels) - derived from PALETTES */
 export type GrayscalePaletteDefinition = Record<GrayscalePalette, number>
 
 // =============================================================================

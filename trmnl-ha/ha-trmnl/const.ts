@@ -23,7 +23,22 @@ import type {
   ContentTypeMap,
   ColorPaletteDefinition,
   GrayscalePaletteDefinition,
+  Palette,
+  PaletteConfig,
 } from './types/domain.js'
+import { isColorPalette, isGrayscalePalette } from './types/domain.js'
+// Re-export browser-safe palette options (single source of truth for labels)
+export {
+  PALETTE_OPTIONS,
+  GRAYSCALE_OPTIONS,
+  COLOR_OPTIONS,
+  type PaletteOption,
+} from './html/js/palette-options.js'
+import { PALETTE_OPTIONS } from './html/js/palette-options.js'
+
+/** Lookup label from palette-options (single source of truth) */
+const label = (value: string): string =>
+  PALETTE_OPTIONS.find((p) => p.value === value)?.label ?? value
 import {
   isValidTimezone,
   hasEnvConfig as checkEnvConfig,
@@ -297,63 +312,56 @@ export const VALID_FORMATS: readonly ImageFormat[] = [
 export const VALID_ROTATIONS: readonly RotationAngle[] = [90, 180, 270] as const
 
 /**
- * Color palette definitions for e-ink displays
+ * Unified palette definitions - SINGLE SOURCE OF TRUTH
+ *
+ * Add new palettes here and they automatically appear in UI + dithering.
+ * Order determines dropdown display order.
  *
  * @see https://www.eink.com/brand/detail/Spectra6
  * @see https://shop.pimoroni.com/products/inky-impression-7-3
  */
-export const COLOR_PALETTES: ColorPaletteDefinition = {
-  // 6-color: Basic RGB + Yellow + Black/White
-  'color-6a': [
-    '#000000', // Black
-    '#FFFFFF', // White
-    '#FF0000', // Red
-    '#00FF00', // Green
-    '#0000FF', // Blue
-    '#FFFF00', // Yellow
-  ],
-  // 7-color ACeP/Gallery with Orange (Waveshare, Pimoroni Inky Impression)
-  'color-7a': [
-    '#000000', // Black
-    '#FFFFFF', // White
-    '#FF0000', // Red
-    '#00FF00', // Green
-    '#0000FF', // Blue
-    '#FFFF00', // Yellow
-    '#FF8C00', // Orange (Dark Orange - per Pimoroni spec)
-  ],
-  // 7-color with Cyan (for displays that have Cyan instead of Orange)
-  'color-7b': [
-    '#000000', // Black
-    '#FFFFFF', // White
-    '#FF0000', // Red
-    '#00FF00', // Green
-    '#0000FF', // Blue
-    '#FFFF00', // Yellow
-    '#00FFFF', // Cyan
-  ],
-  // 8-color Spectra 6 T2000 (2025+) - has both Cyan AND Orange
-  'color-8a': [
-    '#000000', // Black
-    '#FFFFFF', // White
-    '#FF0000', // Red
-    '#00FF00', // Green
-    '#0000FF', // Blue
-    '#FFFF00', // Yellow
-    '#00FFFF', // Cyan
-    '#FF8C00', // Orange
-  ],
+export const PALETTES: Record<Palette, PaletteConfig> = {
+  // Grayscale palettes (labels from palette-options.ts)
+  bw: { label: label('bw'), levels: 2 },
+  'gray-4': { label: label('gray-4'), levels: 4 },
+  'gray-16': { label: label('gray-16'), levels: 16 },
+  'gray-256': { label: label('gray-256'), levels: 256 },
+  // Color palettes (labels from palette-options.ts)
+  'color-6a': {
+    label: label('color-6a'),
+    colors: ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00'],
+  },
+  'color-7a': {
+    label: label('color-7a'),
+    colors: ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF8C00'],
+  },
+  'color-7b': {
+    label: label('color-7b'),
+    colors: ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#00FFFF'],
+  },
+  'color-8a': {
+    label: label('color-8a'),
+    colors: ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#00FFFF', '#FF8C00'],
+  },
 }
 
-/**
- * Grayscale palette definitions (number of gray levels)
- */
-export const GRAYSCALE_PALETTES: GrayscalePaletteDefinition = {
-  bw: 2,
-  'gray-4': 4,
-  'gray-16': 16,
-  'gray-256': 256,
-}
+// =============================================================================
+// DERIVED PALETTE CONSTANTS (backward compatibility)
+// =============================================================================
+
+/** Color palettes (hex arrays) - derived from PALETTES */
+export const COLOR_PALETTES: ColorPaletteDefinition = Object.fromEntries(
+  Object.entries(PALETTES)
+    .filter(([_, config]) => isColorPalette(config))
+    .map(([key, config]) => [key, (config as { colors: string[] }).colors])
+) as ColorPaletteDefinition
+
+/** Grayscale palettes (gray levels) - derived from PALETTES */
+export const GRAYSCALE_PALETTES: GrayscalePaletteDefinition = Object.fromEntries(
+  Object.entries(PALETTES)
+    .filter(([_, config]) => isGrayscalePalette(config))
+    .map(([key, config]) => [key, (config as { levels: number }).levels])
+) as GrayscalePaletteDefinition
 
 /**
  * Default wait time after page load (milliseconds)

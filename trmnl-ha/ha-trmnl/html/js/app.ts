@@ -23,7 +23,8 @@ import { PreviewGenerator } from './preview-generator.js'
 import { CropModal } from './crop-modal.js'
 import { ConfirmModal } from './confirm-modal.js'
 import { DevicePresetsManager } from './device-presets.js'
-import { SendSchedule } from './api-client.js'
+import { SendSchedule, LoadPalettes } from './api-client.js'
+import type { PaletteOption } from './palette-options.js'
 import type {
   Schedule,
   CropRegion,
@@ -82,6 +83,7 @@ class App {
   #cropModal: CropModal
   #confirmModal: ConfirmModal
   #devicePresetsManager: DevicePresetsManager
+  #paletteOptions: PaletteOption[] = []
 
   constructor() {
     this.#scheduleManager = new ScheduleManager()
@@ -105,7 +107,13 @@ class App {
       // Show HA status banner if not connected
       this.#updateHAStatusBanner()
 
-      await this.#scheduleManager.loadAll()
+      // Load palettes and schedules in parallel
+      const [, palettes] = await Promise.all([
+        this.#scheduleManager.loadAll(),
+        new LoadPalettes().call(),
+      ])
+      this.#paletteOptions = palettes
+
       this.renderUI()
 
       await this.#devicePresetsManager.loadAndRenderPresets()
@@ -513,7 +521,7 @@ class App {
   #renderScheduleContent(): void {
     const schedule = this.#scheduleManager.activeSchedule
     if (schedule) {
-      new RenderScheduleContent(schedule).call()
+      new RenderScheduleContent(schedule, this.#paletteOptions).call()
 
       this.#devicePresetsManager.afterDOMRender(schedule)
 

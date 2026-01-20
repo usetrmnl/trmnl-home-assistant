@@ -1,8 +1,8 @@
 /**
  * Integration tests for color palette dithering
  *
- * Verifies that color palettes (color-6a, color-7a) correctly remap
- * images to use only the defined palette colors.
+ * Verifies that color palettes correctly remap images to use only
+ * the defined palette colors.
  *
  * @module tests/integration/color-palette
  */
@@ -103,6 +103,99 @@ describe('Color Palette Dithering', () => {
       }
 
       expect(verification.valid).toBe(true)
+    }, 30000)
+
+    it('includes orange in palette output when input has orange tones', async () => {
+      const orangeImage = await createSolidColorImage('#FFA500')
+
+      const result = await applyDithering(orangeImage, {
+        method: 'threshold',
+        palette,
+        saturationBoost: false,
+        normalize: false,
+        format: 'png',
+      })
+
+      const uniqueColors = await extractUniqueColors(result)
+      expect(hasColorNear(uniqueColors, '#FFA500')).toBe(true)
+    }, 30000)
+  })
+
+  describe('color-7b palette (RTM1002 with Cyan)', () => {
+    const palette: ColorPalette = 'color-7b'
+    const paletteColors = COLOR_PALETTES[palette]
+
+    it('constrains colorful image to palette colors', async () => {
+      const result = await applyDithering(colorfulImage, {
+        method: 'floyd-steinberg',
+        palette,
+        format: 'png',
+      })
+
+      expect(Buffer.isBuffer(result)).toBe(true)
+
+      const uniqueColors = await extractUniqueColors(result)
+      const verification = verifyColorsMatchPalette(uniqueColors, paletteColors)
+
+      if (!verification.valid) {
+        console.log('Out-of-range colors:', verification.outOfRange)
+      }
+
+      expect(verification.valid).toBe(true)
+    }, 30000)
+
+    it('includes cyan in palette output when input has cyan tones', async () => {
+      const cyanImage = await createSolidColorImage('#00FFFF')
+
+      const result = await applyDithering(cyanImage, {
+        method: 'threshold',
+        palette,
+        saturationBoost: false,
+        normalize: false,
+        format: 'png',
+      })
+
+      const uniqueColors = await extractUniqueColors(result)
+      expect(hasColorNear(uniqueColors, '#00FFFF')).toBe(true)
+    }, 30000)
+  })
+
+  describe('color-8a palette (Spectra 6 with Cyan + Orange)', () => {
+    const palette: ColorPalette = 'color-8a'
+    const paletteColors = COLOR_PALETTES[palette]
+
+    it('constrains colorful image to palette colors', async () => {
+      const result = await applyDithering(colorfulImage, {
+        method: 'floyd-steinberg',
+        palette,
+        format: 'png',
+      })
+
+      expect(Buffer.isBuffer(result)).toBe(true)
+
+      const uniqueColors = await extractUniqueColors(result)
+      const verification = verifyColorsMatchPalette(uniqueColors, paletteColors)
+
+      if (!verification.valid) {
+        console.log('Out-of-range colors:', verification.outOfRange)
+      }
+
+      expect(verification.valid).toBe(true)
+    }, 30000)
+
+    it('includes cyan in palette output when input has cyan tones', async () => {
+      const cyanImage = await createSolidColorImage('#00FFFF')
+
+      const result = await applyDithering(cyanImage, {
+        method: 'threshold',
+        palette,
+        saturationBoost: false,
+        normalize: false,
+        format: 'png',
+      })
+
+      const uniqueColors = await extractUniqueColors(result)
+      expect(hasColorNear(uniqueColors, '#00FFFF')).toBe(true)
     }, 30000)
 
     it('includes orange in palette output when input has orange tones', async () => {

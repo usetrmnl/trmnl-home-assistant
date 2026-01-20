@@ -16,6 +16,7 @@
  */
 
 import type { Schedule } from '../../types/domain.js'
+import type { PaletteOption } from './palette-options.js'
 
 /**
  * Renders the tab bar showing all schedules as clickable tabs.
@@ -89,9 +90,11 @@ export class RenderEmptyState {
  */
 export class RenderScheduleContent {
   schedule: Schedule
+  paletteOptions: PaletteOption[]
 
-  constructor(schedule: Schedule) {
+  constructor(schedule: Schedule, paletteOptions: PaletteOption[]) {
     this.schedule = schedule
+    this.paletteOptions = paletteOptions
   }
 
   call(): void {
@@ -571,26 +574,14 @@ export class RenderScheduleContent {
             <select id="s_palette" class="w-full px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
               onchange="window.app.updateScheduleFromForm()"
               title="Color palette matching your e-ink display capabilities">
-              <option value="bw" ${
-                s.dithering?.palette === 'bw' ? 'selected' : ''
-              }>1-bit (B&W)</option>
-              <option value="gray-4" ${
-                s.dithering?.palette === 'gray-4' ? 'selected' : ''
-              }>2-bit (4 grays)</option>
-              <option value="gray-16" ${
-                s.dithering?.palette === 'gray-16' ? 'selected' : ''
-              }>4-bit (16 grays)</option>
-              <option value="gray-256" ${
-                s.dithering?.palette === 'gray-256' ? 'selected' : ''
-              }>8-bit (256 grays)</option>
-              <option value="color-6a" ${
-                s.dithering?.palette === 'color-6a' ? 'selected' : ''
-              }>6-color (Inky 13.3)</option>
-              <option value="color-7a" ${
-                s.dithering?.palette === 'color-7a' ? 'selected' : ''
-              }>7-color (Inky 7.3)</option>
+              ${this.paletteOptions.map(
+                (p) =>
+                  `<option value="${p.value}" ${
+                    s.dithering?.palette === p.value ? 'selected' : ''
+                  }>${p.label}</option>`
+              ).join('\n              ')}
             </select>
-            <p class="text-xs text-gray-500 mt-1">Match your display: 1-bit (classic), 4-grays (TRMNL), 16-grays (high-res), or color (Pimoroni Inky)</p>
+            <p class="text-xs text-gray-500 mt-1">Match your display: grayscale (TRMNL, classic e-ink) or color (Inky, Spectra, RTM1002)</p>
           </div>
 
           <div class="flex items-center">

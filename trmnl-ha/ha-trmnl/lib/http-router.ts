@@ -22,6 +22,7 @@ import {
   deleteSchedule,
 } from './scheduleStore.js'
 import { loadPresets } from '../devices.js'
+import { PALETTE_OPTIONS } from '../const.js'
 import type { BrowserFacade } from './browserFacade.js'
 import type {
   ScheduleInput,
@@ -130,6 +131,10 @@ export class HttpRouter {
 
     if (pathname === '/api/presets') {
       return this.#handlePresetsAPI(response)
+    }
+
+    if (pathname === '/api/palettes') {
+      return this.#handlePalettesAPI(response)
     }
 
     if (
@@ -285,6 +290,12 @@ export class HttpRouter {
     const presets = loadPresets()
     response.writeHead(200, { 'Content-Type': 'application/json' })
     response.end(toJson(presets))
+    return true
+  }
+
+  #handlePalettesAPI(response: ServerResponse): boolean {
+    response.writeHead(200, { 'Content-Type': 'application/json' })
+    response.end(toJson(PALETTE_OPTIONS))
     return true
   }
 

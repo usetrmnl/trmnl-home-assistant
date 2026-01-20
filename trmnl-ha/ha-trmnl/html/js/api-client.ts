@@ -14,6 +14,7 @@ import type {
   PresetsConfig,
   SendScheduleResponse,
 } from '../../types/domain.js'
+import type { PaletteOption } from './palette-options.js'
 
 /**
  * Fetches all schedules from the API
@@ -121,6 +122,25 @@ export class LoadPresets {
     const response = await fetch(this.baseUrl)
     if (!response.ok) {
       throw new Error(`Failed to load presets: ${response.statusText}`)
+    }
+    return response.json()
+  }
+}
+
+/**
+ * Loads palette options for UI dropdown
+ */
+export class LoadPalettes {
+  baseUrl: string
+
+  constructor(baseUrl = './api/palettes') {
+    this.baseUrl = baseUrl
+  }
+
+  async call(): Promise<PaletteOption[]> {
+    const response = await fetch(this.baseUrl)
+    if (!response.ok) {
+      throw new Error(`Failed to load palettes: ${response.statusText}`)
     }
     return response.json()
   }

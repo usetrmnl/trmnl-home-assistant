@@ -10,6 +10,7 @@
         "home-assistant-js-websocket": "^9.6.0",
         "node-cron": "^4.2.1",
         "puppeteer": "^24.34.0",
+        "ws": "^8.18.0",
       },
       "devDependencies": {
         "@eslint/js": "^9.39.2",
@@ -22,7 +23,6 @@
         "globals": "^16.5.0",
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.50.1",
-        "ws": "^8.18.0",
       },
     },
   },
