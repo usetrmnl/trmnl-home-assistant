@@ -23,13 +23,16 @@ import { PreviewGenerator } from './preview-generator.js'
 import { CropModal } from './crop-modal.js'
 import { ConfirmModal } from './confirm-modal.js'
 import { DevicePresetsManager } from './device-presets.js'
-import { SendSchedule, LoadPalettes } from './api-client.js'
+import { SendSchedule, LoadPalettes, ByosLogin } from './api-client.js'
 import type { PaletteOption } from './palette-options.js'
 import type {
   Schedule,
   CropRegion,
   ScheduleUpdate,
   SendScheduleResponse,
+  WebhookFormat,
+  WebhookFormatConfig,
+  ByosAuthConfig,
 } from '../../types/domain.js'
 
 // =============================================================================
@@ -42,7 +45,7 @@ import type {
  */
 function parseIntOrDefault(
   value: string | undefined,
-  defaultValue: number
+  defaultValue: number,
 ): number {
   if (!value || value.trim() === '') return defaultValue
   const parsed = parseInt(value, 10)
@@ -55,7 +58,7 @@ function parseIntOrDefault(
  */
 function parseFloatOrDefault(
   value: string | undefined,
-  defaultValue: number
+  defaultValue: number,
 ): number {
   if (!value || value.trim() === '') return defaultValue
   const parsed = parseFloat(value)
@@ -119,7 +122,7 @@ class App {
       await this.#devicePresetsManager.loadAndRenderPresets()
 
       const autoRefreshCheckbox = document.getElementById(
-        'autoRefreshToggle'
+        'autoRefreshToggle',
       ) as HTMLInputElement | null
       if (autoRefreshCheckbox) {
         autoRefreshCheckbox.checked = this.#previewGenerator.autoRefresh
@@ -152,7 +155,7 @@ class App {
     const logPrefix = '[HA Connection]'
     if (uiConfig.haConnected) {
       console.log(
-        `${logPrefix} Connected | URL: ${uiConfig.hassUrl} | Token: ${uiConfig.tokenPreview}`
+        `${logPrefix} Connected | URL: ${uiConfig.hassUrl} | Token: ${uiConfig.tokenPreview}`,
       )
       banner.classList.add('hidden')
       return
@@ -160,7 +163,7 @@ class App {
     console.warn(
       `${logPrefix} ${uiConfig.connectionStatus} | URL: ${
         uiConfig.hassUrl
-      } | Token: ${uiConfig.tokenPreview ?? 'not set'}`
+      } | Token: ${uiConfig.tokenPreview ?? 'not set'}`,
     )
 
     // Build diagnostic info
@@ -315,11 +318,11 @@ class App {
     const { webhook } = result
     if (webhook.success) {
       console.log(
-        `${logPrefix} Webhook success: ${webhook.statusCode} → ${webhook.url}`
+        `${logPrefix} Webhook success: ${webhook.statusCode} → ${webhook.url}`,
       )
     } else {
       console.error(
-        `${logPrefix} Webhook failed: ${webhook.error} → ${webhook.url}`
+        `${logPrefix} Webhook failed: ${webhook.error} → ${webhook.url}`,
       )
     }
   }
@@ -420,9 +423,16 @@ class App {
     // Check if in HA mode or generic mode from the toggle
     // When toggle is checked = HA mode, unchecked = generic mode
     const haModeCheckbox = document.getElementById(
-      's_ha_mode'
+      's_ha_mode',
     ) as HTMLInputElement | null
     const isHAMode = haModeCheckbox?.checked ?? true // default to HA mode if checkbox missing
+
+    // Build webhook format config
+    const webhookFormat = this.#buildWebhookFormatConfig(
+      select,
+      input,
+      checkbox,
+    )
 
     return {
       ...schedule,
@@ -433,6 +443,7 @@ class App {
       name: input('s_name') || schedule.name,
       cron: input('s_cron') || schedule.cron,
       webhook_url: input('s_webhook') || null,
+      webhook_format: webhookFormat,
       viewport: {
         width: parseIntOrDefault(input('s_width'), schedule.viewport.width),
         height: parseIntOrDefault(input('s_height'), schedule.viewport.height),
@@ -443,11 +454,11 @@ class App {
         y: parseIntOrDefault(input('s_crop_y'), 0),
         width: parseIntOrDefault(
           input('s_crop_width'),
-          schedule.viewport.width
+          schedule.viewport.width,
         ),
         height: parseIntOrDefault(
           input('s_crop_height'),
-          schedule.viewport.height
+          schedule.viewport.height,
         ),
       },
       format: (select('s_format') as 'png' | 'jpeg' | 'bmp') || schedule.format,
@@ -501,6 +512,46 @@ class App {
     return value ? parseInt(value) : null
   }
 
+  /**
+   * Builds webhook format config from form inputs.
+   * Returns null for 'raw' format so JSON.stringify includes it (clears existing value).
+   * NOTE: Auth tokens are preserved from existing schedule, NOT read from form.
+   */
+  #buildWebhookFormatConfig(
+    select: (id: string) => string | undefined,
+    input: (id: string) => string | undefined,
+    checkbox: (id: string) => boolean,
+  ): WebhookFormatConfig | null {
+    const format = (select('s_webhook_format') || 'raw') as WebhookFormat
+
+    if (format === 'raw') {
+      return null // null is preserved by JSON.stringify (unlike undefined which is omitted)
+    }
+
+    if (format === 'byos-hanami') {
+      const name = input('s_byos_name') || 'ha-dashboard'
+      const authEnabled = checkbox('s_byos_auth_enabled')
+
+      // Preserve existing auth tokens (managed by byosLogin/byosLogout, not form)
+      // If auth is enabled but no tokens yet, create empty auth object with enabled: true
+      const existingAuth =
+        this.#scheduleManager.activeSchedule?.webhook_format?.byosConfig?.auth
+
+      return {
+        format: 'byos-hanami',
+        byosConfig: {
+          label: input('s_byos_label') || 'Home Assistant',
+          name,
+          model_id: input('s_byos_model_id') || '1',
+          preprocessed: true,
+          auth: authEnabled ? (existingAuth ?? { enabled: true }) : undefined,
+        },
+      }
+    }
+
+    return null
+  }
+
   // =============================================================================
   // UI RENDERING
   // =============================================================================
@@ -526,7 +577,7 @@ class App {
       this.#devicePresetsManager.afterDOMRender(schedule)
 
       const autoRefreshCheckbox = document.getElementById(
-        'autoRefreshToggle'
+        'autoRefreshToggle',
       ) as HTMLInputElement | null
       if (autoRefreshCheckbox) {
         autoRefreshCheckbox.checked = this.#previewGenerator.autoRefresh
@@ -575,19 +626,19 @@ class App {
 
   #updateCropFormInputs(crop: CropSettings): void {
     const cropEnabledInput = document.getElementById(
-      's_crop_enabled'
+      's_crop_enabled',
     ) as HTMLInputElement | null
     const cropXInput = document.getElementById(
-      's_crop_x'
+      's_crop_x',
     ) as HTMLInputElement | null
     const cropYInput = document.getElementById(
-      's_crop_y'
+      's_crop_y',
     ) as HTMLInputElement | null
     const cropWidthInput = document.getElementById(
-      's_crop_width'
+      's_crop_width',
     ) as HTMLInputElement | null
     const cropHeightInput = document.getElementById(
-      's_crop_height'
+      's_crop_height',
     ) as HTMLInputElement | null
 
     if (cropEnabledInput) cropEnabledInput.checked = crop.enabled
@@ -636,13 +687,217 @@ class App {
     // Clear target_url when switching to HA mode
     if (enabled) {
       const targetUrlInput = document.getElementById(
-        's_target_url'
+        's_target_url',
       ) as HTMLInputElement | null
       if (targetUrlInput) targetUrlInput.value = ''
     }
 
     // Save the schedule with new ha_mode value and re-render
     await this.updateScheduleFromForm()
+  }
+
+  // =============================================================================
+  // WEBHOOK FORMAT TOGGLE
+  // =============================================================================
+
+  /**
+   * Builds a schedule update with BYOS auth config changes.
+   * Centralizes the boilerplate of preserving existing BYOS config while updating auth.
+   *
+   * @param schedule - Current schedule to update
+   * @param auth - New auth config (merged with enabled: true)
+   * @returns Schedule update ready for persistence
+   */
+  #buildByosAuthUpdate(
+    schedule: Schedule,
+    auth: Partial<ByosAuthConfig>,
+  ): ScheduleUpdate {
+    const existing = schedule.webhook_format?.byosConfig
+    return {
+      ...schedule,
+      webhook_format: {
+        format: 'byos-hanami',
+        byosConfig: {
+          label: existing?.label || 'Home Assistant',
+          name: existing?.name || 'ha-dashboard',
+          model_id: existing?.model_id || '1',
+          preprocessed: existing?.preprocessed ?? true,
+          auth: { enabled: true, ...auth },
+        },
+      },
+    }
+  }
+
+  /**
+   * Toggles between webhook formats and shows/hides format-specific config.
+   */
+  async toggleWebhookFormat(format: string): Promise<void> {
+    const byosSection = document.getElementById('byosConfigSection')
+    if (byosSection) {
+      byosSection.classList.toggle('hidden', format !== 'byos-hanami')
+    }
+
+    // Save the schedule with new webhook format
+    await this.updateScheduleFromForm()
+  }
+
+  /**
+   * Toggles BYOS JWT authentication fields visibility.
+   */
+  async toggleByosAuth(enabled: boolean): Promise<void> {
+    const authFields = document.getElementById('byosAuthFields')
+    if (authFields) {
+      authFields.classList.toggle('hidden', !enabled)
+    }
+
+    // Save the schedule with new auth state
+    await this.updateScheduleFromForm()
+  }
+
+  /**
+   * Authenticates with BYOS server. Credentials are NOT stored.
+   */
+  async byosLogin(): Promise<void> {
+    const schedule = this.#scheduleManager.activeSchedule
+    if (!schedule?.webhook_url) {
+      await this.#confirmModal.alert({
+        title: 'Error',
+        message: 'Please enter a webhook URL first.',
+        type: 'error',
+      })
+      return
+    }
+
+    const loginInput = document.getElementById(
+      's_byos_auth_login',
+    ) as HTMLInputElement | null
+    const passwordInput = document.getElementById(
+      's_byos_auth_password',
+    ) as HTMLInputElement | null
+
+    const login = loginInput?.value?.trim()
+    const password = passwordInput?.value
+
+    if (!login || !password) {
+      await this.#confirmModal.alert({
+        title: 'Error',
+        message: 'Please enter both email and password.',
+        type: 'error',
+      })
+      return
+    }
+
+    try {
+      const byosLoginCmd = new ByosLogin()
+      const result = await byosLoginCmd.call(
+        schedule.webhook_url,
+        login,
+        password,
+      )
+
+      if (!result.success || !result.access_token) {
+        await this.#confirmModal.alert({
+          title: 'Authentication Failed',
+          message: result.error ?? 'Unknown error',
+          type: 'error',
+        })
+        return
+      }
+
+      // Save tokens to schedule (NOT credentials)
+      const updates = this.#buildByosAuthUpdate(schedule, {
+        access_token: result.access_token,
+        refresh_token: result.refresh_token,
+        obtained_at: result.obtained_at,
+      })
+
+      await this.#scheduleManager.update(schedule.id, updates)
+      this.renderUI()
+
+      await this.#confirmModal.alert({
+        title: 'Success',
+        message: 'Successfully authenticated with BYOS server.',
+        type: 'success',
+      })
+    } catch (err) {
+      await this.#confirmModal.alert({
+        title: 'Error',
+        message: `Authentication failed: ${(err as Error).message}`,
+        type: 'error',
+      })
+    }
+  }
+
+  /**
+   * Removes BYOS authentication tokens.
+   */
+  async byosLogout(): Promise<void> {
+    const schedule = this.#scheduleManager.activeSchedule
+    if (!schedule) return
+
+    const confirmed = await this.#confirmModal.show({
+      title: 'Logout from BYOS',
+      message:
+        'This will remove your authentication tokens. You will need to re-authenticate to send screenshots.',
+      confirmText: 'Logout',
+      cancelText: 'Cancel',
+      confirmClass: 'bg-red-600 hover:bg-red-700',
+    })
+
+    if (!confirmed) return
+
+    // Clear auth tokens but keep other BYOS config
+    const updates = this.#buildByosAuthUpdate(schedule, {
+      access_token: undefined,
+      refresh_token: undefined,
+      obtained_at: undefined,
+    })
+
+    await this.#scheduleManager.update(schedule.id, updates)
+    this.renderUI()
+  }
+
+  /**
+   * Saves manually entered tokens (for users who don't want to enter password).
+   */
+  async byosSaveManualTokens(): Promise<void> {
+    const schedule = this.#scheduleManager.activeSchedule
+    if (!schedule) return
+
+    const accessTokenInput = document.getElementById(
+      's_byos_manual_access_token',
+    ) as HTMLInputElement | null
+    const refreshTokenInput = document.getElementById(
+      's_byos_manual_refresh_token',
+    ) as HTMLInputElement | null
+
+    const accessToken = accessTokenInput?.value?.trim()
+    const refreshToken = refreshTokenInput?.value?.trim()
+
+    if (!accessToken) {
+      await this.#confirmModal.alert({
+        title: 'Error',
+        message: 'Please enter at least an access token.',
+        type: 'error',
+      })
+      return
+    }
+
+    // Save tokens to schedule
+    const updates = this.#buildByosAuthUpdate(schedule, {
+      access_token: accessToken,
+      refresh_token: refreshToken || undefined,
+      obtained_at: Date.now(),
+    })
+
+    await this.#scheduleManager.update(schedule.id, updates)
+    this.renderUI()
+
+    await this.#confirmModal.alert({
+      title: 'Success',
+      message: 'Tokens saved successfully.',
+      type: 'success',
+    })
   }
 
   // =============================================================================

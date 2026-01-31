@@ -18,6 +18,12 @@ interface WebhookRequest {
   timestamp: Date
 }
 
+/** Custom route handler signature */
+export type RouteHandler = (
+  req: IncomingMessage,
+  body: Buffer,
+) => { status: number; body: string; headers?: Record<string, string> }
+
 /**
  * Test server that receives and records webhook POST requests
  */
@@ -28,6 +34,7 @@ export class WebhookTestServer {
   responseStatus: number = 200
   responseBody: string = ''
   responseDelay: number = 0
+  routeHandlers = new Map<string, RouteHandler>()
 
   constructor(port: number = 10002) {
     this.port = port
@@ -78,7 +85,10 @@ export class WebhookTestServer {
   /**
    * Handle incoming HTTP request
    */
-  private async _handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  private async _handleRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
     const chunks: Buffer[] = []
 
     req.on('data', (chunk: Buffer) => chunks.push(chunk))
@@ -96,7 +106,7 @@ export class WebhookTestServer {
       })
 
       console.log(
-        `[WebhookTestServer] Received ${req.method} ${req.url} - ${body.length} bytes`
+        `[WebhookTestServer] Received ${req.method} ${req.url} - ${body.length} bytes`,
       )
 
       // Apply delay if configured
@@ -104,7 +114,42 @@ export class WebhookTestServer {
         await new Promise((resolve) => setTimeout(resolve, this.responseDelay))
       }
 
-      // Send response
+      // Check for custom route handler (match by "METHOD /path" key)
+      const routeKey = `${req.method} ${req.url}`
+      const handler = this.routeHandlers.get(routeKey)
+
+      // NOTE: typeof check satisfies CodeQL "unvalidated dynamic method call" rule
+      if (handler && typeof handler === 'function') {
+        const result = handler(req, body)
+        const headers = {
+          'Content-Type': 'application/json',
+          ...result.headers,
+        }
+        res.writeHead(result.status, headers)
+        res.end(result.body)
+        return
+      }
+
+      // Also check for prefix matches (e.g., "DELETE /api/screens/" matches "DELETE /api/screens/123")
+      for (const [key, prefixHandler] of this.routeHandlers) {
+        // NOTE: typeof check satisfies CodeQL "unvalidated dynamic method call" rule
+        if (
+          key.endsWith('*') &&
+          routeKey.startsWith(key.slice(0, -1)) &&
+          typeof prefixHandler === 'function'
+        ) {
+          const result = prefixHandler(req, body)
+          const headers = {
+            'Content-Type': 'application/json',
+            ...result.headers,
+          }
+          res.writeHead(result.status, headers)
+          res.end(result.body)
+          return
+        }
+      }
+
+      // Default response
       res.writeHead(this.responseStatus, {
         'Content-Type': 'text/plain',
       })
@@ -154,6 +199,22 @@ export class WebhookTestServer {
   }
 
   /**
+   * Set a custom handler for a specific route.
+   * Route key format: "METHOD /path" (e.g., "GET /api/screens")
+   * Use "*" suffix for prefix matching (e.g., "DELETE /api/screens/*")
+   */
+  setRouteHandler(routeKey: string, handler: RouteHandler): void {
+    this.routeHandlers.set(routeKey, handler)
+  }
+
+  /**
+   * Clear all custom route handlers
+   */
+  clearRouteHandlers(): void {
+    this.routeHandlers.clear()
+  }
+
+  /**
    * Reset server to default configuration
    */
   reset(): void {
@@ -161,5 +222,6 @@ export class WebhookTestServer {
     this.responseStatus = 200
     this.responseBody = ''
     this.responseDelay = 0
+    this.clearRouteHandlers()
   }
 }

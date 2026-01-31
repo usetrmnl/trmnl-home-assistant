@@ -188,6 +188,7 @@ export class RenderScheduleContent {
             <input type="url" id="s_webhook" value="${s.webhook_url || ''}"
               class="w-full px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
               onchange="window.app.updateScheduleFromForm()"
+              
               placeholder="https://your-server.com/upload"
               title="Optional: POST screenshots to this URL when captured" />
             <p class="text-xs text-gray-500 mt-1">Optional: Screenshots will be POSTed to this URL</p>
@@ -204,6 +205,134 @@ export class RenderScheduleContent {
                 : ''
             }
           </div>
+
+          ${this.#renderWebhookFormatSettings()}
+        </div>
+      </div>
+    `
+  }
+
+  #renderWebhookFormatSettings(): string {
+    const s = this.schedule
+    const currentFormat = s.webhook_format?.format ?? 'raw'
+    const byosConfig = s.webhook_format?.byosConfig
+    const showByosFields = currentFormat === 'byos-hanami'
+
+    return `
+      <div id="webhookFormatSection" >
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Webhook Format</label>
+          <select id="s_webhook_format" class="w-full px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
+            onchange="window.app.toggleWebhookFormat(this.value)"
+            title="Payload format for webhook requests">
+            <option value="raw" ${currentFormat === 'raw' ? 'selected' : ''}>Raw Image (default)</option>
+            <option value="byos-hanami" ${currentFormat === 'byos-hanami' ? 'selected' : ''}>BYOS Hanami API</option>
+          </select>
+          <p class="text-xs text-gray-500 mt-1">Raw: sends binary image | BYOS: JSON-wrapped base64 for self-hosted TRMNL</p>
+        </div>
+
+        <div id="byosConfigSection" class="${showByosFields ? '' : 'hidden'} mt-3 p-3 rounded-md" style="background-color: #f9fafb; border: 1px solid #e5e7eb">
+          <p class="text-xs font-medium text-gray-600 mb-2">BYOS Hanami Configuration (/api/screens)</p>
+          <div class="space-y-2">
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">Label</label>
+              <input type="text" id="s_byos_label" value="${byosConfig?.label || 'Home Assistant'}"
+                class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
+                onchange="window.app.updateScheduleFromForm()"
+                placeholder="Home Assistant"
+                title="Display label shown in BYOS dashboard" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">Screen Name</label>
+              <input type="text" id="s_byos_name" value="${byosConfig?.name || 'ha-dashboard'}"
+                class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
+                onchange="window.app.updateScheduleFromForm()"
+                placeholder="ha-dashboard"
+                title="Unique screen identifier (no spaces)" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">Model ID</label>
+              <input type="text" id="s_byos_model_id" value="${byosConfig?.model_id || '1'}"
+                class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
+                onchange="window.app.updateScheduleFromForm()"
+                placeholder="1"
+                title="BYOS model ID for your device" />
+            </div>
+          </div>
+
+          <!-- JWT Authentication -->
+          <div class="mt-3 pt-3 border-t border-gray-200">
+            <label class="flex items-center gap-2 text-xs font-medium text-gray-600 mb-2 cursor-pointer">
+              <input type="checkbox" id="s_byos_auth_enabled" ${byosConfig?.auth?.enabled ? 'checked' : ''}
+                class="h-4 w-4 border-gray-300 rounded"
+                onchange="window.app.toggleByosAuth(this.checked)"
+                title="Enable JWT authentication for BYOS API" />
+              JWT Authentication
+            </label>
+            <div id="byosAuthFields" class="${byosConfig?.auth?.enabled ? '' : 'hidden'}">
+              ${
+                byosConfig?.auth?.access_token
+                  ? `
+              <!-- Authenticated state -->
+              <div class="flex items-center justify-between p-2 rounded-md bg-green-50 border border-green-200">
+                <div class="flex items-center gap-2">
+                  <span class="inline-block w-2 h-2 rounded-full bg-green-500"></span>
+                  <span class="text-xs text-green-700">Authenticated</span>
+                </div>
+                <button type="button" onclick="window.app.byosLogout()"
+                  class="text-xs text-red-600 hover:text-red-800 underline">
+                  Clear Tokens
+                </button>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">Tokens auto-refresh. Valid for ~14 days.</p>
+              `
+                  : `
+              <!-- Auth options: Login or Manual Token -->
+              <div class="space-y-3">
+                <!-- Option 1: Login with credentials -->
+                <div class="p-2 rounded-md bg-gray-50 border border-gray-200">
+                  <p class="text-xs font-medium text-gray-600 mb-2">Option 1: Login (credentials not stored)</p>
+                  <div class="space-y-2">
+                    <input type="email" id="s_byos_auth_login"
+                      class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
+                      placeholder="Email" />
+                    <input type="password" id="s_byos_auth_password"
+                      class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
+                      placeholder="Password" />
+                    <button type="button" onclick="window.app.byosLogin()"
+                      class="w-full px-3 py-1.5 text-sm text-white rounded-md transition hover:opacity-90"
+                      style="background-color: var(--primary)">
+                      Authenticate
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Option 2: Manual token entry -->
+                <div class="p-2 rounded-md bg-gray-50 border border-gray-200">
+                  <p class="text-xs font-medium text-gray-600 mb-2">Option 2: Paste tokens manually</p>
+                  <div class="space-y-2">
+                    <input type="text" id="s_byos_manual_access_token"
+                      class="w-full px-2 py-1 text-sm border rounded-md font-mono" style="border-color: var(--primary-light)"
+                      placeholder="Access Token" />
+                    <input type="text" id="s_byos_manual_refresh_token"
+                      class="w-full px-2 py-1 text-sm border rounded-md font-mono" style="border-color: var(--primary-light)"
+                      placeholder="Refresh Token" />
+                    <button type="button" onclick="window.app.byosSaveManualTokens()"
+                      class="w-full px-3 py-1.5 text-sm border-2 rounded-md transition hover:bg-gray-100"
+                      style="border-color: var(--primary); color: var(--primary)">
+                      Save Tokens
+                    </button>
+                  </div>
+                </div>
+              </div>
+              `
+              }
+            </div>
+          </div>
+
+          <p class="text-xs text-gray-500 mt-2">
+            <a href="https://github.com/usetrmnl/byos_hanami/blob/main/doc/api.adoc#screens" target="_blank" class="underline" style="color: var(--primary)">BYOS Hanami docs</a>
+          </p>
         </div>
       </div>
     `
@@ -574,12 +703,14 @@ export class RenderScheduleContent {
             <select id="s_palette" class="w-full px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
               onchange="window.app.updateScheduleFromForm()"
               title="Color palette matching your e-ink display capabilities">
-              ${this.paletteOptions.map(
-                (p) =>
-                  `<option value="${p.value}" ${
-                    s.dithering?.palette === p.value ? 'selected' : ''
-                  }>${p.label}</option>`
-              ).join('\n              ')}
+              ${this.paletteOptions
+                .map(
+                  (p) =>
+                    `<option value="${p.value}" ${
+                      s.dithering?.palette === p.value ? 'selected' : ''
+                    }>${p.label}</option>`,
+                )
+                .join('\n              ')}
             </select>
             <p class="text-xs text-gray-500 mt-1">Match your display: grayscale (TRMNL, classic e-ink) or color (Inky, Spectra, RTM1002)</p>
           </div>
@@ -667,17 +798,17 @@ export class RenderScheduleContent {
                 .map(
                   (level) => `
                 <option value="${level}" ${
-                    (s.dithering?.compressionLevel ?? 9) === level
-                      ? 'selected'
-                      : ''
-                  }>${level} ${
-                    level === 9
-                      ? '(max compression)'
-                      : level === 1
+                  (s.dithering?.compressionLevel ?? 9) === level
+                    ? 'selected'
+                    : ''
+                }>${level} ${
+                  level === 9
+                    ? '(max compression)'
+                    : level === 1
                       ? '(fastest)'
                       : ''
-                  }</option>
-              `
+                }</option>
+              `,
                 )
                 .join('')}
             </select>

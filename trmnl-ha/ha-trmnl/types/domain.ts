@@ -129,6 +129,46 @@ export interface ScreenshotParams {
 }
 
 // =============================================================================
+// WEBHOOK FORMATS
+// =============================================================================
+
+/** Supported webhook payload formats */
+export type WebhookFormat = 'raw' | 'byos-hanami'
+
+/** BYOS Hanami API configuration */
+export interface ByosHanamiConfig {
+  /** Display label shown in BYOS UI */
+  label: string
+  /** Unique screen identifier */
+  name: string
+  /** BYOS model ID */
+  model_id: string
+  /** Whether the screen has been preprocessed */
+  preprocessed: boolean
+  /** JWT authentication settings */
+  auth?: ByosAuthConfig
+}
+
+/** BYOS JWT authentication configuration (tokens only - no credentials stored) */
+export interface ByosAuthConfig {
+  /** Enable JWT authentication */
+  enabled: boolean
+  /** JWT access token (short-lived, ~30 min) */
+  access_token?: string
+  /** JWT refresh token (long-lived, ~14 days) */
+  refresh_token?: string
+  /** Timestamp when tokens were obtained */
+  obtained_at?: number
+}
+
+/** Webhook format configuration */
+export interface WebhookFormatConfig {
+  format: WebhookFormat
+  /** Required when format is 'byos-hanami' */
+  byosConfig?: ByosHanamiConfig
+}
+
+// =============================================================================
 // SCHEDULE
 // =============================================================================
 
@@ -155,6 +195,9 @@ export interface Schedule {
 
   /** Custom headers for webhook requests */
   webhook_headers?: Record<string, string>
+
+  /** Webhook payload format configuration (null/undefined = 'raw' for backward compat) */
+  webhook_format?: WebhookFormatConfig | null
 
   /** Whether to use Home Assistant mode (true) or generic URL mode (false) */
   ha_mode: boolean
@@ -302,8 +345,9 @@ export const isColorPalette = (c: PaletteConfig): c is ColorPaletteConfig =>
   'colors' in c
 
 /** Type guard: is this a grayscale palette config? */
-export const isGrayscalePalette = (c: PaletteConfig): c is GrayscalePaletteConfig =>
-  'levels' in c
+export const isGrayscalePalette = (
+  c: PaletteConfig,
+): c is GrayscalePaletteConfig => 'levels' in c
 
 /** Color palette definitions (hex color arrays) - derived from PALETTES */
 export type ColorPaletteDefinition = Record<ColorPalette, string[]>

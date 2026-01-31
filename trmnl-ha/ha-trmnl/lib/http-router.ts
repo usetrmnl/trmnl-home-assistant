@@ -21,6 +21,7 @@ import {
   updateSchedule,
   deleteSchedule,
 } from './scheduleStore.js'
+import { login as byosLogin, getBaseUrl } from './scheduler/byos-auth.js'
 import { loadPresets } from '../devices.js'
 import { PALETTE_OPTIONS } from '../const.js'
 import type { BrowserFacade } from './browserFacade.js'
@@ -135,6 +136,10 @@ export class HttpRouter {
 
     if (pathname === '/api/palettes') {
       return this.#handlePalettesAPI(response)
+    }
+
+    if (pathname === '/api/byos/login') {
+      return this.#handleByosLoginAPI(request, response)
     }
 
     if (
@@ -296,6 +301,56 @@ export class HttpRouter {
   #handlePalettesAPI(response: ServerResponse): boolean {
     response.writeHead(200, { 'Content-Type': 'application/json' })
     response.end(toJson(PALETTE_OPTIONS))
+    return true
+  }
+
+  /**
+   * Handles BYOS JWT login - authenticates and returns tokens.
+   * Credentials are NOT stored - only used for this request.
+   */
+  async #handleByosLoginAPI(
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<boolean> {
+    response.setHeader('Content-Type', 'application/json')
+
+    if (request.method !== 'POST') {
+      response.writeHead(405)
+      response.end(toJson({ error: 'Method not allowed' }))
+      return true
+    }
+
+    try {
+      const body = await this.#readRequestBody(request)
+      const { webhookUrl, login, password } = JSON.parse(body) as {
+        webhookUrl: string
+        login: string
+        password: string
+      }
+
+      if (!webhookUrl || !login || !password) {
+        response.writeHead(400)
+        response.end(toJson({ error: 'Missing webhookUrl, login, or password' }))
+        return true
+      }
+
+      const baseUrl = getBaseUrl(webhookUrl)
+      const tokens = await byosLogin(baseUrl, login, password)
+
+      response.writeHead(200)
+      response.end(
+        toJson({
+          success: true,
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+          obtained_at: Date.now(),
+        }),
+      )
+    } catch (err) {
+      log.error`BYOS login failed: ${(err as Error).message}`
+      response.writeHead(401)
+      response.end(toJson({ error: (err as Error).message }))
+    }
     return true
   }
 

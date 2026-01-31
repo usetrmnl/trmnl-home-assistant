@@ -77,6 +77,7 @@ If running Home Assistant OS in Proxmox, set the VM host type to `host` for Chro
 | [API Reference](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#api-reference) | Screenshot endpoint parameters |
 | [Device Presets](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#device-presets) | Supported e-ink displays |
 | [Scheduled Captures](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#scheduled-captures) | Cron-based automation |
+| [Webhook Formats](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/docs/webhook-formats.md) | TRMNL, BYOS, and custom endpoints |
 | [Troubleshooting](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#troubleshooting) | Common issues and fixes |
 | [Local Development](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#local-development) | Development setup |
 

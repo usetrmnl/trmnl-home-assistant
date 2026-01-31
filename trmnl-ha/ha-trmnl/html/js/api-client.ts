@@ -194,3 +194,47 @@ export class FetchPreview {
     return response.blob()
   }
 }
+
+/** Response from BYOS login API */
+export interface ByosLoginResponse {
+  success: boolean
+  access_token?: string
+  refresh_token?: string
+  obtained_at?: number
+  error?: string
+}
+
+/**
+ * Authenticates with BYOS server and returns tokens.
+ * Credentials are NOT stored - only passed to server for authentication.
+ */
+export class ByosLogin {
+  baseUrl: string
+
+  constructor(baseUrl = './api/byos/login') {
+    this.baseUrl = baseUrl
+  }
+
+  async call(
+    webhookUrl: string,
+    login: string,
+    password: string,
+  ): Promise<ByosLoginResponse> {
+    const response = await fetch(this.baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhookUrl, login, password }),
+    })
+
+    const data = (await response.json()) as ByosLoginResponse
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error ?? `HTTP ${response.status}: ${response.statusText}`,
+      }
+    }
+
+    return data
+  }
+}

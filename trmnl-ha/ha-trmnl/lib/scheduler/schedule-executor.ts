@@ -96,12 +96,12 @@ export class ScheduleExecutor {
     const savedPath = await this.#saveAndCleanup(
       schedule,
       imageBuffer,
-      params.format
+      params.format,
     )
     const webhook = await this.#uploadIfConfigured(
       schedule,
       imageBuffer,
-      params.format
+      params.format,
     )
     return { success: true, savedPath, webhook }
   }
@@ -110,7 +110,7 @@ export class ScheduleExecutor {
   async #saveAndCleanup(
     schedule: Schedule,
     imageBuffer: Buffer,
-    format: string
+    format: string,
   ): Promise<string> {
     const { outputPath } = saveScreenshot({
       outputDir: this.#outputDir,
@@ -138,7 +138,7 @@ export class ScheduleExecutor {
   async #uploadIfConfigured(
     schedule: Schedule,
     imageBuffer: Buffer,
-    format: string
+    format: string,
   ): Promise<WebhookResult | undefined> {
     if (!schedule.webhook_url) return undefined
 
@@ -150,6 +150,7 @@ export class ScheduleExecutor {
         webhookHeaders: schedule.webhook_headers,
         imageBuffer,
         format: format as 'png' | 'jpeg' | 'bmp',
+        webhookFormat: schedule.webhook_format,
       })
 
       log.info`Schedule "${schedule.name}" webhook success: ${result.status} ${result.statusText}`

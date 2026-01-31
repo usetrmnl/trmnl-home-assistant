@@ -271,6 +271,22 @@ Presets auto-configure viewport, rotation, dithering, and format.
 
 ---
 
+## Webhook Formats
+
+The add-on supports multiple webhook payload formats for different e-ink display backends:
+
+| Format | Use Case |
+|--------|----------|
+| **Raw** (default) | TRMNL devices, custom endpoints |
+| **BYOS Hanami** | Self-hosted [BYOS](https://github.com/usetrmnl/byos) servers |
+
+See **[Webhook Formats Guide](docs/webhook-formats.md)** for:
+- Detailed format specifications
+- JWT authentication setup for BYOS
+- How to add custom webhook formats
+
+---
+
 ## Troubleshooting
 
 ### Proxmox Users
