@@ -30,18 +30,26 @@ interface ByosScreensResponse {
 }
 
 /**
- * Deletes an existing BYOS screen by model_id.
+ * Updates an existing BYOS screen by model_id using PATCH.
  * Used to handle 422 errors when screen already exists.
  *
  * @param webhookUrl - The webhook URL (used to derive base URL)
  * @param modelId - The model_id to search for (as string, compared to API's number)
  * @param authToken - Bearer token for authentication
- * @returns true if screen was found and deleted, false otherwise
+ * @param imageBuffer - The new image buffer to upload
+ * @param format - The image format
+ * @param byosConfig - The BYOS configuration with label, name, etc.
+ * @returns true if screen was found and updated, false otherwise
  */
-async function deleteExistingByosScreen(
+async function updateExistingByosScreen(
   webhookUrl: string,
   modelId: string,
   authToken: string,
+  imageBuffer: Buffer,
+  format: ImageFormat,
+  byosConfig: NonNullable<
+    NonNullable<WebhookFormatConfig>['byosConfig']
+  >,
 ): Promise<boolean> {
   const baseUrl = getBaseUrl(webhookUrl)
   const screensUrl = `${baseUrl}/api/screens`
@@ -69,23 +77,43 @@ async function deleteExistingByosScreen(
       return false
     }
 
-    log.info`Found existing screen id=${existingScreen.id} with model_id=${modelId}, deleting...`
+    log.info`Found existing screen id=${existingScreen.id} with model_id=${modelId}, updating...`
 
-    // DELETE /api/screens/:id
-    const deleteResponse = await fetch(`${screensUrl}/${existingScreen.id}`, {
-      method: 'DELETE',
-      headers: { Authorization: authToken },
+    // Build PATCH payload with content as data URI
+    // PATCH API expects HTML content, so we embed the image as a data URI
+    const base64Image = imageBuffer.toString('base64')
+    const mimeType = format === 'png' ? 'image/png' : 'image/bmp'
+    const dataUri = `data:${mimeType};base64,${base64Image}`
+    const htmlContent = `<img src="${dataUri}" style="width:100%;height:100%;object-fit:contain;" />`
+    
+    const patchPayload = {
+      screen: {
+        model_id: targetModelId,
+        label: byosConfig.label,
+        name: byosConfig.name,
+        content: htmlContent,
+      },
+    }
+
+    // PATCH /api/screens/:id
+    const patchResponse = await fetch(`${screensUrl}/${existingScreen.id}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: authToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(patchPayload),
     })
 
-    if (!deleteResponse.ok) {
-      log.error`Failed to delete screen: ${deleteResponse.status} ${deleteResponse.statusText}`
+    if (!patchResponse.ok) {
+      log.error`Failed to update screen: ${patchResponse.status} ${patchResponse.statusText}`
       return false
     }
 
-    log.info`Successfully deleted screen id=${existingScreen.id}`
+    log.info`Successfully updated screen id=${existingScreen.id}`
     return true
   } catch (err) {
-    log.error`Error during screen deletion: ${(err as Error).message}`
+    log.error`Error during screen update: ${(err as Error).message}`
     return false
   }
 }
@@ -173,31 +201,26 @@ export async function uploadToWebhook(
     log.error`Webhook failed: ${response.status} ${response.statusText}`
 
     // Handle 422 (Unprocessable Entity) - likely screen already exists in BYOS
-    // Try to delete the existing screen and retry
+    // Try to update the existing screen instead of deleting and recreating
     if (response.status === 422 && byosConfig && headers['Authorization']) {
-      log.info`Got 422, attempting to delete existing screen and retry...`
-      const deleted = await deleteExistingByosScreen(
+      log.info`Got 422, attempting to update existing screen...`
+      const updated = await updateExistingByosScreen(
         webhookUrl,
         byosConfig.model_id,
         headers['Authorization'],
+        imageBuffer,
+        format,
+        byosConfig,
       )
-      if (deleted) {
-        log.info`Deleted existing screen, retrying upload...`
-        const retryResponse = await fetch(webhookUrl, {
-          method: 'POST',
-          headers,
-          body: fetchBody,
-        })
-        if (retryResponse.ok) {
-          log.info`Retry successful: ${retryResponse.status} ${retryResponse.statusText}`
-          return {
-            success: true,
-            status: retryResponse.status,
-            statusText: retryResponse.statusText,
-          }
+      if (updated) {
+        log.info`Successfully updated existing screen`
+        return {
+          success: true,
+          status: 200,
+          statusText: 'OK (Updated)',
         }
-        log.error`Retry also failed: ${retryResponse.status} ${retryResponse.statusText}`
       }
+      log.error`Failed to update existing screen`
     }
 
     // Extract error message from response body for better UI feedback
