@@ -71,7 +71,7 @@ async function updateExistingByosScreen(
 
     // Find screen with matching model_id (API returns number, we store string)
     const targetModelId = parseInt(modelId, 10)
-    const existingScreen = screens.find((s) => s.model_id === targetModelId)
+    const existingScreen = screens.find((s) => s.name === byosConfig.name && s.model_id === targetModelId)
     if (!existingScreen) {
       log.debug`No existing screen found with model_id: ${modelId}`
       return false
@@ -84,7 +84,7 @@ async function updateExistingByosScreen(
     const base64Image = imageBuffer.toString('base64')
     const mimeType = format === 'png' ? 'image/png' : 'image/bmp'
     const dataUri = `data:${mimeType};base64,${base64Image}`
-    const htmlContent = `<img src="${dataUri}" style="width:100%;height:100%;object-fit:contain;" />`
+    const htmlContent = `<img src="${dataUri}" class="image image--fill" />`
     
     const patchPayload = {
       screen: {
