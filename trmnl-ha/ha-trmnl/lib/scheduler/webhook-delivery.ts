@@ -84,7 +84,7 @@ async function updateExistingByosScreen(
     const base64Image = imageBuffer.toString('base64')
     const mimeType = format === 'png' ? 'image/png' : 'image/bmp'
     const dataUri = `data:${mimeType};base64,${base64Image}`
-    const htmlContent = `<img src="${dataUri}" class="image image--fill" />`
+    const htmlContent = `<img id="image" class="image image--fill" /><script>document.getElementById("image").src = "${dataUri}";</script>`
     
     const patchPayload = {
       screen: {
