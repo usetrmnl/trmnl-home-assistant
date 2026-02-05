@@ -680,7 +680,8 @@ class App {
   // =============================================================================
 
   /**
-   * Copies the fetch URL (with full origin) to clipboard.
+   * Copies the fetch URL to clipboard.
+   * NOTE: The input already contains the full URL (with hostname:port)
    */
   async copyFetchUrl(): Promise<void> {
     const input = document.getElementById(
@@ -688,10 +689,8 @@ class App {
     ) as HTMLInputElement | null
     if (!input) return
 
-    const fullUrl = `${window.location.origin}${input.value}`
-
     try {
-      await navigator.clipboard.writeText(fullUrl)
+      await navigator.clipboard.writeText(input.value)
       // Brief visual feedback
       const copyBtn = input.nextElementSibling as HTMLButtonElement | null
       if (copyBtn) {
@@ -703,7 +702,6 @@ class App {
       }
     } catch {
       // Fallback: select the text for manual copy
-      input.value = fullUrl
       input.select()
     }
   }

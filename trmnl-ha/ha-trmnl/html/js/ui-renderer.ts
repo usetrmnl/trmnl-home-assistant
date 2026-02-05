@@ -230,12 +230,19 @@ export class RenderScheduleContent {
     const queryString = params.toString()
     const fetchPath = queryString ? `${path}?${queryString}` : path
 
+    // Build full URL using hostname + server port (not window.location.origin which
+    // would be the HA ingress URL when accessed via HA's add-on panel)
+    // @ts-expect-error window.uiConfig is injected by server
+    const uiConfig = window.uiConfig || { serverPort: 10000 }
+    const baseUrl = `http://${window.location.hostname}:${uiConfig.serverPort}`
+    const fullFetchUrl = `${baseUrl}${fetchPath}`
+
     return `
       <div class="mt-3 p-3 rounded-md" style="background-color: #f0f9ff; border: 1px solid #bae6fd">
         <label class="block text-sm font-medium text-gray-700 mb-1">Fetch URL</label>
         <div class="flex gap-2">
           <input type="text" id="s_fetch_url" readonly
-            value="${fetchPath}"
+            value="${fullFetchUrl}"
             class="w-full px-3 py-2 border rounded-md bg-white font-mono text-xs"
             style="border-color: #93c5fd"
             title="GET this URL to receive a screenshot with the current settings" />

@@ -25,7 +25,7 @@ import type { HaWebSocket as LibHaWebSocket } from 'home-assistant-js-websocket/
 import * as messages from 'home-assistant-js-websocket/dist/messages.js'
 import { atLeastHaVersion } from 'home-assistant-js-websocket/dist/util.js'
 import WebSocket from 'ws'
-import { hassUrl, hassToken } from './const.js'
+import { hassUrl, hassToken, SERVER_PORT } from './const.js'
 import { loadPresets } from './devices.js'
 import type { PresetsConfig } from './types/domain.js'
 import { uiLogger } from './lib/logger.js'
@@ -85,6 +85,8 @@ interface UIConfig {
   connectionStatus: string
   /** Timestamp when HA data was last fetched (for cache age display) */
   cachedAt: number | null
+  /** Server port for constructing Fetch URLs (10000 for add-on, configurable for standalone) */
+  serverPort: number
 }
 
 // =============================================================================
@@ -134,7 +136,7 @@ function extractHostname(url: string): string | null {
  * Returns detailed diagnostic info for error logging
  */
 async function checkDnsResolution(
-  hostname: string
+  hostname: string,
 ): Promise<{ resolved: boolean; ip?: string; error?: string }> {
   try {
     const result = await lookup(hostname)
@@ -160,7 +162,7 @@ async function checkDnsResolution(
  * than the browser's WebSocket, but they're compatible enough for our use case.
  */
 function createSocketWithSslBypass(
-  options: ConnectionOptions
+  options: ConnectionOptions,
 ): Promise<LibHaWebSocket> {
   if (!options.auth) {
     throw new Error('Auth is required for WebSocket connection')
@@ -177,7 +179,7 @@ function createSocketWithSslBypass(
     function connect(
       triesLeft: number,
       promResolve: (socket: LibHaWebSocket) => void,
-      promReject: (err: unknown) => void
+      promReject: (err: unknown) => void,
     ) {
       log.debug`WebSocket connection attempt (retries left: ${triesLeft})`
 
@@ -193,7 +195,7 @@ function createSocketWithSslBypass(
       let invalidAuth = false
 
       const closeMessage = (
-        event?: WebSocket.CloseEvent | WebSocket.ErrorEvent
+        event?: WebSocket.CloseEvent | WebSocket.ErrorEvent,
       ) => {
         socket.removeEventListener('close', closeMessage)
 
@@ -306,7 +308,7 @@ function createSocketWithSslBypass(
 function sendHtmlResponse(
   response: ServerResponse,
   html: string,
-  statusCode: number = 200
+  statusCode: number = 200,
 ): void {
   response.writeHead(statusCode, {
     'Content-Type': 'text/html',
@@ -328,12 +330,12 @@ const HA_CONNECTION_TIMEOUT = 5000
 function withTimeout<T>(
   promise: Promise<T>,
   ms: number,
-  message: string
+  message: string,
 ): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(message)), ms)
+      setTimeout(() => reject(new Error(message)), ms),
     ),
   ])
 }
@@ -399,7 +401,7 @@ async function fetchHomeAssistantData(): Promise<HomeAssistantData> {
         createSocket: createSocketWithSslBypass,
       }),
       HA_CONNECTION_TIMEOUT,
-      `HA connection timeout after ${HA_CONNECTION_TIMEOUT}ms`
+      `HA connection timeout after ${HA_CONNECTION_TIMEOUT}ms`,
     )
 
     log.debug`WebSocket connected, fetching HA data...`
@@ -491,7 +493,7 @@ async function getCachedOrFetch(forceRefresh: boolean): Promise<{
   // Return cached data if available and not forcing refresh
   if (cachedHassData && !forceRefresh) {
     log.debug`Using cached HA data (age: ${Math.round(
-      (Date.now() - cacheTimestamp) / 1000
+      (Date.now() - cacheTimestamp) / 1000,
     )}s)`
     return { data: cachedHassData, cachedAt: cacheTimestamp }
   }
@@ -520,7 +522,7 @@ async function getCachedOrFetch(forceRefresh: boolean): Promise<{
  */
 export async function handleUIRequest(
   response: ServerResponse,
-  requestUrl?: URL
+  requestUrl?: URL,
 ): Promise<void> {
   try {
     // Check for forced refresh via query param
@@ -581,6 +583,7 @@ export async function handleUIRequest(
       tokenPreview,
       connectionStatus,
       cachedAt,
+      serverPort: SERVER_PORT,
     }
 
     const htmlPath = join(HTML_DIR, 'index.html')
