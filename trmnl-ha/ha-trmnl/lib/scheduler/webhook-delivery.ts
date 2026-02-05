@@ -30,24 +30,26 @@ interface ByosScreensResponse {
 }
 
 /**
- * Deletes an existing BYOS screen by model_id.
- * Used to handle 422 errors when screen already exists.
+ * Finds existing BYOS screen by composite key (model_id + name).
+ *
+ * BYOS uses a composite unique constraint - a model can have multiple screens.
  *
  * @param webhookUrl - The webhook URL (used to derive base URL)
  * @param modelId - The model_id to search for (as string, compared to API's number)
+ * @param screenName - The screen name to match (composite key with model_id)
  * @param authToken - Bearer token for authentication
- * @returns true if screen was found and deleted, false otherwise
+ * @returns Screen ID if found, null otherwise
  */
-async function deleteExistingByosScreen(
+async function findExistingByosScreen(
   webhookUrl: string,
   modelId: string,
+  screenName: string,
   authToken: string,
-): Promise<boolean> {
+): Promise<number | null> {
   const baseUrl = getBaseUrl(webhookUrl)
   const screensUrl = `${baseUrl}/api/screens`
 
   try {
-    // GET /api/screens to list all screens
     const listResponse = await fetch(screensUrl, {
       method: 'GET',
       headers: { Authorization: authToken },
@@ -55,39 +57,59 @@ async function deleteExistingByosScreen(
 
     if (!listResponse.ok) {
       log.error`Failed to list screens: ${listResponse.status} ${listResponse.statusText}`
-      return false
+      return null
     }
 
     const response = (await listResponse.json()) as ByosScreensResponse
     const screens = response.data
 
-    // Find screen with matching model_id (API returns number, we store string)
+    // Find screen with matching model_id AND name (composite unique constraint)
     const targetModelId = parseInt(modelId, 10)
-    const existingScreen = screens.find((s) => s.model_id === targetModelId)
+    const existingScreen = screens.find(
+      (s) => s.model_id === targetModelId && s.name === screenName,
+    )
+
     if (!existingScreen) {
-      log.debug`No existing screen found with model_id: ${modelId}`
-      return false
+      log.debug`No existing screen found with model_id=${modelId} name=${screenName}`
+      return null
     }
 
-    log.info`Found existing screen id=${existingScreen.id} with model_id=${modelId}, deleting...`
-
-    // DELETE /api/screens/:id
-    const deleteResponse = await fetch(`${screensUrl}/${existingScreen.id}`, {
-      method: 'DELETE',
-      headers: { Authorization: authToken },
-    })
-
-    if (!deleteResponse.ok) {
-      log.error`Failed to delete screen: ${deleteResponse.status} ${deleteResponse.statusText}`
-      return false
-    }
-
-    log.info`Successfully deleted screen id=${existingScreen.id}`
-    return true
+    log.debug`Found existing screen id=${existingScreen.id} with model_id=${modelId} name=${screenName}`
+    return existingScreen.id
   } catch (err) {
-    log.error`Error during screen deletion: ${(err as Error).message}`
-    return false
+    log.error`Error finding screen: ${(err as Error).message}`
+    return null
   }
+}
+
+/**
+ * Updates existing BYOS screen via PATCH.
+ *
+ * @param webhookUrl - The webhook URL (used to derive base URL)
+ * @param screenId - The screen ID to update
+ * @param body - The request body (same format as POST)
+ * @param authToken - Bearer token for authentication
+ * @returns Response from PATCH request
+ */
+async function patchByosScreen(
+  webhookUrl: string,
+  screenId: number,
+  body: BodyInit,
+  authToken: string,
+): Promise<Response> {
+  const baseUrl = getBaseUrl(webhookUrl)
+  const patchUrl = `${baseUrl}/api/screens/${screenId}`
+
+  log.info`Updating existing screen id=${screenId} via PATCH`
+
+  return fetch(patchUrl, {
+    method: 'PATCH',
+    headers: {
+      Authorization: authToken,
+      'Content-Type': 'application/json',
+    },
+    body,
+  })
 }
 
 /** Options for webhook upload */
@@ -173,30 +195,31 @@ export async function uploadToWebhook(
     log.error`Webhook failed: ${response.status} ${response.statusText}`
 
     // Handle 422 (Unprocessable Entity) - likely screen already exists in BYOS
-    // Try to delete the existing screen and retry
+    // Find existing screen and update via PATCH instead of delete + recreate
     if (response.status === 422 && byosConfig && headers['Authorization']) {
-      log.info`Got 422, attempting to delete existing screen and retry...`
-      const deleted = await deleteExistingByosScreen(
+      log.info`Got 422, attempting to find and update existing screen via PATCH...`
+      const screenId = await findExistingByosScreen(
         webhookUrl,
         byosConfig.model_id,
+        byosConfig.name,
         headers['Authorization'],
       )
-      if (deleted) {
-        log.info`Deleted existing screen, retrying upload...`
-        const retryResponse = await fetch(webhookUrl, {
-          method: 'POST',
-          headers,
-          body: fetchBody,
-        })
-        if (retryResponse.ok) {
-          log.info`Retry successful: ${retryResponse.status} ${retryResponse.statusText}`
+      if (screenId !== null) {
+        const patchResponse = await patchByosScreen(
+          webhookUrl,
+          screenId,
+          fetchBody,
+          headers['Authorization'],
+        )
+        if (patchResponse.ok) {
+          log.info`PATCH successful: ${patchResponse.status} ${patchResponse.statusText}`
           return {
             success: true,
-            status: retryResponse.status,
-            statusText: retryResponse.statusText,
+            status: patchResponse.status,
+            statusText: patchResponse.statusText,
           }
         }
-        log.error`Retry also failed: ${retryResponse.status} ${retryResponse.statusText}`
+        log.error`PATCH failed: ${patchResponse.status} ${patchResponse.statusText}`
       }
     }
 
