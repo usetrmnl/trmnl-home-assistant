@@ -579,7 +579,7 @@ describe('Webhook Integration', () => {
   })
 
   // ==========================================================================
-  // BYOS 422 Error Handling - Delete existing screen and retry
+  // BYOS 422 Error Handling - Update existing screen via PATCH
   // ==========================================================================
 
   describe('BYOS 422 Error Handling', () => {
@@ -598,19 +598,16 @@ describe('Webhook Integration', () => {
       }
     }
 
-    it('retries after 422 by deleting existing screen', async () => {
+    it('updates existing screen via PATCH after 422', async () => {
       let postCount = 0
 
-      // Mock BYOS screens endpoint - return 422 on first POST, 201 on retry
+      // Mock BYOS screens endpoint - return 422 on POST (screen exists)
       webhookServer.setRouteHandler('POST /api/screens', () => {
         postCount++
-        if (postCount === 1) {
-          return {
-            status: 422,
-            body: JSON.stringify({ error: 'Screen already exists' }),
-          }
+        return {
+          status: 422,
+          body: JSON.stringify({ error: 'Screen already exists' }),
         }
-        return { status: 201, body: JSON.stringify({ id: 99, model_id: 1 }) }
       })
 
       // Mock GET /api/screens - return list with matching screen
@@ -623,9 +620,12 @@ describe('Webhook Integration', () => {
         }
       })
 
-      // Mock DELETE /api/screens/:id
-      webhookServer.setRouteHandler('DELETE /api/screens/*', () => {
-        return { status: 200, body: JSON.stringify({ success: true }) }
+      // Mock PATCH /api/screens/:id - successfully updates
+      webhookServer.setRouteHandler('PATCH /api/screens/*', () => {
+        return {
+          status: 200,
+          body: JSON.stringify({ data: { id: 42, model_id: 1 } }),
+        }
       })
 
       const result = await uploadByosWebhook({
@@ -650,18 +650,17 @@ describe('Webhook Integration', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(postCount).toBe(2) // Initial POST + retry POST
+      expect(postCount).toBe(1) // Only initial POST, then PATCH
 
-      // Verify request sequence: POST (422) → GET → DELETE → POST (201)
+      // Verify request sequence: POST (422) → GET → PATCH (200)
       const requests = webhookServer.getRequests()
-      expect(requests.length).toBeGreaterThanOrEqual(4)
+      expect(requests.length).toBeGreaterThanOrEqual(3)
       expect(requests[0]!.method).toBe('POST')
       expect(requests[1]!.method).toBe('GET')
-      expect(requests[2]!.method).toBe('DELETE')
-      expect(requests[3]!.method).toBe('POST')
+      expect(requests[2]!.method).toBe('PATCH')
     })
 
-    it('fails gracefully when screen not found for deletion', async () => {
+    it('fails gracefully when screen not found for PATCH', async () => {
       let postCount = 0
 
       // Return 422 on all POSTs
@@ -673,7 +672,7 @@ describe('Webhook Integration', () => {
         }
       })
 
-      // Return empty screen list (no matching screen to delete)
+      // Return empty screen list (no matching screen to PATCH)
       webhookServer.setRouteHandler('GET /api/screens', () => {
         return { status: 200, body: JSON.stringify({ data: [] }) }
       })
@@ -699,13 +698,13 @@ describe('Webhook Integration', () => {
         },
       })
 
-      // Should fail because no screen was found to delete
+      // Should fail because no screen was found to PATCH
       expect(result.success).toBe(false)
       expect(result.error).toContain('422')
-      expect(postCount).toBe(1) // Only initial POST, no retry
+      expect(postCount).toBe(1) // Only initial POST, no PATCH
     })
 
-    it('fails gracefully when DELETE fails', async () => {
+    it('fails gracefully when PATCH fails', async () => {
       let postCount = 0
 
       webhookServer.setRouteHandler('POST /api/screens', () => {
@@ -725,8 +724,8 @@ describe('Webhook Integration', () => {
         }
       })
 
-      // DELETE fails
-      webhookServer.setRouteHandler('DELETE /api/screens/*', () => {
+      // PATCH fails
+      webhookServer.setRouteHandler('PATCH /api/screens/*', () => {
         return { status: 500, body: JSON.stringify({ error: 'Server error' }) }
       })
 
@@ -752,7 +751,7 @@ describe('Webhook Integration', () => {
       })
 
       expect(result.success).toBe(false)
-      expect(postCount).toBe(1) // Only initial POST, no retry after failed delete
+      expect(postCount).toBe(1) // Only initial POST, no retry after failed PATCH
     })
 
     it('skips 422 handling for non-BYOS format', async () => {
@@ -806,18 +805,13 @@ describe('Webhook Integration', () => {
     })
 
     it('finds correct screen by model_id among multiple screens', async () => {
-      let deletedId = ''
-      let postCount = 0
+      let patchedId = ''
 
       webhookServer.setRouteHandler('POST /api/screens', () => {
-        postCount++
-        if (postCount === 1) {
-          return {
-            status: 422,
-            body: JSON.stringify({ error: 'Screen already exists' }),
-          }
+        return {
+          status: 422,
+          body: JSON.stringify({ error: 'Screen already exists' }),
         }
-        return { status: 201, body: JSON.stringify({ id: 99, model_id: 2 }) }
       })
 
       // Multiple screens, only one matches model_id=2
@@ -834,9 +828,12 @@ describe('Webhook Integration', () => {
         }
       })
 
-      webhookServer.setRouteHandler('DELETE /api/screens/*', (req) => {
-        deletedId = req.url!.split('/').pop()!
-        return { status: 200, body: JSON.stringify({ success: true }) }
+      webhookServer.setRouteHandler('PATCH /api/screens/*', (req) => {
+        patchedId = req.url!.split('/').pop()!
+        return {
+          status: 200,
+          body: JSON.stringify({ data: { id: 20, model_id: 2 } }),
+        }
       })
 
       const result = await uploadByosWebhook({
@@ -861,7 +858,7 @@ describe('Webhook Integration', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(deletedId).toBe('20') // Correct screen was deleted
+      expect(patchedId).toBe('20') // Correct screen was PATCHed
     })
   })
 })
