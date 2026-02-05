@@ -676,6 +676,39 @@ class App {
   }
 
   // =============================================================================
+  // FETCH URL
+  // =============================================================================
+
+  /**
+   * Copies the fetch URL (with full origin) to clipboard.
+   */
+  async copyFetchUrl(): Promise<void> {
+    const input = document.getElementById(
+      's_fetch_url',
+    ) as HTMLInputElement | null
+    if (!input) return
+
+    const fullUrl = `${window.location.origin}${input.value}`
+
+    try {
+      await navigator.clipboard.writeText(fullUrl)
+      // Brief visual feedback
+      const copyBtn = input.nextElementSibling as HTMLButtonElement | null
+      if (copyBtn) {
+        const original = copyBtn.textContent
+        copyBtn.textContent = 'Copied!'
+        setTimeout(() => {
+          copyBtn.textContent = original
+        }, 1500)
+      }
+    } catch {
+      // Fallback: select the text for manual copy
+      input.value = fullUrl
+      input.select()
+    }
+  }
+
+  // =============================================================================
   // HA MODE TOGGLE
   // =============================================================================
 

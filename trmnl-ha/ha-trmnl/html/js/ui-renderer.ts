@@ -17,6 +17,8 @@
 
 import type { Schedule } from '../../types/domain.js'
 import type { PaletteOption } from './palette-options.js'
+import { buildScreenshotParams } from '../shared/build-screenshot-params.js'
+import { resolveScreenshotTarget } from '../shared/screenshot-target.js'
 
 /**
  * Renders the tab bar showing all schedules as clickable tabs.
@@ -141,6 +143,7 @@ export class RenderScheduleContent {
       : ''
 
     return `
+      ${this.#renderFetchUrl()}
       <div class="border-b pb-4">
         <h3 class="text-lg font-semibold mb-3" style="color: var(--primary-dark)">Schedule</h3>
         <div class="space-y-3">
@@ -208,6 +211,44 @@ export class RenderScheduleContent {
 
           ${this.#renderWebhookFormatSettings()}
         </div>
+      </div>
+    `
+  }
+
+  #renderFetchUrl(): string {
+    const s = this.schedule
+    const target = resolveScreenshotTarget(s)
+    const params = buildScreenshotParams(s)
+
+    // Build the full fetch URL
+    // For generic mode, add the url param
+    if (target.fullUrl) {
+      params.append('url', target.fullUrl)
+    }
+
+    const path = target.isHAMode ? target.path : '/'
+    const queryString = params.toString()
+    const fetchPath = queryString ? `${path}?${queryString}` : path
+
+    return `
+      <div class="mt-3 p-3 rounded-md" style="background-color: #f0f9ff; border: 1px solid #bae6fd">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Fetch URL</label>
+        <div class="flex gap-2">
+          <input type="text" id="s_fetch_url" readonly
+            value="${fetchPath}"
+            class="w-full px-3 py-2 border rounded-md bg-white font-mono text-xs"
+            style="border-color: #93c5fd"
+            title="GET this URL to receive a screenshot with the current settings" />
+          <button onclick="window.app.copyFetchUrl()"
+            class="px-3 py-2 text-sm border-2 rounded-md transition hover:bg-gray-50 whitespace-nowrap"
+            style="border-color: var(--primary); color: var(--primary)"
+            title="Copy full URL to clipboard">
+            Copy
+          </button>
+        </div>
+        <p class="text-xs text-gray-500 mt-1">
+          Pull mode: any device can GET this URL to receive the screenshot image on demand. This URL is dynamically updated based on the settings below so the preview pane can be use to configure this URL.
+        </p>
       </div>
     `
   }

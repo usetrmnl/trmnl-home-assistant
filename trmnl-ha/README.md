@@ -14,6 +14,7 @@ Send Home Assistant dashboard screenshots to your TRMNL e-ink display with advan
 
 - **E-ink optimized dithering** - Floyd-Steinberg and Ordered algorithms for crisp e-paper rendering
 - **TRMNL webhook integration** - Automatic dashboard uploads to TRMNL devices
+- **Fetch URL (pull mode)** - Direct URL for on-demand screenshots, works with ESPHome and custom e-ink setups
 - **Scheduled captures** - Cron-based automation with Web UI management
 - **Device presets** - Pre-configured settings for 24+ popular e-ink displays
 - **Crash recovery** - Automatic browser recovery and process supervision
@@ -46,7 +47,7 @@ docker run -d --name trmnl-ha \
   -e ACCESS_TOKEN=your_token_here \
   -p 10000:10000 \
   -v ./trmnl-data:/data \
-  ghcr.io/usetrmnl/trmnl-ha-amd64:latest
+  ghcr.io/usetrmnl/trmnl-ha-amd64:latest # ARM64 (Pi 4/5, Apple Silicon): ghcr.io/usetrmnl/trmnl-ha-aarch64:latest
 ```
 
 > **Note:** Replace `YOUR_HOST_IP` with your machine's IP (e.g., `192.168.1.100`). Container names like `homeassistant` won't work since HA uses host networking.
@@ -75,6 +76,7 @@ If running Home Assistant OS in Proxmox, set the VM host type to `host` for Chro
 | [Configuration](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#configuration) | Required and optional settings |
 | [Web UI](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#web-ui) | Using the web interface |
 | [API Reference](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#api-reference) | Screenshot endpoint parameters |
+| [Fetch URL (Pull Mode)](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#fetch-url-pull-mode) | On-demand screenshots via direct URL |
 | [Device Presets](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#device-presets) | Supported e-ink displays |
 | [Scheduled Captures](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#scheduled-captures) | Cron-based automation |
 | [Webhook Formats](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/docs/webhook-formats.md) | TRMNL, BYOS, and custom endpoints |

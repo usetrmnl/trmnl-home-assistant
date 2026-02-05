@@ -161,6 +161,7 @@ Access via **Ingress** (recommended) or directly at `http://homeassistant.local:
 - Interactive screenshot preview with timing/size info
 - Schedule management (create/edit/delete)
 - Device preset picker (24+ e-ink displays)
+- Copyable **Fetch URL** for pull-mode integration (ESPHome, custom setups)
 - Manual "Send Now" trigger
 
 **HA Mode Toggle** (when HA is connected):
@@ -226,8 +227,76 @@ curl "http://localhost:10000/?url=https://images.unsplash.com/photo-example&view
 
 | Architecture | Description | Use Case |
 |--------------|-------------|----------|
-| **Pull** | Display requests image on-demand via HTTP GET | ESPHome, custom e-ink setups, testing |
-| **Push** | Add-on POSTs to webhook on schedule | TRMNL devices, automated updates |
+| **Pull (Fetch URL)** | Device requests image on-demand via HTTP GET | ESPHome, custom e-ink, TRMNL BYOS, testing |
+| **Push (Webhook)** | Add-on POSTs to webhook on schedule | TRMNL devices, automated updates |
+
+**Pull mode** generates a fresh screenshot on every request. The browser launches automatically if not already running.
+
+**Push mode** captures on a cron schedule and POSTs the image to your webhook URL.
+
+Both modes can be used simultaneously on the same schedule — configure a webhook for push delivery while also using the fetch URL for on-demand access.
+
+---
+
+## Fetch URL (Pull Mode)
+
+Each schedule in the Web UI displays a **Fetch URL** — a direct link that returns a screenshot image with all the schedule's current settings (viewport, dithering, format, etc.) applied.
+
+### How It Works
+
+1. Configure your schedule settings in the Web UI (viewport, dithering, palette, etc.)
+2. The **Fetch URL** field shows the computed URL with all parameters
+3. Click **Copy** to get the full URL
+4. Configure your device or client to GET that URL
+
+Any HTTP client that requests the URL receives the screenshot as a binary image response.
+
+### URL Format
+
+**HA mode (dashboard screenshots):**
+```
+http://<host>:10000/<dashboard-path>?viewport=800x480&dithering&dither_method=floyd-steinberg&palette=gray-4
+```
+
+**Generic mode (any website):**
+```
+http://<host>:10000/?url=https://example.com&viewport=800x480&dithering&palette=bw
+```
+
+### Use Cases
+
+**ESPHome e-ink display:**
+```yaml
+display:
+  - platform: waveshare_epaper
+    # ...
+    lambda: |-
+      # Fetch image from TRMNL HA
+      it.image(0, 0, id(ha_screenshot));
+
+http_request:
+  - url: "http://192.168.1.x:10000/lovelace/0?viewport=800x480&dithering&palette=gray-4"
+    method: GET
+```
+
+**Cron job (Linux/macOS):**
+```bash
+# Save a screenshot every 15 minutes
+*/15 * * * * curl -s "http://192.168.1.x:10000/lovelace/0?viewport=800x480&dithering" -o /tmp/dashboard.png
+```
+
+**Any HTTP client:**
+```bash
+# One-off fetch
+curl "http://192.168.1.x:10000/lovelace/0?viewport=800x480&dithering&palette=bw&format=bmp" -o dashboard.bmp
+```
+
+### Performance Notes
+
+- **Cold start:** First request launches the browser (~3-5s), subsequent requests reuse it
+- **Idle timeout:** Browser shuts down after 60s of inactivity (configurable via `BROWSER_TIMEOUT`)
+- **Keep warm:** Set `KEEP_BROWSER_OPEN=true` to keep the browser alive between requests
+- **Concurrent requests:** Requests are queued and processed sequentially
 
 ---
 
