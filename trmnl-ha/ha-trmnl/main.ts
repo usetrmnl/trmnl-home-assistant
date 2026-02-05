@@ -26,6 +26,7 @@ import {
   BROWSER_TIMEOUT,
   MAX_SCREENSHOTS_BEFORE_RESTART,
   MAX_NEXT_REQUESTS,
+  SERVER_PORT,
 } from './const.js'
 import {
   CannotOpenPageError,
@@ -499,17 +500,16 @@ const scheduler = new Scheduler((params) =>
 
 requestHandler.router.setScheduler(scheduler)
 
-const port = 10000
 const server: Server = http.createServer((request, response) =>
   requestHandler.handleRequest(request, response)
 )
-server.listen(port)
+server.listen(SERVER_PORT)
 
 scheduler.start()
 
 const serverUrl = isAddOn
-  ? `http://homeassistant.local:${port}`
-  : `http://localhost:${port}`
+  ? `http://homeassistant.local:${SERVER_PORT}`
+  : `http://localhost:${SERVER_PORT}`
 log.info`Server started at ${serverUrl}`
 log.info`Scheduler is running`
 

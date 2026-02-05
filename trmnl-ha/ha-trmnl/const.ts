@@ -130,6 +130,10 @@ const options: Options = {
     process.env['DEBUG_LOGGING'] !== undefined
       ? process.env['DEBUG_LOGGING'] === 'true'
       : fileOptions.debug_logging,
+  server_port:
+    process.env['SERVER_PORT'] !== undefined
+      ? parseInt(process.env['SERVER_PORT'], 10)
+      : fileOptions.server_port,
 }
 
 // Log configuration source for debugging
@@ -278,9 +282,29 @@ export const debugLogging: boolean = options.debug_logging ?? true
 // =============================================================================
 
 /**
- * HTTP server port
+ * Default HTTP server port (must match ingress_port in config.yaml for add-on mode)
  */
-export const SERVER_PORT: number = 10000
+const DEFAULT_SERVER_PORT = 10000
+
+/**
+ * HTTP server port
+ * - Add-on mode: Fixed at 10000 (required for HA ingress/sidebar)
+ * - Standalone mode: Configurable via server_port option or SERVER_PORT env var
+ */
+export const SERVER_PORT: number = isAddOn
+  ? DEFAULT_SERVER_PORT
+  : (options.server_port ?? DEFAULT_SERVER_PORT)
+
+// Warn if add-on user tried to configure a different port
+if (
+  isAddOn &&
+  options.server_port &&
+  options.server_port !== DEFAULT_SERVER_PORT
+) {
+  console.warn(
+    `[Config] ⚠️ server_port=${options.server_port} ignored in add-on mode (must be ${DEFAULT_SERVER_PORT} for HA ingress)`,
+  )
+}
 
 /**
  * Browser idle timeout before cleanup (milliseconds)

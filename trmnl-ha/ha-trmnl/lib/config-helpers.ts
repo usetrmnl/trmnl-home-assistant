@@ -17,6 +17,7 @@ export interface Options {
   chromium_executable?: string
   keep_browser_open?: boolean
   debug_logging?: boolean
+  server_port?: number
 }
 
 /**

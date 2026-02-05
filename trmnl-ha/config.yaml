@@ -16,6 +16,7 @@ arch:
 stage: stable
 
 # Enable ingress for sidebar integration
+# NOTE: ingress_port must match DEFAULT_SERVER_PORT in const.ts
 ingress: true
 ingress_port: 10000
 ingress_stream: false
@@ -26,9 +27,9 @@ panel_title: "TRMNL HA"
 
 # Keep ports for backward compatibility (optional direct access)
 ports:
-  10000/tcp: null
+  10000/tcp: 10000
 ports_description:
-  10000/tcp: "Web UI (use ingress instead)"
+  10000/tcp: "Web UI and API (direct access)"
 
 # Configuration options
 options:
@@ -37,6 +38,7 @@ options:
   timezone: ""
   keep_browser_open: false
   debug_logging: false
+  server_port: 10000
 
 # Schema for options validation
 schema:
@@ -45,6 +47,7 @@ schema:
   timezone: str?
   keep_browser_open: bool?
   debug_logging: bool?
+  server_port: "int(1024,65535)?"
 
 # Exclude regeneratable data from HA backups
 backup_exclude:
