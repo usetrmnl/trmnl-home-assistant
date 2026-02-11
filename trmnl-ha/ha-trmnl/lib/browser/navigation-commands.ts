@@ -153,14 +153,25 @@ export class NavigateToPage {
         throw new CannotOpenPageError(response?.status() ?? 0, pageUrl)
       }
     } else {
-      // Same path? Full reload to get fresh entity states
       const currentPath = new URL(this.#page.url()).pathname
+      const haUrl = new URL(pagePath, this.#homeAssistantUrl).toString()
+
       if (currentPath === pagePath) {
-        log.info`Reloading: ${pagePath} (mode: full-reload, same path)`
-        await this.#page.reload()
+        log.info`Navigating to: ${haUrl} (mode: HA panel remount, same path)`
+        await this.#page.evaluate((path: string) => {
+          const fire = (p: string) => {
+            history.replaceState(null, '', p)
+            const event = new Event('location-changed') as Event & {
+              detail?: { replace: boolean }
+            }
+            event.detail = { replace: true }
+            window.dispatchEvent(event)
+          }
+          // Navigate away to force panel unmount, then back to target
+          fire('/')
+          fire(path)
+        }, pagePath)
       } else {
-        // Different HA path: Use client-side navigation (faster, preserves state)
-        const haUrl = new URL(pagePath, this.#homeAssistantUrl).toString()
         log.info`Navigating to: ${haUrl} (mode: HA client-side)`
         await this.#page.evaluate((path: string) => {
           const state = history.state as { root?: boolean } | null

@@ -19,7 +19,6 @@ import puppeteer from 'puppeteer'
 import type { Browser as PuppeteerBrowser, Page, Viewport } from 'puppeteer'
 import {
   debugLogging,
-  isAddOn,
   chromiumExecutable,
   HEADER_HEIGHT,
 } from './const.js'
@@ -67,7 +66,6 @@ const HASS_LOCAL_STORAGE_DEFAULTS: AuthStorage = {
 const PUPPETEER_ARGS: string[] = [
   // Disable unnecessary background processes
   '--autoplay-policy=user-gesture-required',
-  '--disable-background-networking',
   '--disable-background-timer-throttling',
   '--disable-backgrounding-occluded-windows',
   '--disable-breakpad',
@@ -115,18 +113,11 @@ const PUPPETEER_ARGS: string[] = [
   '--disable-accelerated-2d-canvas',
   '--disable-software-rasterizer',
 
-  // Memory and cache optimizations
-  '--disable-application-cache',
-  '--disable-cache',
-  '--disk-cache-size=1',
-  '--media-cache-size=1',
-
-  // Process isolation optimizations
-  '--disable-features=IsolateOrigins,site-per-process',
-  '--single-process',
-
-  // Add low-end device mode for resource-constrained environments
-  ...(isAddOn ? ['--enable-low-end-device-mode'] : []),
+  // NOTE: The following were removed to fix stale dashboard rendering (issue #34):
+  // --disable-cache, --disk-cache-size=1  → prevented resource caching, no fallback on network hiccups
+  // --single-process                      → one stall affects entire browser, less stable long-running
+  // --enable-low-end-device-mode          → throttles JS timers/rAF, can stall HA card render cycles
+  // --disable-background-networking       → could affect WebSocket keepalive/reconnection
 ]
 
 // =============================================================================

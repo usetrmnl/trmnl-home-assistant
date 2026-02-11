@@ -171,11 +171,11 @@ describe('NavigateToPage', () => {
   })
 
   // ==========================================================================
-  // Subsequent navigation: same path must reload for fresh content (Issue #34)
+  // Subsequent navigation: client-side panel remount for fresh content (Issue #34)
   // ==========================================================================
 
   describe('subsequent navigation to same HA path', () => {
-    it('reloads page when already on the same HA path', async () => {
+    it('uses client-side panel remount for same HA path (no full reload)', async () => {
       const page = createMockPage('http://homeassistant:8123/lovelace/kitchen')
       const nav = new NavigateToPage(
         page,
@@ -185,8 +185,11 @@ describe('NavigateToPage', () => {
 
       await nav.call('/lovelace/kitchen', false)
 
-      expect(page.calls.reload).toBe(1)
-      expect(page.calls.evaluate).toBe(0)
+      // NOTE: Uses evaluate (client-side navigate-away-and-back) instead of
+      // page.reload(). This forces HA to remount the lovelace panel and clear
+      // stale card states without tearing down the entire frontend.
+      expect(page.calls.reload).toBe(0)
+      expect(page.calls.evaluate).toBe(1)
       expect(page.calls.goto).toEqual([])
     })
 
