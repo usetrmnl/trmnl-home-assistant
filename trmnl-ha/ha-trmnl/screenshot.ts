@@ -2,7 +2,7 @@
  * Browser Automation Module for Home Assistant Screenshot Capture
  *
  * Manages Puppeteer browser lifecycle and screenshot capture with aggressive optimization.
- * Implements caching, smart waiting, and error classification for robust automation.
+ * Uses fresh page per request for clean state and error classification for robust automation.
  *
  * Performance Optimizations:
  * - Theme caching: Skip theme updates if same theme/dark mode requested
@@ -17,11 +17,7 @@
 
 import puppeteer from 'puppeteer'
 import type { Browser as PuppeteerBrowser, Page, Viewport } from 'puppeteer'
-import {
-  debugLogging,
-  chromiumExecutable,
-  HEADER_HEIGHT,
-} from './const.js'
+import { debugLogging, chromiumExecutable, HEADER_HEIGHT } from './const.js'
 import {
   CannotOpenPageError,
   BrowserCrashError,
@@ -30,9 +26,9 @@ import {
 import { processImage } from './lib/dithering.js'
 import {
   NavigateToPage,
-  WaitForPageStable,
-  WaitForNetworkIdle,
   WaitForLoadingComplete,
+  WaitForPaintStability,
+  WaitForHassReady,
   type AuthStorage,
 } from './lib/browser/navigation-commands.js'
 import { getPageSetupStrategy } from './lib/browser/page-setup-strategies.js'
@@ -130,7 +126,7 @@ export interface NavigateParams {
   /** Full target URL (if provided, overrides pagePath + base URL resolution) */
   targetUrl?: string
   viewport: Viewport
-  /** Custom timeout for smart wait detection (default: 15000ms) */
+  /** Fixed wait time in ms. If omitted, waits for loading indicators to clear. */
   extraWait?: number
   zoom?: number
   lang?: string
@@ -237,43 +233,73 @@ export class Browser {
   }
 
   /**
-   * Gets or creates Puppeteer page instance (lazy initialization pattern).
+   * Gets or creates Puppeteer page instance.
+   * Separates browser launch from page creation to support per-request page recycling.
    */
   async #getPage(): Promise<Page> {
     if (this.#page) return this.#page
 
-    browserLog.info`Starting browser`
+    // Launch browser if needed (reused across requests)
+    if (!this.#browser) {
+      browserLog.info`Starting browser`
+      try {
+        // NOTE: acceptInsecureCerts allows screenshots of HTTPS pages with:
+        // - Self-signed certificates
+        // - Internal domains with custom CAs
+        // - Let's Encrypt certs when CA store is incomplete in Docker
+        const browser = await puppeteer.launch({
+          headless: 'shell',
+          executablePath: chromiumExecutable,
+          args: PUPPETEER_ARGS,
+          acceptInsecureCerts: true,
+        })
 
+        // Monitor browser process death
+        browser.on('disconnected', () => {
+          browserLog.error`Browser process disconnected!`
+          this.#browser = undefined
+          this.#page = undefined
+        })
+
+        this.#browser = browser
+      } catch (err) {
+        throw new BrowserCrashError(err as Error)
+      }
+    }
+
+    // Create fresh page
     try {
-      // Launch browser
-      // NOTE: acceptInsecureCerts allows screenshots of HTTPS pages with:
-      // - Self-signed certificates
-      // - Internal domains with custom CAs
-      // - Let's Encrypt certs when CA store is incomplete in Docker
-      const browser = await puppeteer.launch({
-        headless: 'shell',
-        executablePath: chromiumExecutable,
-        args: PUPPETEER_ARGS,
-        acceptInsecureCerts: true,
-      })
-
-      // Monitor browser process death
-      browser.on('disconnected', () => {
-        browserLog.error`Browser process disconnected!`
-        this.#browser = undefined
-        this.#page = undefined
-      })
-
-      const page = await browser.newPage()
-
-      // Set up event logging
+      const page = await this.#browser.newPage()
       this.#setupPageLogging(page)
-
-      this.#browser = browser
       this.#page = page
       return this.#page
     } catch (err) {
       throw new BrowserCrashError(err as Error)
+    }
+  }
+
+  /**
+   * Closes current page while keeping the browser process alive.
+   * Resets all page-related state so the next #getPage() creates a fresh context.
+   *
+   * NOTE: This is the "nuclear" fix for issue #34 (stale dashboard rendering).
+   * HA's frontend accumulates stale state (WebSocket connections, LitElement
+   * component state, cached renders) in long-lived pages. Creating a fresh page
+   * per request eliminates all accumulated state.
+   */
+  async #closePage(): Promise<void> {
+    const page = this.#page
+    this.#page = undefined
+    this.#lastRequestedPath = undefined
+    this.#lastRequestedLang = undefined
+    this.#lastRequestedTheme = undefined
+    this.#lastRequestedDarkMode = undefined
+    this.#pageErrorDetected = false
+
+    try {
+      if (page) await page.close()
+    } catch (err) {
+      browserLog.debug`Error closing page: ${err}`
     }
   }
 
@@ -369,24 +395,17 @@ export class Browser {
     const headerHeight = Math.round(HEADER_HEIGHT * zoom)
 
     try {
+      // Fresh page per request: close existing page to eliminate accumulated
+      // stale state (WebSocket connections, cached renders, component state)
+      await this.#closePage()
+
       const page = await this.#getPage()
+      await page.setViewport({
+        width: viewport.width,
+        height: viewport.height + headerHeight,
+      })
 
-      // Add header height to viewport (will be clipped in screenshot)
-      viewport.height += headerHeight
-
-      // Update viewport if changed
-      const curViewport = page.viewport()
-      if (
-        !curViewport ||
-        curViewport.width !== viewport.width ||
-        curViewport.height !== viewport.height
-      ) {
-        await page.setViewport(viewport)
-      }
-
-      const isFirstNavigation = this.#lastRequestedPath === undefined
-
-      // Always navigate to ensure fresh content (HA dashboards update dynamically)
+      // Always first navigation on fresh page - injects auth + full page.goto()
       const effectivePath = targetUrl || pagePath
       const authStorage = this.#buildAuthStorage()
       const navigateCmd = new NavigateToPage(
@@ -394,7 +413,7 @@ export class Browser {
         authStorage,
         this.#homeAssistantUrl,
       )
-      await navigateCmd.call(pagePath, isFirstNavigation, targetUrl)
+      await navigateCmd.call(pagePath, targetUrl)
       this.#lastRequestedPath = effectivePath
 
       // Check if we landed on HA login/auth page (indicates invalid token)
@@ -415,7 +434,6 @@ export class Browser {
         theme,
         lang,
         dark,
-        isFirstNavigation,
         lastTheme: this.#lastRequestedTheme,
         lastLang: this.#lastRequestedLang,
         lastDarkMode: this.#lastRequestedDarkMode,
@@ -427,38 +445,37 @@ export class Browser {
         this.#lastRequestedDarkMode = dark
       }
 
-      // Wait strategy: explicit fixed wait OR automatic smart detection
-      // - If user provides 'wait' param: use fixed wait (bypasses smart detection)
-      // - Otherwise: use smart wait (network idle + loading indicators + stability)
+      // Wait strategy: explicit fixed wait OR multi-stage readiness detection
+      // NOTE: page.goto() already uses waitUntil:'networkidle2' so network is settled
       if (extraWait && extraWait > 0) {
-        // Explicit fixed wait - user knows how long their page needs
         log.debug`Explicit wait: ${extraWait}ms`
         await new Promise((resolve) => setTimeout(resolve, extraWait))
       } else {
-        // Automatic smart wait (default: 15 seconds max)
-        const maxWait = 15000
+        // Stage 1: Wait for network to re-settle after theme/language changes
+        // Theme and language changes trigger WebSocket messages and cascading renders
+        if (setupResult.themeChanged || setupResult.langChanged) {
+          log.debug`Waiting for network idle after page setup changes`
+          try {
+            await page.waitForNetworkIdle({ idleTime: 500, concurrency: 2 })
+          } catch (_err) {
+            log.debug`Network idle wait timed out after page setup`
+          }
+        }
 
-        // Step 1: Wait for network activity to settle (catches async API calls)
-        const networkCmd = new WaitForNetworkIdle(page, maxWait, 500)
-        const networkWait = await networkCmd.call()
-        log.debug`Network idle after ${networkWait}ms`
+        // Stage 2: Wait for HA entity data to load (HA pages only)
+        if (!isGenericUrl) {
+          const hassReadyCmd = new WaitForHassReady(page)
+          await hassReadyCmd.call()
+        }
 
-        // Step 2: Wait for loading indicators to disappear
-        const loadingCmd = new WaitForLoadingComplete(
-          page,
-          Math.max(1000, maxWait - networkWait),
-        )
+        // Stage 3: Wait for loading indicators to clear
+        const loadingCmd = new WaitForLoadingComplete(page, 15000)
         const loadingWait = await loadingCmd.call()
-        log.debug`Loading complete after ${loadingWait}ms`
+        log.debug`Loading indicators cleared after ${loadingWait}ms`
 
-        // Step 3: Final stability check (content stops changing)
-        const remainingTime = Math.max(
-          1000,
-          maxWait - networkWait - loadingWait,
-        )
-        const stableCmd = new WaitForPageStable(page, remainingTime)
-        const stableWait = await stableCmd.call()
-        log.debug`Smart wait total: ${networkWait + loadingWait + stableWait}ms`
+        // Stage 4: Wait for rendering pipeline to flush
+        const paintCmd = new WaitForPaintStability(page)
+        await paintCmd.call()
       }
 
       return { time: Date.now() - start }

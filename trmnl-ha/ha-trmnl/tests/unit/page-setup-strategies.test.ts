@@ -37,13 +37,14 @@ function createMockPage(options: { hasHAElements?: boolean } = {}) {
 }
 
 /** Default options for testing */
-function defaultOptions(overrides: Partial<PageSetupOptions> = {}): PageSetupOptions {
+function defaultOptions(
+  overrides: Partial<PageSetupOptions> = {},
+): PageSetupOptions {
   return {
     zoom: 1,
     theme: undefined,
     lang: undefined,
     dark: undefined,
-    isFirstNavigation: true,
     lastTheme: undefined,
     lastLang: undefined,
     lastDarkMode: undefined,
@@ -98,13 +99,19 @@ describe('Page Setup Strategies', () => {
     })
 
     it('returns themeChanged as false', async () => {
-      const result = await strategy.setup(mockPage as never, defaultOptions({ theme: 'dark' }))
+      const result = await strategy.setup(
+        mockPage as never,
+        defaultOptions({ theme: 'dark' }),
+      )
 
       expect(result.themeChanged).toBe(false)
     })
 
     it('returns langChanged as false', async () => {
-      const result = await strategy.setup(mockPage as never, defaultOptions({ lang: 'en' }))
+      const result = await strategy.setup(
+        mockPage as never,
+        defaultOptions({ lang: 'en' }),
+      )
 
       expect(result.langChanged).toBe(false)
     })
@@ -130,16 +137,18 @@ describe('Page Setup Strategies', () => {
     })
 
     describe('zoom handling', () => {
-      it('sets zoom via evaluate on first navigation', async () => {
-        await strategy.setup(mockPage as never, defaultOptions({
-          zoom: 2,
-          isFirstNavigation: true,
-        }))
+      it('sets zoom via evaluate', async () => {
+        await strategy.setup(
+          mockPage as never,
+          defaultOptions({
+            zoom: 2,
+          }),
+        )
 
         // First call is WaitForPageLoad's waitForFunction
         // Then evaluate calls for zoom and possibly others
         const zoomCall = mockPage.evaluateCalls.find(
-          (call) => call.args[0] === 2
+          (call) => call.args[0] === 2,
         )
         expect(zoomCall).toBeDefined()
       })
@@ -147,39 +156,51 @@ describe('Page Setup Strategies', () => {
 
     describe('theme changes', () => {
       it('returns themeChanged true when theme differs from last', async () => {
-        const result = await strategy.setup(mockPage as never, defaultOptions({
-          theme: 'dark',
-          lastTheme: 'light',
-        }))
+        const result = await strategy.setup(
+          mockPage as never,
+          defaultOptions({
+            theme: 'dark',
+            lastTheme: 'light',
+          }),
+        )
 
         expect(result.themeChanged).toBe(true)
       })
 
       it('returns themeChanged true when dark mode differs', async () => {
-        const result = await strategy.setup(mockPage as never, defaultOptions({
-          dark: true,
-          lastDarkMode: false,
-        }))
+        const result = await strategy.setup(
+          mockPage as never,
+          defaultOptions({
+            dark: true,
+            lastDarkMode: false,
+          }),
+        )
 
         expect(result.themeChanged).toBe(true)
       })
 
       it('returns themeChanged false when theme unchanged', async () => {
-        const result = await strategy.setup(mockPage as never, defaultOptions({
-          theme: 'dark',
-          lastTheme: 'dark',
-          dark: true,
-          lastDarkMode: true,
-        }))
+        const result = await strategy.setup(
+          mockPage as never,
+          defaultOptions({
+            theme: 'dark',
+            lastTheme: 'dark',
+            dark: true,
+            lastDarkMode: true,
+          }),
+        )
 
         expect(result.themeChanged).toBe(false)
       })
 
       it('adds waitTime when theme changes', async () => {
-        const result = await strategy.setup(mockPage as never, defaultOptions({
-          theme: 'new-theme',
-          lastTheme: 'old-theme',
-        }))
+        const result = await strategy.setup(
+          mockPage as never,
+          defaultOptions({
+            theme: 'new-theme',
+            lastTheme: 'old-theme',
+          }),
+        )
 
         expect(result.waitTime).toBeGreaterThanOrEqual(500)
       })
@@ -187,28 +208,37 @@ describe('Page Setup Strategies', () => {
 
     describe('language changes', () => {
       it('returns langChanged true when language differs', async () => {
-        const result = await strategy.setup(mockPage as never, defaultOptions({
-          lang: 'fr',
-          lastLang: 'en',
-        }))
+        const result = await strategy.setup(
+          mockPage as never,
+          defaultOptions({
+            lang: 'fr',
+            lastLang: 'en',
+          }),
+        )
 
         expect(result.langChanged).toBe(true)
       })
 
       it('returns langChanged false when language unchanged', async () => {
-        const result = await strategy.setup(mockPage as never, defaultOptions({
-          lang: 'en',
-          lastLang: 'en',
-        }))
+        const result = await strategy.setup(
+          mockPage as never,
+          defaultOptions({
+            lang: 'en',
+            lastLang: 'en',
+          }),
+        )
 
         expect(result.langChanged).toBe(false)
       })
 
       it('adds waitTime when language changes', async () => {
-        const result = await strategy.setup(mockPage as never, defaultOptions({
-          lang: 'de',
-          lastLang: 'en',
-        }))
+        const result = await strategy.setup(
+          mockPage as never,
+          defaultOptions({
+            lang: 'de',
+            lastLang: 'en',
+          }),
+        )
 
         expect(result.waitTime).toBeGreaterThanOrEqual(1000)
       })
@@ -233,12 +263,15 @@ describe('Page Setup Strategies', () => {
 
     describe('combined waitTime', () => {
       it('accumulates wait time from multiple changes', async () => {
-        const result = await strategy.setup(mockPage as never, defaultOptions({
-          theme: 'new-theme',
-          lastTheme: 'old-theme',
-          lang: 'fr',
-          lastLang: 'en',
-        }))
+        const result = await strategy.setup(
+          mockPage as never,
+          defaultOptions({
+            theme: 'new-theme',
+            lastTheme: 'old-theme',
+            lang: 'fr',
+            lastLang: 'en',
+          }),
+        )
 
         // Theme (500) + Lang (1000) = 1500+
         expect(result.waitTime).toBeGreaterThanOrEqual(1500)
@@ -258,7 +291,10 @@ describe('Page Setup Strategies', () => {
       const options = defaultOptions()
 
       const haResult = await haStrategy.setup(mockPage as never, options)
-      const genericResult = await genericStrategy.setup(mockPage as never, options)
+      const genericResult = await genericStrategy.setup(
+        mockPage as never,
+        options,
+      )
 
       // Both return the same result shape
       expect(haResult).toHaveProperty('waitTime')
@@ -275,7 +311,7 @@ describe('Page Setup Strategies', () => {
       const options = defaultOptions({ zoom: 1.5 })
 
       // Factory returns strategy, caller doesn't care which type
-      const strategy1 = getPageSetupStrategy(true)  // Generic
+      const strategy1 = getPageSetupStrategy(true) // Generic
       const strategy2 = getPageSetupStrategy(false) // HA
 
       const result1 = await strategy1.setup(mockPage as never, options)

@@ -10,7 +10,6 @@
 import type { Page } from 'puppeteer-core'
 import {
   WaitForPageLoad,
-  DismissToastsAndSetZoom,
   UpdateLanguage,
   UpdateTheme,
 } from './navigation-commands.js'
@@ -21,7 +20,6 @@ export interface PageSetupOptions {
   theme?: string
   lang?: string
   dark?: boolean
-  isFirstNavigation: boolean
   lastTheme?: string
   lastLang?: string
   lastDarkMode?: boolean
@@ -52,7 +50,7 @@ export interface PageSetupStrategy {
  */
 export class HAPageSetup implements PageSetupStrategy {
   async setup(page: Page, options: PageSetupOptions): Promise<PageSetupResult> {
-    const { zoom, theme, lang, dark, isFirstNavigation, lastTheme, lastLang, lastDarkMode } = options
+    const { zoom, theme, lang, dark, lastTheme, lastLang, lastDarkMode } = options
     let waitTime = 0
     let themeChanged = false
     let langChanged = false
@@ -61,17 +59,10 @@ export class HAPageSetup implements PageSetupStrategy {
     const waitLoadCmd = new WaitForPageLoad(page)
     await waitLoadCmd.call()
 
-    // Dismiss toasts and set zoom (after first navigation)
-    if (!isFirstNavigation) {
-      const dismissCmd = new DismissToastsAndSetZoom(page)
-      const dismissedToast = await dismissCmd.call(zoom)
-      if (dismissedToast) waitTime += 1000
-    } else {
-      // First navigation: set zoom directly
-      await page.evaluate((zoomLevel: number) => {
-        document.body.style.zoom = String(zoomLevel)
-      }, zoom)
-    }
+    // Set zoom
+    await page.evaluate((zoomLevel: number) => {
+      document.body.style.zoom = String(zoomLevel)
+    }, zoom)
 
     // Update language if changed
     if (lang !== lastLang) {

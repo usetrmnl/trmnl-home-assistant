@@ -12,6 +12,9 @@ frozen-lockfile = true
 # Test timeout (30 seconds, matching Jest)
 timeout = 30000
 
+# Coverage thresholds - bun test --coverage exits non-zero if not met
+coverageThreshold = { line = 0.70, function = 0.70 }
+
 [run]
 # Use system shell for scripts
 shell = "system"

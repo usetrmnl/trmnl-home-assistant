@@ -4,6 +4,10 @@
  * Encapsulates all browser navigation and page manipulation operations for Home Assistant.
  * Uses Command Pattern - each class is a single-purpose command with .call() method.
  *
+ * NOTE: With the fresh-page-per-request model (issue #34 fix), every navigation
+ * is a full page.goto() with auth injection. Client-side navigation was removed
+ * because HA's frontend accumulates stale state in long-lived pages.
+ *
  * @module lib/browser/navigation-commands
  */
 
@@ -29,9 +33,7 @@ export type AuthStorage = Record<string, string>
  * 1. HA Mode: Resolves pagePath against base URL, injects HA auth tokens
  * 2. Generic Mode: Uses targetUrl directly, skips auth injection
  *
- * Navigation Strategies:
- * 1. First Navigation: Injects auth tokens via evaluateOnNewDocument(), then page.goto()
- * 2. Subsequent Navigation: Uses client-side router (real HA) or page.goto() (mock/generic)
+ * Always uses full page.goto() for maximum reliability.
  */
 export class NavigateToPage {
   #page: Page
@@ -47,38 +49,14 @@ export class NavigateToPage {
   }
 
   /**
-   * Navigates to specified page.
+   * Navigates to specified page with full page.goto().
    *
    * @param pagePath - Page path relative to HA base (e.g., "/lovelace/kitchen")
-   * @param isFirstNavigation - True for first navigation (inject auth if applicable)
    * @param targetUrl - Full URL to navigate to (overrides pagePath resolution)
    * @returns Recommended wait time in milliseconds
    * @throws CannotOpenPageError If navigation fails
    */
-  async call(
-    pagePath: string,
-    isFirstNavigation: boolean = false,
-    targetUrl?: string,
-  ): Promise<NavigationResult> {
-    if (isFirstNavigation) {
-      return this.#firstNavigation(pagePath, targetUrl)
-    } else {
-      return this.#subsequentNavigation(pagePath, targetUrl)
-    }
-  }
-
-  /**
-   * Determines if HA auth should be injected for a given URL.
-   * Only inject auth when navigating to the configured HA instance.
-   */
-  #shouldInjectAuth(pageUrl: string): boolean {
-    return pageUrl.startsWith(this.#homeAssistantUrl)
-  }
-
-  async #firstNavigation(
-    pagePath: string,
-    targetUrl?: string,
-  ): Promise<NavigationResult> {
+  async call(pagePath: string, targetUrl?: string): Promise<NavigationResult> {
     // Resolve the final URL: use targetUrl if provided, otherwise resolve against HA base
     const pageUrl =
       targetUrl || new URL(pagePath, this.#homeAssistantUrl).toString()
@@ -102,7 +80,7 @@ export class NavigateToPage {
 
     let response
     try {
-      response = await this.#page.goto(pageUrl)
+      response = await this.#page.goto(pageUrl, { waitUntil: 'networkidle2' })
     } catch (err) {
       if (evaluateId) {
         this.#page.removeScriptToEvaluateOnNewDocument(evaluateId.identifier)
@@ -126,71 +104,30 @@ export class NavigateToPage {
     }
   }
 
-  async #subsequentNavigation(
-    pagePath: string,
-    targetUrl?: string,
-  ): Promise<NavigationResult> {
-    const isGenericUrl = !!targetUrl
-    const isCurrentlyOnHA = this.#page.url().startsWith(this.#homeAssistantUrl)
-
-    // Use page.goto() for generic URLs or when not currently on HA
-    // Use client-side navigation only when already on HA (faster, preserves state)
-    if (isGenericUrl || !isCurrentlyOnHA) {
-      const pageUrl =
-        targetUrl || new URL(pagePath, this.#homeAssistantUrl).toString()
-      log.info`Navigating to: ${pageUrl} (mode: ${
-        isGenericUrl ? 'generic' : 'full-reload'
-      })`
-
-      let response
-      try {
-        response = await this.#page.goto(pageUrl)
-      } catch (err) {
-        throw new CannotOpenPageError(0, pageUrl, (err as Error).message)
-      }
-
-      if (!response?.ok()) {
-        throw new CannotOpenPageError(response?.status() ?? 0, pageUrl)
-      }
-    } else {
-      const currentPath = new URL(this.#page.url()).pathname
-      const haUrl = new URL(pagePath, this.#homeAssistantUrl).toString()
-
-      if (currentPath === pagePath) {
-        log.info`Navigating to: ${haUrl} (mode: HA panel remount, same path)`
-        await this.#page.evaluate((path: string) => {
-          const fire = (p: string) => {
-            history.replaceState(null, '', p)
-            const event = new Event('location-changed') as Event & {
-              detail?: { replace: boolean }
-            }
-            event.detail = { replace: true }
-            window.dispatchEvent(event)
-          }
-          // Navigate away to force panel unmount, then back to target
-          fire('/')
-          fire(path)
-        }, pagePath)
-      } else {
-        log.info`Navigating to: ${haUrl} (mode: HA client-side)`
-        await this.#page.evaluate((path: string) => {
-          const state = history.state as { root?: boolean } | null
-          history.replaceState(state?.root ? { root: true } : null, '', path)
-          const event = new Event('location-changed') as Event & {
-            detail?: { replace: boolean }
-          }
-          event.detail = { replace: true }
-          window.dispatchEvent(event)
-        }, pagePath)
-      }
-    }
-
-    return { waitTime: DEFAULT_WAIT_TIME }
+  /**
+   * Determines if HA auth should be injected for a given URL.
+   * Only inject auth when navigating to the configured HA instance.
+   */
+  #shouldInjectAuth(pageUrl: string): boolean {
+    return pageUrl.startsWith(this.#homeAssistantUrl)
   }
 }
 
 /**
- * Waits for Home Assistant page to finish loading by checking shadow DOM loading flags.
+ * Waits for Home Assistant page to finish loading by checking panel state.
+ *
+ * Checks two levels:
+ * 1. partial-panel-resolver: must not be in _loading state
+ * 2. ha-panel-lovelace: must reach _panelState === "loaded"
+ *
+ * _panelState is a state machine ("loading" | "loaded" | "error" | "yaml-editor")
+ * that only reaches "loaded" after config is fetched AND registries are verified.
+ * This is more reliable than _loading alone because it represents the panel's
+ * own "I'm done" signal.
+ *
+ * For non-lovelace panels (e.g. ha-panel-history), falls back to the _loading check.
+ *
+ * @see frontend/src/panels/lovelace/ha-panel-lovelace.ts
  */
 export class WaitForPageLoad {
   #page: Page
@@ -219,161 +156,25 @@ export class WaitForPageLoad {
           if (!panelResolver || panelResolver._loading) return false
 
           const panel = panelResolver.children[0] as
-            | (Element & { _loading?: boolean })
+            | (Element & {
+                _loading?: boolean
+                _panelState?: string
+              })
             | undefined
           if (!panel) return false
 
+          // Lovelace panels expose _panelState — wait for "loaded"
+          if ('_panelState' in panel) {
+            return panel._panelState === 'loaded'
+          }
+
+          // Non-lovelace panels: fall back to _loading check
           return !('_loading' in panel) || !panel._loading
         },
-        { timeout: 3000, polling: 100 },
+        { timeout: 5000, polling: 100 },
       )
     } catch (_err) {
       log.debug`Timeout waiting for HA to finish loading`
-    }
-  }
-}
-
-/** Page stability metrics */
-interface StabilityMetrics {
-  height: number
-  contentHash: number
-}
-
-/**
- * Smart wait strategy that detects when page content stops changing.
- */
-export class WaitForPageStable {
-  #page: Page
-  #timeout: number
-
-  constructor(page: Page, timeout: number = 5000) {
-    this.#page = page
-    this.#timeout = timeout
-  }
-
-  /**
-   * Waits for content stabilization or timeout.
-   * @returns Actual wait time in milliseconds
-   */
-  async call(): Promise<number> {
-    const start = Date.now()
-    let lastHeight = 0
-    let lastContent = 0
-    let stableChecks = 0
-    const requiredStableChecks = 3
-
-    while (Date.now() - start < this.#timeout) {
-      const metrics = await this.#page.evaluate((): StabilityMetrics => {
-        const haEl = document.querySelector('home-assistant')
-        if (!haEl) return { height: 0, contentHash: 0 }
-
-        return {
-          height: document.body.scrollHeight,
-          contentHash: haEl.shadowRoot?.innerHTML?.length || 0,
-        }
-      })
-
-      if (
-        metrics.height === lastHeight &&
-        metrics.contentHash === lastContent
-      ) {
-        stableChecks++
-        if (stableChecks >= requiredStableChecks) {
-          const actualWait = Date.now() - start
-          log.debug`Page stable after ${actualWait}ms (${stableChecks} checks)`
-          return actualWait
-        }
-      } else {
-        stableChecks = 0
-      }
-
-      lastHeight = metrics.height
-      lastContent = metrics.contentHash
-
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    }
-
-    const actualWait = Date.now() - start
-    log.debug`Page stability timeout after ${actualWait}ms`
-    return actualWait
-  }
-}
-
-/**
- * Waits for network activity to settle (no pending requests).
- *
- * Tracks XHR/Fetch requests and waits until no requests are in-flight
- * for a specified quiet period. This catches async data loading from widgets.
- */
-export class WaitForNetworkIdle {
-  #page: Page
-  #timeout: number
-  #idleTime: number
-
-  constructor(page: Page, timeout: number = 10000, idleTime: number = 500) {
-    this.#page = page
-    this.#timeout = timeout
-    this.#idleTime = idleTime
-  }
-
-  /**
-   * Waits for network to be idle or timeout.
-   * @returns Actual wait time in milliseconds
-   */
-  async call(): Promise<number> {
-    const start = Date.now()
-
-    try {
-      // Use CDP to monitor network activity
-      const client = await this.#page.createCDPSession()
-      await client.send('Network.enable')
-
-      let pendingRequests = 0
-      let lastActivityTime = Date.now()
-
-      const onRequestWillBeSent = () => {
-        pendingRequests++
-        lastActivityTime = Date.now()
-      }
-
-      const onLoadingFinished = () => {
-        pendingRequests = Math.max(0, pendingRequests - 1)
-        lastActivityTime = Date.now()
-      }
-
-      const onLoadingFailed = () => {
-        pendingRequests = Math.max(0, pendingRequests - 1)
-        lastActivityTime = Date.now()
-      }
-
-      client.on('Network.requestWillBeSent', onRequestWillBeSent)
-      client.on('Network.loadingFinished', onLoadingFinished)
-      client.on('Network.loadingFailed', onLoadingFailed)
-
-      // Wait for network to be idle
-      while (Date.now() - start < this.#timeout) {
-        const timeSinceLastActivity = Date.now() - lastActivityTime
-        const isIdle =
-          pendingRequests === 0 && timeSinceLastActivity >= this.#idleTime
-
-        if (isIdle) {
-          const actualWait = Date.now() - start
-          log.debug`Network idle after ${actualWait}ms`
-          await client.detach()
-          return actualWait
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      }
-
-      await client.detach()
-      const actualWait = Date.now() - start
-      log.debug`Network idle timeout after ${actualWait}ms (${pendingRequests} pending)`
-      return actualWait
-    } catch (err) {
-      // CDP not available or error - fall through gracefully
-      log.debug`Network idle detection unavailable: ${(err as Error).message}`
-      return Date.now() - start
     }
   }
 }
@@ -383,6 +184,10 @@ export class WaitForNetworkIdle {
  *
  * Detects common HA loading patterns: circular progress spinners,
  * skeleton loaders, and loading placeholders.
+ *
+ * NOTE: Uses Puppeteer's waitForFunction instead of manual evaluate() polling.
+ * The function is sent to the browser once and polled internally every 100ms,
+ * eliminating IPC round-trip overhead per poll cycle.
  */
 export class WaitForLoadingComplete {
   #page: Page
@@ -400,101 +205,163 @@ export class WaitForLoadingComplete {
   async call(): Promise<number> {
     const start = Date.now()
 
-    // Common HA loading indicator selectors
     const loadingSelectors = [
       'ha-circular-progress',
+      'hass-loading-screen', // Panel loading screen (shown while _panelState === "loading")
       '.loading',
       '.spinner',
       '[loading]',
       'hui-card-preview', // Card preview placeholder
     ].join(', ')
 
-    while (Date.now() - start < this.#timeout) {
-      const hasLoadingIndicators = await this.#page.evaluate((selectors) => {
-        const haEl = document.querySelector('home-assistant')
-        if (!haEl?.shadowRoot) return false
+    try {
+      await this.#page.waitForFunction(
+        (selectors: string) => {
+          // ha-launch-screen lives on document root (not in shadow DOM)
+          // It's removed when the app is fully initialized
+          if (document.getElementById('ha-launch-screen')) return false
 
-        // Check for loading indicators in shadow DOM
-        const checkShadowRoot = (root: ShadowRoot | Document): boolean => {
-          const indicators = Array.from(root.querySelectorAll(selectors))
-          for (const el of indicators) {
-            // Only count visible indicators
-            const style = window.getComputedStyle(el)
-            if (style.display !== 'none' && style.visibility !== 'hidden') {
-              return true
-            }
-          }
+          const haEl = document.querySelector('home-assistant')
+          if (!haEl?.shadowRoot) return true // No HA element = nothing to wait for
 
-          // Recursively check shadow roots
-          const elementsWithShadow = Array.from(root.querySelectorAll('*'))
-          for (const el of elementsWithShadow) {
-            if ((el as Element & { shadowRoot?: ShadowRoot }).shadowRoot) {
-              if (
-                checkShadowRoot(
-                  (el as Element & { shadowRoot: ShadowRoot }).shadowRoot,
-                )
-              ) {
+          const checkShadowRoot = (root: ShadowRoot | Document): boolean => {
+            const indicators = Array.from(root.querySelectorAll(selectors))
+            for (const el of indicators) {
+              const style = window.getComputedStyle(el)
+              if (style.display !== 'none' && style.visibility !== 'hidden') {
                 return true
               }
             }
+
+            const elementsWithShadow = Array.from(root.querySelectorAll('*'))
+            for (const el of elementsWithShadow) {
+              if ((el as Element & { shadowRoot?: ShadowRoot }).shadowRoot) {
+                if (
+                  checkShadowRoot(
+                    (el as Element & { shadowRoot: ShadowRoot }).shadowRoot,
+                  )
+                ) {
+                  return true
+                }
+              }
+            }
+
+            return false
           }
 
-          return false
-        }
-
-        return checkShadowRoot(haEl.shadowRoot)
-      }, loadingSelectors)
-
-      if (!hasLoadingIndicators) {
-        const actualWait = Date.now() - start
-        log.debug`Loading indicators cleared after ${actualWait}ms`
-        return actualWait
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 100))
+          // Return true (ready) when no visible loading indicators remain
+          return !checkShadowRoot(haEl.shadowRoot)
+        },
+        { timeout: this.#timeout, polling: 100 },
+        loadingSelectors,
+      )
+    } catch (_err) {
+      log.debug`Loading indicator timeout after ${Date.now() - start}ms`
     }
 
     const actualWait = Date.now() - start
-    log.debug`Loading indicator timeout after ${actualWait}ms`
+    log.debug`Loading indicators cleared after ${actualWait}ms`
     return actualWait
   }
 }
 
 /**
- * Dismisses HA notification toasts and sets browser zoom level.
+ * Waits for the browser rendering pipeline to flush after DOM changes.
+ *
+ * Uses the "double requestAnimationFrame" technique: two consecutive rAF
+ * callbacks ensure the browser has composed and painted at least one frame.
+ * This catches the gap between "loading indicators gone" and "pixels painted".
  */
-export class DismissToastsAndSetZoom {
+export class WaitForPaintStability {
   #page: Page
 
   constructor(page: Page) {
     this.#page = page
   }
 
-  /**
-   * Dismisses toasts and sets zoom.
-   * @param zoom - Zoom level (1.0 = 100%)
-   * @returns True if toast was dismissed
-   */
-  async call(zoom: number): Promise<boolean> {
-    return this.#page.evaluate((zoomLevel: number) => {
-      document.body.style.zoom = String(zoomLevel)
+  async call(): Promise<void> {
+    try {
+      await this.#page.waitForFunction(
+        () =>
+          new Promise((resolve) => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => resolve(true))
+            })
+          }),
+        { timeout: 2000 },
+      )
+    } catch (_err) {
+      log.debug`Paint stability check timed out`
+    }
+  }
+}
 
-      const haEl = document.querySelector('home-assistant')
-      if (!haEl) return false
+/**
+ * Waits for Home Assistant core data to be populated via WebSocket.
+ *
+ * The HA frontend loads data in this order (connection-mixin.ts):
+ *   1. subscribeEntities → hass.states
+ *   2. subscribeConfig → hass.config
+ *   3. subscribeEntityRegistryDisplay → hass.entities
+ *   4. subscribeDeviceRegistry → hass.devices
+ *   5. subscribeAreaRegistry → hass.areas
+ *
+ * ha-panel-lovelace._fetchConfig() explicitly checks for entities, devices,
+ * and areas before loading the dashboard config. Without these, cards that
+ * reference devices/areas will render with incomplete data.
+ *
+ * @see frontend/src/state/connection-mixin.ts
+ * @see frontend/src/panels/lovelace/ha-panel-lovelace.ts (_fetchConfig)
+ */
+export class WaitForHassReady {
+  #page: Page
+  #timeout: number
 
-      const notifyEl = haEl.shadowRoot?.querySelector(
-        'notification-manager',
-      ) as (Element & { shadowRoot: ShadowRoot | null }) | null
-      if (!notifyEl) return false
+  constructor(page: Page, timeout: number = 5000) {
+    this.#page = page
+    this.#timeout = timeout
+  }
 
-      const actionEl = notifyEl.shadowRoot?.querySelector(
-        'ha-toast *[slot=action]',
-      ) as HTMLElement | null
-      if (!actionEl) return false
+  async call(): Promise<void> {
+    try {
+      await this.#page.waitForFunction(
+        () => {
+          const haEl = document.querySelector('home-assistant') as
+            | (Element & {
+                hass?: {
+                  connected?: boolean
+                  states?: Record<string, unknown>
+                  config?: { state?: string }
+                  entities?: Record<string, unknown>
+                  devices?: Record<string, unknown>
+                  areas?: Record<string, unknown>
+                }
+              })
+            | null
+          if (!haEl?.hass) return false
 
-      actionEl.click()
-      return true
-    }, zoom)
+          const h = haEl.hass
+
+          // Core check: entity state data must be populated (all HA versions)
+          if (!h.states || Object.keys(h.states).length === 0) return false
+
+          // Defensive checks: only enforce properties that exist on this HA version.
+          // Older HA lacks registries; future HA may change the shape.
+          // If the property exists but is falsy (null/undefined), data hasn't loaded yet.
+          if ('connected' in h && !h.connected) return false
+          if (h.config && 'state' in h.config && h.config.state !== 'RUNNING')
+            return false
+          if ('entities' in h && !h.entities) return false
+          if ('devices' in h && !h.devices) return false
+          if ('areas' in h && !h.areas) return false
+
+          return true
+        },
+        { timeout: this.#timeout, polling: 100 },
+      )
+    } catch (_err) {
+      log.debug`Hass ready check timed out after ${this.#timeout}ms`
+    }
   }
 }
 
