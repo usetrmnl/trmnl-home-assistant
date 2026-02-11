@@ -74,7 +74,7 @@ interface CropSettings extends CropRegion {
 }
 
 /** Callback type for crop apply */
-type OnApplyCallback = (cropSettings: CropSettings) => void
+type OnApplyCallback = (cropSettings: CropSettings) => void | Promise<void>
 
 /**
  * Interactive crop modal with Interact.js integration.
@@ -186,8 +186,11 @@ export class CropModal {
 
   /**
    * Applies current crop settings via callback.
+   * NOTE: Must await #onApply so the save + form update completes
+   * before close(). Otherwise the modal closing can trigger a form
+   * re-render that overwrites the crop values.
    */
-  apply(): void {
+  async apply(): Promise<void> {
     if (!this.#onApply) return
 
     const cropSettings: CropSettings = {
@@ -198,7 +201,7 @@ export class CropModal {
       height: Math.round(this.#modalState.crop.height),
     }
 
-    this.#onApply(cropSettings)
+    await this.#onApply(cropSettings)
     this.close()
   }
 
@@ -308,17 +311,21 @@ export class CropModal {
     const overlayRect = overlay.getBoundingClientRect()
     const imgRect = img.getBoundingClientRect()
 
-    const x = (overlayRect.left - imgRect.left) / this.#modalState.containerScale
-    const y = (overlayRect.top - imgRect.top) / this.#modalState.containerScale
-    const width = overlayRect.width / this.#modalState.containerScale
-    const height = overlayRect.height / this.#modalState.containerScale
+    const rawX = (overlayRect.left - imgRect.left) / this.#modalState.containerScale
+    const rawY = (overlayRect.top - imgRect.top) / this.#modalState.containerScale
+    const rawWidth = overlayRect.width / this.#modalState.containerScale
+    const rawHeight = overlayRect.height / this.#modalState.containerScale
 
-    this.#modalState.crop = {
-      x: Math.max(0, Math.min(schedule.viewport.width - width, x)),
-      y: Math.max(0, Math.min(schedule.viewport.height - height, y)),
-      width: Math.max(50, Math.min(schedule.viewport.width, width)),
-      height: Math.max(50, Math.min(schedule.viewport.height, height)),
-    }
+    // Clamp position within viewport bounds
+    const x = Math.max(0, Math.min(schedule.viewport.width - 50, rawX))
+    const y = Math.max(0, Math.min(schedule.viewport.height - 50, rawY))
+
+    // Shrink dimensions to fit within viewport when dragged near edges
+    // This allows dragging a full-size overlay to reposition and crop
+    const width = Math.max(50, Math.min(schedule.viewport.width - x, rawWidth))
+    const height = Math.max(50, Math.min(schedule.viewport.height - y, rawHeight))
+
+    this.#modalState.crop = { x, y, width, height }
 
     this.#updateDimensionsDisplay()
   }

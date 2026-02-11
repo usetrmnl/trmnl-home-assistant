@@ -659,8 +659,28 @@ class App {
     }
   }
 
-  applyCropSettings(): void {
-    this.#cropModal.apply()
+  async applyCropSettings(): Promise<void> {
+    await this.#cropModal.apply()
+  }
+
+  /**
+   * Quick preset: crop the 56px HA toolbar from the top of screenshots.
+   * Sets crop to y=56, height=viewport-56, keeping full width.
+   */
+  async applyCropHeaderPreset(): Promise<void> {
+    const HA_HEADER_HEIGHT = 56
+
+    const enabledInput = document.getElementById(
+      's_crop_enabled',
+    ) as HTMLInputElement | null
+    const yInput = document.getElementById(
+      's_crop_y',
+    ) as HTMLInputElement | null
+
+    if (enabledInput) enabledInput.checked = true
+    if (yInput) yInput.value = String(HA_HEADER_HEIGHT)
+
+    await this.updateScheduleFromForm()
   }
 
   // =============================================================================

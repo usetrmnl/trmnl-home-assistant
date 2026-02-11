@@ -336,11 +336,6 @@ export const MAX_NEXT_REQUESTS: number = 100
 // =============================================================================
 
 /**
- * Home Assistant header height in pixels (clipped from screenshots)
- */
-export const HEADER_HEIGHT: number = 56
-
-/**
  * Valid output image formats
  */
 export const VALID_FORMATS: readonly ImageFormat[] = [

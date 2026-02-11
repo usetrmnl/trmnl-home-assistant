@@ -549,6 +549,16 @@ export class RenderScheduleContent {
             Enable Crop Region
           </label>
         </div>
+        ${
+          (s.ha_mode ?? true)
+            ? `<button onclick="window.app.applyCropHeaderPreset()"
+                class="mb-2 px-3 py-1 text-xs border rounded-md transition hover:bg-gray-100"
+                style="border-color: var(--primary-light); color: var(--primary)"
+                title="Crop the 56px Home Assistant toolbar from the top of the screenshot">
+                Crop HA Header
+              </button>`
+            : ''
+        }
         <div class="grid grid-cols-4 gap-2">
           <div>
             <label class="block text-xs text-gray-600 mb-1">X</label>

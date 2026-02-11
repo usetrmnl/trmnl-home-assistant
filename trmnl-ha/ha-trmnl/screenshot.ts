@@ -17,7 +17,7 @@
 
 import puppeteer from 'puppeteer'
 import type { Browser as PuppeteerBrowser, Page, Viewport } from 'puppeteer'
-import { debugLogging, chromiumExecutable, HEADER_HEIGHT } from './const.js'
+import { debugLogging, chromiumExecutable } from './const.js'
 import {
   CannotOpenPageError,
   BrowserCrashError,
@@ -392,18 +392,13 @@ export class Browser {
 
     const start = Date.now()
     this.#busy = true
-    const headerHeight = Math.round(HEADER_HEIGHT * zoom)
-
     try {
       // Fresh page per request: close existing page to eliminate accumulated
       // stale state (WebSocket connections, cached renders, component state)
       await this.#closePage()
 
       const page = await this.#getPage()
-      await page.setViewport({
-        width: viewport.width,
-        height: viewport.height + headerHeight,
-      })
+      await page.setViewport(viewport)
 
       // Always first navigation on fresh page - injects auth + full page.goto()
       const authStorage = this.#buildAuthStorage()
@@ -513,8 +508,6 @@ export class Browser {
    * Captures screenshot of current page with cropping and image processing.
    */
   async screenshotPage({
-    viewport,
-    zoom = 1,
     format = 'png',
     rotate,
     invert,
@@ -525,33 +518,20 @@ export class Browser {
 
     const start = Date.now()
     this.#busy = true
-    const headerHeight = Math.round(HEADER_HEIGHT * zoom)
-
     try {
       const page = await this.#getPage()
 
-      // Determine clip region (with optional crop)
-      let clipRegion = {
-        x: 0,
-        y: headerHeight,
-        width: viewport.width,
-        height: viewport.height,
-      }
-
-      // Apply crop if specified
-      if (crop && crop.width > 0 && crop.height > 0) {
-        clipRegion = {
-          x: crop.x,
-          y: headerHeight + crop.y,
-          width: crop.width,
-          height: crop.height,
-        }
-      }
-
-      // Capture screenshot as PNG (Puppeteer returns Uint8Array, convert to Buffer)
+      // Capture screenshot (use crop clip if specified, otherwise full viewport)
       const screenshotData = await page.screenshot({
         type: 'png',
-        clip: clipRegion,
+        ...(crop && crop.width > 0 && crop.height > 0 && {
+          clip: {
+            x: crop.x,
+            y: crop.y,
+            width: crop.width,
+            height: crop.height,
+          },
+        }),
       })
 
       // Process image with dithering and format conversion

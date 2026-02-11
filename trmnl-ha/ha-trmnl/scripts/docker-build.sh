@@ -17,6 +17,9 @@ cd "$PROJECT_ROOT"
 # Build the image
 docker build -t trmnl-ha .
 
+# Remove dangling images left behind by the re-tag
+docker image prune -f --filter "dangling=true" > /dev/null 2>&1 || true
+
 echo ""
 echo -e "${GREEN}✅ Build complete!${NC}"
 echo ""
