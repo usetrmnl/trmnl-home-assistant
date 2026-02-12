@@ -160,6 +160,55 @@ describe('clampCropToViewport', () => {
   })
 
   // -------------------------------------------------------------------------
+  // Exact boundary values
+  // -------------------------------------------------------------------------
+
+  it('preserves crop that exactly fills viewport from origin', () => {
+    const result = clampCropToViewport(
+      { x: 0, y: 0, width: 800, height: 480 },
+      viewport,
+    )
+    expect(result).toEqual({ x: 0, y: 0, width: 800, height: 480 })
+  })
+
+  it('preserves crop that exactly touches right and bottom edges', () => {
+    // x=200, width=600 → x+width=800 (exactly viewport.width)
+    const result = clampCropToViewport(
+      { x: 200, y: 100, width: 600, height: 380 },
+      viewport,
+    )
+    expect(result).toEqual({ x: 200, y: 100, width: 600, height: 380 })
+  })
+
+  // -------------------------------------------------------------------------
+  // Negative and zero dimensions
+  // -------------------------------------------------------------------------
+
+  it('enforces minimum 50px when width is negative', () => {
+    const result = clampCropToViewport(
+      { x: 100, y: 100, width: -10, height: 200 },
+      viewport,
+    )
+    expect(result.width).toBe(50)
+  })
+
+  it('enforces minimum 50px when height is negative', () => {
+    const result = clampCropToViewport(
+      { x: 100, y: 100, width: 200, height: -5 },
+      viewport,
+    )
+    expect(result.height).toBe(50)
+  })
+
+  it('enforces minimum dimensions when both are zero', () => {
+    const result = clampCropToViewport(
+      { x: 0, y: 0, width: 0, height: 0 },
+      viewport,
+    )
+    expect(result).toEqual({ x: 0, y: 0, width: 50, height: 50 })
+  })
+
+  // -------------------------------------------------------------------------
   // Different viewport sizes
   // -------------------------------------------------------------------------
 
@@ -169,11 +218,20 @@ describe('clampCropToViewport', () => {
       { x: 60, y: 70, width: 200, height: 200 },
       small,
     )
-    // x clamped to min(50, 60)=50, width = min(100-60, 200)=40 → enforced to 50? No:
     // x = max(0, min(100-50, 60)) = max(0, min(50, 60)) = 50
     // width = max(50, min(100-50, 200)) = max(50, min(50, 200)) = 50
     // y = max(0, min(100-50, 70)) = max(0, min(50, 70)) = 50
     // height = max(50, min(100-50, 200)) = max(50, min(50, 200)) = 50
     expect(result).toEqual({ x: 50, y: 50, width: 50, height: 50 })
+  })
+
+  it('works with TRMNL e-ink resolution (1072×1448)', () => {
+    const trmnl = { width: 1072, height: 1448 }
+    const result = clampCropToViewport(
+      { x: 0, y: 56, width: 1072, height: 1392 },
+      trmnl,
+    )
+    // NOTE: y=56 is the HA header preset — crop starts below header
+    expect(result).toEqual({ x: 0, y: 56, width: 1072, height: 1392 })
   })
 })
