@@ -8,10 +8,10 @@
  * @module tests/unit/http-router
  */
 
-import { describe, it, expect, beforeEach, afterAll, mock } from 'bun:test'
+import { describe, it, expect, beforeEach, mock } from 'bun:test'
 
 // ---------------------------------------------------------------------------
-// Module mocks — replace scheduleStore and byos-auth before HttpRouter loads
+// Mock functions — passed via constructor DI (no global mock.module needed)
 // ---------------------------------------------------------------------------
 
 const mockLoadSchedules = mock(async () => [{ id: 's1', name: 'Test' }])
@@ -31,38 +31,28 @@ const mockUpdateSchedule = mock(
 )
 const mockDeleteSchedule = mock(async (_id: unknown) => true)
 
-mock.module('../../lib/scheduleStore.js', () => ({
-  loadSchedules: mockLoadSchedules,
-  saveSchedules: mock(async () => {}),
-  getSchedule: mock(async () => null),
-  createSchedule: mockCreateSchedule,
-  updateSchedule: mockUpdateSchedule,
-  deleteSchedule: mockDeleteSchedule,
-}))
-
 const mockByosLogin = mock(async () => ({
   access_token: 'test-access',
   refresh_token: 'test-refresh',
 }))
 
-mock.module('../../lib/scheduler/byos-auth.js', () => ({
-  login: mockByosLogin,
+// ---------------------------------------------------------------------------
+// Import module under test (real module — deps injected via constructor)
+// ---------------------------------------------------------------------------
+
+import { HttpRouter, type HttpRouterDeps } from '../../lib/http-router.js'
+
+/** Shared mock deps injected into HttpRouter — avoids global mock.module() */
+const mockDeps = {
+  loadSchedules: mockLoadSchedules,
+  createSchedule: mockCreateSchedule,
+  updateSchedule: mockUpdateSchedule,
+  deleteSchedule: mockDeleteSchedule,
+  byosLogin: mockByosLogin,
   getBaseUrl: (url: string) => new URL(url).origin,
-  getValidAccessToken: mock(async () => null),
-}))
-
-// ---------------------------------------------------------------------------
-// Import module under test (uses mocked leaf deps + real data modules)
-// ---------------------------------------------------------------------------
-
-import { HttpRouter } from '../../lib/http-router.js'
+} as unknown as HttpRouterDeps
 import type { BrowserFacade } from '../../lib/browserFacade.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-
-// Clean up global mocks so other test files get real modules
-afterAll(() => {
-  mock.restore()
-})
 
 /** Mock HTTP request */
 interface MockRequest {
@@ -150,8 +140,8 @@ describe('HttpRouter', () => {
       }),
     }
 
-    // Create router instance
-    router = new HttpRouter(mockFacade)
+    // Create router instance with injected mock deps
+    router = new HttpRouter(mockFacade, null, mockDeps)
 
     // Create fake request/response
     mockRequest = createRequest()
@@ -451,7 +441,7 @@ describe('HttpRouter', () => {
 
     it('returns 503 when scheduler not initialized', async () => {
       // Create router without scheduler
-      const routerNoScheduler = new HttpRouter(mockFacade)
+      const routerNoScheduler = new HttpRouter(mockFacade, null, mockDeps)
 
       const url = new URL('http://localhost/api/schedules/123/send')
 
@@ -503,7 +493,7 @@ describe('HttpRouter', () => {
 
   describe('setScheduler', () => {
     it('allows scheduler to be set after construction', () => {
-      const newRouter = new HttpRouter(mockFacade)
+      const newRouter = new HttpRouter(mockFacade, null, mockDeps)
 
       newRouter.setScheduler(
         mockScheduler as Parameters<typeof router.setScheduler>[0],
@@ -518,7 +508,7 @@ describe('HttpRouter', () => {
     })
 
     it('enables /send endpoint after scheduler is set', async () => {
-      const newRouter = new HttpRouter(mockFacade)
+      const newRouter = new HttpRouter(mockFacade, null, mockDeps)
 
       // Before setting scheduler - should return 503
       mockRequest = createRequest('POST')

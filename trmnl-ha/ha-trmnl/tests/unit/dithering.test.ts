@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'bun:test'
+import { execSync } from 'node:child_process'
 import {
   processImage,
   applyDithering,
@@ -18,8 +19,22 @@ import {
 import type { DitheringMethod } from '../../types/domain.js'
 import gm from 'gm'
 
-// NOTE: Skipped - ImageMagick image creation times out in CI
-describe.skip('Dithering Module', () => {
+// Auto-skip when ImageMagick 7 isn't available (local dev without IM7)
+function hasImageMagick7(): boolean {
+  try {
+    const version = execSync('magick --version 2>/dev/null || convert --version 2>/dev/null', {
+      encoding: 'utf-8',
+      timeout: 5000,
+    })
+    return version.includes('ImageMagick 7')
+  } catch {
+    return false
+  }
+}
+
+const describeDithering = hasImageMagick7() ? describe : describe.skip
+
+describeDithering('Dithering Module', () => {
   let testImageBuffer: Buffer
 
   beforeAll(async () => {

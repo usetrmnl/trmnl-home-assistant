@@ -9,16 +9,17 @@
  * - Busy guard prevents concurrent operations
  * - Generic mode (targetUrl) skips HA-specific page setup
  *
- * NOTE: Only mocks leaf dependencies (puppeteer, const, logger, dithering).
- * Real navigation-commands and page-setup-strategies are used with a
- * comprehensive mock page, avoiding global mock leaks into other test files.
+ * NOTE: Uses constructor dependency injection instead of mock.module() to avoid
+ * global mock pollution. Real navigation-commands and page-setup-strategies run
+ * against the comprehensive mock page below.
  *
  * @module tests/unit/screenshot-clip
  */
 
-import { mock, describe, it, expect, beforeEach, afterAll } from 'bun:test'
+import { mock, describe, it, expect, beforeEach } from 'bun:test'
+import type { BrowserDeps } from '../../screenshot.js'
 
-// Safety: provide env vars in case const.js mock doesn't intercept
+// Safety: const.ts needs these env vars at module load time (no options-dev.json in CI)
 process.env['HOME_ASSISTANT_URL'] = 'http://localhost:8123'
 process.env['ACCESS_TOKEN'] = 'test-token'
 
@@ -71,12 +72,7 @@ function createMockPage(): MockPage {
 }
 
 // ---------------------------------------------------------------------------
-// Module mocks — only leaf dependencies, NOT shared modules
-//
-// NOTE: mock.module() is global in Bun. Mocking navigation-commands or
-// page-setup-strategies here would poison tests in those files' own test
-// suites. Instead we mock only leaf deps and let the real commands run
-// against the comprehensive mock page above.
+// Mock browser + injectable dependencies (no mock.module — avoids global pollution)
 // ---------------------------------------------------------------------------
 
 const mockBrowserInstance = {
@@ -86,47 +82,15 @@ const mockBrowserInstance = {
   on: mock(() => {}),
 }
 
-mock.module('puppeteer', () => ({
-  default: { launch: mock(async () => mockBrowserInstance) },
-}))
+// Dynamic import: env vars must be set BEFORE const.ts loads (static imports hoist)
+const { Browser } = await import('../../screenshot.js')
 
-const noopLogger = {
-  info: () => {},
-  debug: () => {},
-  error: () => {},
-  warn: () => {},
-  trace: () => {},
-}
-
-mock.module('../../lib/logger.js', () => ({
-  screenshotLogger: () => noopLogger,
-  browserLogger: () => noopLogger,
-  navigationLogger: () => noopLogger,
-}))
-
-mock.module('../../const.js', () => ({
-  debugLogging: false,
-  chromiumExecutable: undefined,
-  // Required by real NavigateToPage (imported via navigation-commands.ts)
-  isAddOn: false,
-  DEFAULT_WAIT_TIME: 500,
-  COLD_START_EXTRA_WAIT: 0,
-}))
-
-mock.module('../../lib/dithering.js', () => ({
+const mockDeps = {
+  launchBrowser: mock(async () => mockBrowserInstance),
   processImage: mock(async (buf: Buffer) => buf),
-}))
-
-// ---------------------------------------------------------------------------
-// Import module under test (uses mocked leaf deps + real commands)
-// ---------------------------------------------------------------------------
-
-import { Browser } from '../../screenshot.js'
-
-// Clean up global mocks so other test files get real modules
-afterAll(() => {
-  mock.restore()
-})
+  chromiumExecutable: undefined,
+  debugLogging: false,
+} as unknown as BrowserDeps
 
 // ---------------------------------------------------------------------------
 // Shared defaults
@@ -147,13 +111,13 @@ describe('Browser', () => {
 
   describe('#busy', () => {
     it('is false before any operation', () => {
-      const browser = new Browser(BASE_URL, TOKEN)
+      const browser = new Browser(BASE_URL, TOKEN, mockDeps)
 
       expect(browser.busy).toBe(false)
     })
 
     it('is false after navigation completes', async () => {
-      const browser = new Browser(BASE_URL, TOKEN)
+      const browser = new Browser(BASE_URL, TOKEN, mockDeps)
       await browser.navigatePage({
         pagePath: '/lovelace/0',
         viewport: DEFAULT_VIEWPORT,
@@ -169,13 +133,13 @@ describe('Browser', () => {
 
   describe('#isConnected', () => {
     it('returns false before browser is launched', () => {
-      const browser = new Browser(BASE_URL, TOKEN)
+      const browser = new Browser(BASE_URL, TOKEN, mockDeps)
 
       expect(browser.isConnected()).toBe(false)
     })
 
     it('returns true after navigation launches browser', async () => {
-      const browser = new Browser(BASE_URL, TOKEN)
+      const browser = new Browser(BASE_URL, TOKEN, mockDeps)
       await browser.navigatePage({
         pagePath: '/lovelace/0',
         viewport: DEFAULT_VIEWPORT,
@@ -191,7 +155,7 @@ describe('Browser', () => {
 
   describe('#cleanup', () => {
     it('is safe to call when no browser exists', async () => {
-      const browser = new Browser(BASE_URL, TOKEN)
+      const browser = new Browser(BASE_URL, TOKEN, mockDeps)
 
       // Should not throw
       await browser.cleanup()
@@ -200,7 +164,7 @@ describe('Browser', () => {
     })
 
     it('disconnects browser after cleanup', async () => {
-      const browser = new Browser(BASE_URL, TOKEN)
+      const browser = new Browser(BASE_URL, TOKEN, mockDeps)
       await browser.navigatePage({
         pagePath: '/lovelace/0',
         viewport: DEFAULT_VIEWPORT,
@@ -211,7 +175,7 @@ describe('Browser', () => {
     })
 
     it('calls close on the browser instance', async () => {
-      const browser = new Browser(BASE_URL, TOKEN)
+      const browser = new Browser(BASE_URL, TOKEN, mockDeps)
       await browser.navigatePage({
         pagePath: '/lovelace/0',
         viewport: DEFAULT_VIEWPORT,
@@ -224,7 +188,7 @@ describe('Browser', () => {
     })
 
     it('calls close on the page instance', async () => {
-      const browser = new Browser(BASE_URL, TOKEN)
+      const browser = new Browser(BASE_URL, TOKEN, mockDeps)
       await browser.navigatePage({
         pagePath: '/lovelace/0',
         viewport: DEFAULT_VIEWPORT,
@@ -244,7 +208,7 @@ describe('Browser', () => {
 
   describe('#navigatePage', () => {
     it('sets viewport directly without header height offset', async () => {
-      const browser = new Browser(BASE_URL, TOKEN)
+      const browser = new Browser(BASE_URL, TOKEN, mockDeps)
 
       await browser.navigatePage({
         pagePath: '/lovelace/0',
@@ -255,7 +219,7 @@ describe('Browser', () => {
     })
 
     it('does not add scaled header offset when zoom is set', async () => {
-      const browser = new Browser(BASE_URL, TOKEN)
+      const browser = new Browser(BASE_URL, TOKEN, mockDeps)
       const viewport = { width: 1200, height: 825 }
 
       await browser.navigatePage({
@@ -270,7 +234,7 @@ describe('Browser', () => {
     })
 
     it('rejects concurrent calls with busy error', async () => {
-      const browser = new Browser(BASE_URL, TOKEN)
+      const browser = new Browser(BASE_URL, TOKEN, mockDeps)
 
       // Start navigation without awaiting — sets #busy synchronously
       const pending = browser.navigatePage({
@@ -289,7 +253,7 @@ describe('Browser', () => {
     })
 
     it('navigates with targetUrl for generic mode', async () => {
-      const browser = new Browser(BASE_URL, TOKEN)
+      const browser = new Browser(BASE_URL, TOKEN, mockDeps)
 
       await browser.navigatePage({
         pagePath: '',
@@ -302,7 +266,7 @@ describe('Browser', () => {
     })
 
     it('returns timing information', async () => {
-      const browser = new Browser(BASE_URL, TOKEN)
+      const browser = new Browser(BASE_URL, TOKEN, mockDeps)
 
       const result = await browser.navigatePage({
         pagePath: '/lovelace/0',
@@ -321,7 +285,7 @@ describe('Browser', () => {
     let browser: InstanceType<typeof Browser>
 
     beforeEach(async () => {
-      browser = new Browser(BASE_URL, TOKEN)
+      browser = new Browser(BASE_URL, TOKEN, mockDeps)
       await browser.navigatePage({
         pagePath: '/lovelace/0',
         viewport: DEFAULT_VIEWPORT,

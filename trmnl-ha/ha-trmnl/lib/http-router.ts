@@ -16,12 +16,15 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { handleUIRequest } from '../ui.js'
 import {
-  loadSchedules,
-  createSchedule,
-  updateSchedule,
-  deleteSchedule,
+  loadSchedules as defaultLoadSchedules,
+  createSchedule as defaultCreateSchedule,
+  updateSchedule as defaultUpdateSchedule,
+  deleteSchedule as defaultDeleteSchedule,
 } from './scheduleStore.js'
-import { login as byosLogin, getBaseUrl } from './scheduler/byos-auth.js'
+import {
+  login as defaultByosLogin,
+  getBaseUrl as defaultGetBaseUrl,
+} from './scheduler/byos-auth.js'
 import { loadPresets } from '../devices.js'
 import { PALETTE_OPTIONS } from '../const.js'
 import type { BrowserFacade } from './browserFacade.js'
@@ -30,6 +33,8 @@ import type {
   ScheduleUpdate,
   WebhookResult,
 } from '../types/domain.js'
+import type { Schedule } from '../types/domain.js'
+import type { TokenResponse } from './scheduler/byos-auth.js'
 import { toJson } from './json.js'
 import { httpLogger } from './logger.js'
 
@@ -55,8 +60,34 @@ const MIME_TYPES: Record<string, string> = {
 /** Scheduler interface for manual execution */
 interface Scheduler {
   executeNow(
-    scheduleId: string
+    scheduleId: string,
   ): Promise<{ success: boolean; savedPath: string; webhook?: WebhookResult }>
+}
+
+/** Injectable dependencies for testability without global mock.module() */
+export interface HttpRouterDeps {
+  loadSchedules: () => Promise<Schedule[]>
+  createSchedule: (input: ScheduleInput) => Promise<Schedule>
+  updateSchedule: (
+    id: string,
+    updates: ScheduleUpdate,
+  ) => Promise<Schedule | null>
+  deleteSchedule: (id: string) => Promise<boolean>
+  byosLogin: (
+    baseUrl: string,
+    login: string,
+    password: string,
+  ) => Promise<TokenResponse>
+  getBaseUrl: (webhookUrl: string) => string
+}
+
+const defaultDeps: HttpRouterDeps = {
+  loadSchedules: defaultLoadSchedules,
+  createSchedule: defaultCreateSchedule,
+  updateSchedule: defaultUpdateSchedule,
+  deleteSchedule: defaultDeleteSchedule,
+  byosLogin: defaultByosLogin,
+  getBaseUrl: defaultGetBaseUrl,
 }
 
 /**
@@ -65,10 +96,16 @@ interface Scheduler {
 export class HttpRouter {
   #facade: BrowserFacade
   #scheduler: Scheduler | null
+  #deps: HttpRouterDeps
 
-  constructor(facade: BrowserFacade, scheduler: Scheduler | null = null) {
+  constructor(
+    facade: BrowserFacade,
+    scheduler: Scheduler | null = null,
+    deps: Partial<HttpRouterDeps> = {},
+  ) {
     this.#facade = facade
     this.#scheduler = scheduler
+    this.#deps = { ...defaultDeps, ...deps }
   }
 
   /** Reads HTTP request body as string */
@@ -95,7 +132,7 @@ export class HttpRouter {
   async route(
     request: IncomingMessage,
     response: ServerResponse,
-    requestUrl: URL
+    requestUrl: URL,
   ): Promise<boolean> {
     const { pathname } = requestUrl
 
@@ -167,7 +204,7 @@ export class HttpRouter {
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
         browser: { ...health, ...stats },
-      })
+      }),
     )
 
     return true
@@ -175,12 +212,12 @@ export class HttpRouter {
 
   async #handleSchedulesAPI(
     request: IncomingMessage,
-    response: ServerResponse
+    response: ServerResponse,
   ): Promise<boolean> {
     response.setHeader('Content-Type', 'application/json')
 
     if (request.method === 'GET') {
-      const schedules = await loadSchedules()
+      const schedules = await this.#deps.loadSchedules()
       response.writeHead(200)
       response.end(toJson(schedules))
       return true
@@ -190,7 +227,7 @@ export class HttpRouter {
       try {
         const body = await this.#readRequestBody(request)
         const schedule = JSON.parse(body) as ScheduleInput
-        const created = await createSchedule(schedule)
+        const created = await this.#deps.createSchedule(schedule)
         response.writeHead(201)
         response.end(toJson(created))
       } catch (err) {
@@ -208,7 +245,7 @@ export class HttpRouter {
   async #handleScheduleAPI(
     request: IncomingMessage,
     response: ServerResponse,
-    requestUrl: URL
+    requestUrl: URL,
   ): Promise<boolean> {
     response.setHeader('Content-Type', 'application/json')
 
@@ -218,7 +255,7 @@ export class HttpRouter {
       try {
         const body = await this.#readRequestBody(request)
         const updates = JSON.parse(body) as ScheduleUpdate
-        const updated = await updateSchedule(id, updates)
+        const updated = await this.#deps.updateSchedule(id, updates)
 
         if (!updated) {
           response.writeHead(404)
@@ -236,7 +273,7 @@ export class HttpRouter {
     }
 
     if (request.method === 'DELETE') {
-      const deleted = await deleteSchedule(id)
+      const deleted = await this.#deps.deleteSchedule(id)
 
       if (!deleted) {
         response.writeHead(404)
@@ -257,7 +294,7 @@ export class HttpRouter {
   async #handleScheduleSendAPI(
     request: IncomingMessage,
     response: ServerResponse,
-    requestUrl: URL
+    requestUrl: URL,
   ): Promise<boolean> {
     response.setHeader('Content-Type', 'application/json')
 
@@ -283,7 +320,7 @@ export class HttpRouter {
     } catch (err) {
       log.error`Manual schedule execution failed: ${err}`
       response.writeHead(
-        (err as Error).message.includes('not found') ? 404 : 500
+        (err as Error).message.includes('not found') ? 404 : 500,
       )
       response.end(toJson({ error: (err as Error).message }))
     }
@@ -330,12 +367,14 @@ export class HttpRouter {
 
       if (!webhookUrl || !login || !password) {
         response.writeHead(400)
-        response.end(toJson({ error: 'Missing webhookUrl, login, or password' }))
+        response.end(
+          toJson({ error: 'Missing webhookUrl, login, or password' }),
+        )
         return true
       }
 
-      const baseUrl = getBaseUrl(webhookUrl)
-      const tokens = await byosLogin(baseUrl, login, password)
+      const baseUrl = this.#deps.getBaseUrl(webhookUrl)
+      const tokens = await this.#deps.byosLogin(baseUrl, login, password)
 
       response.writeHead(200)
       response.end(
@@ -356,7 +395,7 @@ export class HttpRouter {
 
   async #handleStaticFile(
     response: ServerResponse,
-    pathname: string
+    pathname: string,
   ): Promise<boolean> {
     try {
       const filePath = join(HTML_DIR, pathname)

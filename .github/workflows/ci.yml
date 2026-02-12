@@ -55,8 +55,27 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('trmnl-ha/ha-trmnl/bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
-      - name: Install ImageMagick
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
+      - name: Install ImageMagick 7 (Q16-HDRI)
+        run: |
+          # Install IM6 first — pulls in all shared libraries that IM7 needs
+          sudo apt-get update && sudo apt-get install -y imagemagick
+
+          # Copy IM7 binaries from the same Docker image used in production
+          docker create --name im7-source dpokidov/imagemagick:7.1.1-47-bookworm
+          sudo docker cp im7-source:/usr/local/bin/magick /usr/local/bin/
+          sudo docker cp im7-source:/usr/local/lib/. /usr/local/lib/
+          sudo docker cp im7-source:/usr/local/etc/ImageMagick-7/ /usr/local/etc/ImageMagick-7/
+          docker rm im7-source
+
+          # Wrapper script: gm package calls 'convert', IM7 uses 'magick'
+          sudo cp trmnl-ha/ha-trmnl/scripts/imagemagick-wrapper.sh /usr/local/bin/convert
+          sudo chmod +x /usr/local/bin/convert
+          sudo ln -sf /usr/local/bin/magick /usr/local/bin/identify
+          sudo ln -sf /usr/local/bin/magick /usr/local/bin/mogrify
+          sudo ldconfig
+
+          # Verify — must show "ImageMagick 7" and "Q16-HDRI"
+          /usr/local/bin/magick --version | head -1
 
       - name: Install dependencies
         working-directory: trmnl-ha/ha-trmnl
