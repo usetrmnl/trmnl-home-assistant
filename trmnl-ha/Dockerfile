@@ -53,6 +53,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     # Minimal utilities for health checks and runtime
     curl \
     ca-certificates \
+    # font support for emoji
+    fonts-noto-color-emoji \
     # CJK font support for international dashboards
     fonts-noto-cjk \
     # ImageMagick 7 runtime dependencies (binaries copied from stage 1)
