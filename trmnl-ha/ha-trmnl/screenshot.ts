@@ -17,13 +17,16 @@
 
 import puppeteer from 'puppeteer'
 import type { Browser as PuppeteerBrowser, Page, Viewport } from 'puppeteer'
-import { debugLogging, chromiumExecutable } from './const.js'
+import {
+  debugLogging as defaultDebugLogging,
+  chromiumExecutable as defaultChromiumExecutable,
+} from './const.js'
 import {
   CannotOpenPageError,
   BrowserCrashError,
   PageCorruptedError,
 } from './error.js'
-import { processImage } from './lib/dithering.js'
+import { processImage as defaultProcessImage } from './lib/dithering.js'
 import {
   NavigateToPage,
   WaitForLoadingComplete,
@@ -152,6 +155,30 @@ interface NavigateResult {
 }
 
 // =============================================================================
+// INJECTABLE DEPENDENCIES
+// =============================================================================
+
+/** Injectable dependencies for testability without global mock.module() */
+export interface BrowserDeps {
+  launchBrowser: (options: {
+    headless: boolean | 'shell'
+    executablePath?: string
+    args: string[]
+    acceptInsecureCerts?: boolean
+  }) => Promise<PuppeteerBrowser>
+  processImage: typeof defaultProcessImage
+  chromiumExecutable: string | undefined
+  debugLogging: boolean
+}
+
+const defaultDeps: BrowserDeps = {
+  launchBrowser: (opts) => puppeteer.launch(opts),
+  processImage: defaultProcessImage,
+  chromiumExecutable: defaultChromiumExecutable,
+  debugLogging: defaultDebugLogging,
+}
+
+// =============================================================================
 // BROWSER CLASS
 // =============================================================================
 
@@ -165,15 +192,21 @@ export class Browser {
   #page: Page | undefined
   #busy: boolean = false
   #pageErrorDetected: boolean = false
+  #deps: BrowserDeps
 
   // Cache last requested values to avoid unnecessary page updates
   #lastRequestedLang: string | undefined
   #lastRequestedTheme: string | undefined
   #lastRequestedDarkMode: boolean | undefined
 
-  constructor(homeAssistantUrl: string, token: string) {
+  constructor(
+    homeAssistantUrl: string,
+    token: string,
+    deps: Partial<BrowserDeps> = {},
+  ) {
     this.#homeAssistantUrl = homeAssistantUrl
     this.#token = token
+    this.#deps = { ...defaultDeps, ...deps }
   }
 
   get busy(): boolean {
@@ -247,9 +280,9 @@ export class Browser {
         // - Self-signed certificates
         // - Internal domains with custom CAs
         // - Let's Encrypt certs when CA store is incomplete in Docker
-        const browser = await puppeteer.launch({
+        const browser = await this.#deps.launchBrowser({
           headless: 'shell',
-          executablePath: chromiumExecutable,
+          executablePath: this.#deps.chromiumExecutable,
           args: PUPPETEER_ARGS,
           acceptInsecureCerts: true,
         })
@@ -341,7 +374,7 @@ export class Browser {
       })
 
     // Verbose response logging in debug mode
-    if (debugLogging) {
+    if (this.#deps.debugLogging) {
       page.on('response', (response) => {
         browserLog.trace`Response: ${response.status()} ${response.url()} (cache: ${response.fromCache()})`
       })
@@ -536,7 +569,7 @@ export class Browser {
 
       // Process image with dithering and format conversion
       const startProcess = Date.now()
-      const image = await processImage(Buffer.from(screenshotData), {
+      const image = await this.#deps.processImage(Buffer.from(screenshotData), {
         format,
         rotate,
         invert,
