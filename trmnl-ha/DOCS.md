@@ -319,6 +319,8 @@ Create cron-based schedules via the Web UI for automatic captures.
 
 **Manual Trigger:** Click **Send Now** to execute immediately.
 
+**Export / Import:** Use the **Export** and **Import** buttons in the Schedules tab to back up or restore schedules as JSON files. Import replaces all existing schedules.
+
 ### Cron Syntax
 
 ```

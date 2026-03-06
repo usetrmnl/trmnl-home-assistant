@@ -23,7 +23,7 @@ import { PreviewGenerator } from './preview-generator.js'
 import { CropModal } from './crop-modal.js'
 import { ConfirmModal } from './confirm-modal.js'
 import { DevicePresetsManager } from './device-presets.js'
-import { SendSchedule, LoadPalettes, ByosLogin } from './api-client.js'
+import { SendSchedule, LoadPalettes, ByosLogin, ImportSchedules } from './api-client.js'
 import type { PaletteOption } from './palette-options.js'
 import type {
   Schedule,
@@ -550,6 +550,110 @@ class App {
     }
 
     return null
+  }
+
+  // =============================================================================
+  // EXPORT / IMPORT
+  // =============================================================================
+
+  /** Downloads all schedules as a JSON file */
+  exportSchedules(): void {
+    const schedules = this.#scheduleManager.schedules
+
+    if (schedules.length === 0) {
+      this.#confirmModal.alert({
+        title: 'Nothing to Export',
+        message: 'There are no schedules to export.',
+        type: 'info',
+      })
+      return
+    }
+
+    const json = JSON.stringify(schedules, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const date = new Date().toISOString().slice(0, 10)
+    const filename = `trmnl-schedules-${date}.json`
+
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  /** Prompts user to select a JSON file and imports schedules */
+  async importSchedules(): Promise<void> {
+    const fileInput = document.getElementById('importFileInput') as HTMLInputElement | null
+    if (!fileInput) return
+
+    // Reset so the same file can be re-selected
+    fileInput.value = ''
+
+    // Wait for user to pick a file
+    const file = await new Promise<File | null>((resolve) => {
+      const handler = () => {
+        fileInput.removeEventListener('change', handler)
+        resolve(fileInput.files?.[0] ?? null)
+      }
+      fileInput.addEventListener('change', handler)
+      fileInput.click()
+    })
+
+    if (!file) return
+
+    let parsed: unknown
+    try {
+      const text = await file.text()
+      parsed = JSON.parse(text)
+    } catch {
+      await this.#confirmModal.alert({
+        title: 'Invalid File',
+        message: 'The selected file is not valid JSON.',
+        type: 'error',
+      })
+      return
+    }
+
+    if (!Array.isArray(parsed)) {
+      await this.#confirmModal.alert({
+        title: 'Invalid Format',
+        message: 'Expected a JSON array of schedules.',
+        type: 'error',
+      })
+      return
+    }
+
+    const existing = this.#scheduleManager.schedules.length
+    const incoming = parsed.length
+
+    const confirmed = await this.#confirmModal.confirm({
+      title: 'Import Schedules',
+      message: `This will replace all ${existing} existing schedule(s) with ${incoming} imported schedule(s). This cannot be undone.`,
+      confirmText: 'Import',
+      cancelText: 'Cancel',
+      confirmClass: 'text-white rounded-md transition' +
+        ' ' + 'bg-blue-600 hover:bg-blue-700',
+    })
+
+    if (!confirmed) return
+
+    try {
+      const result = await new ImportSchedules().call(parsed)
+      await this.#scheduleManager.loadAll()
+      this.renderUI()
+
+      await this.#confirmModal.alert({
+        title: 'Import Complete',
+        message: `Successfully imported ${result.count} schedule(s).`,
+        type: 'success',
+      })
+    } catch (err) {
+      await this.#confirmModal.alert({
+        title: 'Import Failed',
+        message: `Failed to import schedules: ${(err as Error).message}`,
+        type: 'error',
+      })
+    }
   }
 
   // =============================================================================

@@ -20,6 +20,7 @@ import {
   createSchedule as defaultCreateSchedule,
   updateSchedule as defaultUpdateSchedule,
   deleteSchedule as defaultDeleteSchedule,
+  replaceAllSchedules,
 } from './scheduleStore.js'
 import {
   login as defaultByosLogin,
@@ -158,6 +159,10 @@ export class HttpRouter {
 
     if (pathname === '/api/schedules') {
       return this.#handleSchedulesAPI(request, response)
+    }
+
+    if (pathname === '/api/schedules/import') {
+      return this.#handleScheduleImportAPI(request, response)
     }
 
     if (pathname.startsWith('/api/schedules/')) {
@@ -322,6 +327,39 @@ export class HttpRouter {
       response.writeHead(
         (err as Error).message.includes('not found') ? 404 : 500,
       )
+      response.end(toJson({ error: (err as Error).message }))
+    }
+
+    return true
+  }
+
+  async #handleScheduleImportAPI(
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<boolean> {
+    response.setHeader('Content-Type', 'application/json')
+
+    if (request.method !== 'POST') {
+      response.writeHead(405)
+      response.end(toJson({ error: 'Method not allowed' }))
+      return true
+    }
+
+    try {
+      const body = await this.#readRequestBody(request)
+      const parsed: unknown = JSON.parse(body)
+
+      if (!Array.isArray(parsed)) {
+        response.writeHead(400)
+        response.end(toJson({ error: 'Request body must be a JSON array' }))
+        return true
+      }
+
+      const schedules = await replaceAllSchedules(parsed as Partial<Schedule>[])
+      response.writeHead(200)
+      response.end(toJson({ success: true, count: schedules.length }))
+    } catch (err) {
+      response.writeHead(400)
       response.end(toJson({ error: (err as Error).message }))
     }
 

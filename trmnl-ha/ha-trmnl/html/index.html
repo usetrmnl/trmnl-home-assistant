@@ -73,6 +73,31 @@
         >
           + New
         </button>
+
+        <button
+          onclick="window.app.exportSchedules()"
+          class="px-3 py-2 rounded-t-lg text-sm transition-all border"
+          style="background-color: #f5f5f5; color: #666; border-color: #e0e0e0"
+          onmouseover="this.style.backgroundColor='#e8e8e8'; this.style.borderColor='var(--primary-light)'"
+          onmouseout="this.style.backgroundColor='#f5f5f5'; this.style.borderColor='#e0e0e0'"
+          title="Export all schedules as JSON"
+        >
+          ↓ Export
+        </button>
+
+        <button
+          onclick="window.app.importSchedules()"
+          class="px-3 py-2 rounded-t-lg text-sm transition-all border"
+          style="background-color: #f5f5f5; color: #666; border-color: #e0e0e0"
+          onmouseover="this.style.backgroundColor='#e8e8e8'; this.style.borderColor='var(--primary-light)'"
+          onmouseout="this.style.backgroundColor='#f5f5f5'; this.style.borderColor='#e0e0e0'"
+          title="Import schedules from JSON file"
+        >
+          ↑ Import
+        </button>
+
+        <!-- Hidden file input for import -->
+        <input type="file" id="importFileInput" accept=".json" class="hidden" />
       </div>
 
       <!-- Tab Content -->

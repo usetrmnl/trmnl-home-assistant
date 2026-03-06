@@ -268,6 +268,47 @@ export async function deleteSchedule(
 }
 
 /**
+ * Replace all schedules with imported data.
+ * Generates fresh IDs and timestamps, runs each through migrateSchedule().
+ */
+export async function replaceAllSchedules(
+  filePath: string,
+  imported: Partial<Schedule>[]
+): Promise<Schedule[]>
+export async function replaceAllSchedules(
+  imported: Partial<Schedule>[]
+): Promise<Schedule[]>
+export async function replaceAllSchedules(
+  filePathOrImported: string | Partial<Schedule>[],
+  imported?: Partial<Schedule>[]
+): Promise<Schedule[]> {
+  const filePath =
+    typeof filePathOrImported === 'string'
+      ? filePathOrImported
+      : DEFAULT_SCHEDULES_FILE
+  const data =
+    typeof filePathOrImported === 'string' ? imported! : filePathOrImported
+
+  return withLock(filePath, async () => {
+    const now = new Date().toISOString()
+    const schedules = data.map((entry) => {
+      // Strip existing IDs/timestamps — regenerate fresh ones
+      const { id: _id, createdAt: _ca, updatedAt: _ua, ...rest } = entry
+      return migrateSchedule({
+        ...rest,
+        id: generateId(),
+        createdAt: now,
+        updatedAt: now,
+      })
+    })
+
+    await saveSchedules(filePath, schedules)
+    log.info`Imported ${schedules.length} schedules`
+    return schedules
+  })
+}
+
+/**
  * Generate a unique ID
  */
 function generateId(): string {

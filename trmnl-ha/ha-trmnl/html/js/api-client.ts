@@ -177,6 +177,32 @@ export class SendSchedule {
 }
 
 /**
+ * Imports schedules (full replace) from a JSON array
+ */
+export class ImportSchedules {
+  baseUrl: string
+
+  constructor(baseUrl = './api/schedules/import') {
+    this.baseUrl = baseUrl
+  }
+
+  async call(schedules: Schedule[]): Promise<{ success: boolean; count: number }> {
+    const response = await fetch(this.baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(schedules),
+    })
+
+    if (!response.ok) {
+      const data = await response.json() as { error?: string }
+      throw new Error(data.error ?? `Failed to import: ${response.statusText}`)
+    }
+
+    return response.json()
+  }
+}
+
+/**
  * Fetches a screenshot preview
  */
 export class FetchPreview {
