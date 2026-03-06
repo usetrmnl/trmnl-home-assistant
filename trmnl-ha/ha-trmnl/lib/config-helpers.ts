@@ -120,6 +120,26 @@ export function detectIsAddOn(
 }
 
 /**
+ * Determine the data directory for persistence (schedules, output, etc.)
+ *
+ * Priority:
+ * 1. HA add-on mode → /data (mounted by HA Supervisor)
+ * 2. Standalone Docker with /data mount → /data (user-mounted volume)
+ * 3. Local dev → ./data relative to cwd (no /data exists)
+ *
+ * @param isAddOn - Whether running as HA add-on
+ * @param cwd - Current working directory (for local dev fallback)
+ * @returns Absolute path to data directory
+ */
+export function detectDataDir(isAddOn: boolean, cwd: string): string {
+  if (isAddOn) return '/data'
+  // NOTE: In standalone Docker, users mount -v ./trmnl-data:/data
+  // existsSync('/data') is true when a volume is mounted there
+  if (existsSync('/data')) return '/data'
+  return `${cwd}/data`
+}
+
+/**
  * Parse boolean from environment variable string
  * @param value - String value from env var
  * @param defaultValue - Default if undefined

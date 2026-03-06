@@ -8,19 +8,16 @@
  */
 
 import fs from 'node:fs/promises'
-import { existsSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type {
   Schedule,
   ScheduleInput,
   ScheduleUpdate,
 } from '../types/domain.js'
+import { DATA_DIR } from '../const.js'
 import { schedulerLogger } from './logger.js'
 
 const log = schedulerLogger()
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // =============================================================================
 // FILE LOCKING (prevents race conditions on concurrent writes)
@@ -62,11 +59,7 @@ async function withLock<T>(
   }
 }
 
-// NOTE: existsSync is used at startup only (sync is fine for config detection)
-const isAddOn = existsSync('/data/options.json')
-const DEFAULT_SCHEDULES_FILE = isAddOn
-  ? '/data/schedules.json'
-  : path.join(__dirname, '..', 'data', 'schedules.json')
+const DEFAULT_SCHEDULES_FILE = path.join(DATA_DIR, 'schedules.json')
 
 /**
  * Check if file exists (async)

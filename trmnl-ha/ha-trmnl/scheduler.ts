@@ -19,17 +19,14 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { loadSchedules } from './lib/scheduleStore.js'
 import { ScheduleExecutor, type ScreenshotFunction, type ExecutionResult } from './lib/scheduler/schedule-executor.js'
 import { CronJobManager } from './lib/scheduler/cron-job-manager.js'
-import { SCHEDULER_RELOAD_INTERVAL_MS, SCHEDULER_OUTPUT_DIR_NAME } from './const.js'
+import { SCHEDULER_RELOAD_INTERVAL_MS, SCHEDULER_OUTPUT_DIR_NAME, DATA_DIR } from './const.js'
 import type { Schedule } from './types/domain.js'
 import { schedulerLogger } from './lib/logger.js'
 
 const log = schedulerLogger()
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 /**
  * High-level scheduler orchestrating cron jobs and screenshot execution.
@@ -46,7 +43,7 @@ export class Scheduler {
    * @param screenshotFn - Screenshot capture function (async)
    */
   constructor(screenshotFn: ScreenshotFunction) {
-    this.#outputDir = path.join(__dirname, SCHEDULER_OUTPUT_DIR_NAME)
+    this.#outputDir = path.join(DATA_DIR, SCHEDULER_OUTPUT_DIR_NAME)
     this.#cronManager = new CronJobManager()
     this.#executor = new ScheduleExecutor(screenshotFn, this.#outputDir)
 

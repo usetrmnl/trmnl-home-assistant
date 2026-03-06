@@ -51,6 +51,8 @@ docker run -d --name trmnl-ha \
 ```
 
 > **Note:** Replace `YOUR_HOST_IP` with your machine's IP (e.g., `192.168.1.100`). Container names like `homeassistant` won't work since HA uses host networking.
+>
+> **Volume mount:** `-v ./trmnl-data:/data` is recommended. `-v ./trmnl-data:/app/data` also works.
 
 Then open `http://localhost:10000` - that's it!
 

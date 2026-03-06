@@ -43,6 +43,7 @@ import {
   isValidTimezone,
   hasEnvConfig as checkEnvConfig,
   detectIsAddOn,
+  detectDataDir,
   findBrowser,
   isNetworkError,
   parseOptionsFile,
@@ -195,6 +196,15 @@ if (isAddOn) {
 } else {
   console.log('[Config] Running in standalone mode')
 }
+
+/**
+ * Persistent data directory for schedules, output screenshots, etc.
+ * - HA add-on: /data (mounted by HA Supervisor)
+ * - Standalone Docker: /data (user-mounted volume)
+ * - Local dev: ./data (relative to cwd)
+ */
+export const DATA_DIR: string = detectDataDir(isAddOn, process.cwd())
+console.log(`[Config] Data directory: ${DATA_DIR}`)
 
 /**
  * Whether to use mock Home Assistant for testing and local development

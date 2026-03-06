@@ -91,6 +91,17 @@ docker run -d --name trmnl-ha \
   ghcr.io/usetrmnl/trmnl-ha-amd64:latest
 ```
 
+**Data Persistence:**
+
+Schedules and output screenshots are stored in a persistent data directory. Two volume mount options are supported:
+
+| Mount | Example | Notes |
+|-------|---------|-------|
+| `/data` (recommended) | `-v ./trmnl-data:/data` | Matches docs, used by HA add-on |
+| `/app/data` (also works) | `-v ./trmnl-data:/app/data` | Legacy alternative |
+
+Both options work — the app auto-detects which path is available. If you're already using `/app/data`, there's no need to change.
+
 **Environment Variables:**
 
 | Variable | Required | Description |
@@ -304,7 +315,7 @@ curl "http://192.168.1.x:10000/lovelace/0?viewport=800x480&dithering&palette=bw&
 
 Create cron-based schedules via the Web UI for automatic captures.
 
-**Storage:** `/data/schedules.json` (persists across restarts)
+**Storage:** `schedules.json` in the data directory (persists across restarts when a volume is mounted — see [Data Persistence](#home-assistant-container-docker))
 
 **Manual Trigger:** Click **Send Now** to execute immediately.
 

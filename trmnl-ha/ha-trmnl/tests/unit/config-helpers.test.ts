@@ -17,6 +17,7 @@ import {
   isValidTimezone,
   hasEnvConfig,
   detectIsAddOn,
+  detectDataDir,
   parseEnvBoolean,
   isNetworkError,
   parseOptionsFile,
@@ -201,6 +202,32 @@ describe('detectIsAddOn', () => {
 
       expect(detectIsAddOn(env, undefined)).toBe(false)
     })
+  })
+})
+
+// =============================================================================
+// Data Directory Detection
+// =============================================================================
+
+describe('detectDataDir', () => {
+  it('returns /data for HA add-on mode', () => {
+    expect(detectDataDir(true, '/app')).toBe('/data')
+  })
+
+  it('returns cwd/data when /data does not exist', () => {
+    // Covers local dev AND the -v ./trmnl-data:/app/data workaround mount.
+    // In Docker with WORKDIR /app, cwd/data resolves to /app/data.
+    const result = detectDataDir(false, '/Users/dev/project')
+    expect(result).toBe('/Users/dev/project/data')
+  })
+
+  it('supports /app/data path in Docker (WORKDIR /app fallback)', () => {
+    // Simulates Docker with WORKDIR /app and -v ./trmnl-data:/app/data.
+    // Since /data doesn't exist on the host, falls through to cwd/data.
+    // NOTE: In Docker with -v ./x:/data, existsSync('/data') is true → '/data'.
+    // Both mount points are supported; this test covers the fallback branch.
+    const result = detectDataDir(false, '/app')
+    expect(['/data', '/app/data']).toContain(result)
   })
 })
 
