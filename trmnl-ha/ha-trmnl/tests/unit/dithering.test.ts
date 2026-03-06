@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'bun:test'
+import { execSync } from 'node:child_process'
 import {
   processImage,
   applyDithering,
@@ -16,10 +17,26 @@ import {
   validateDitheringOptions,
 } from '../../lib/dithering.js'
 import type { DitheringMethod } from '../../types/domain.js'
-import gm from 'gm'
+import gmLib from 'gm'
 
-// NOTE: Skipped - ImageMagick image creation times out in CI
-describe.skip('Dithering Module', () => {
+const gm = gmLib.subClass({ imageMagick: true })
+
+// Auto-skip when ImageMagick 7 isn't available (local dev without IM7)
+function hasImageMagick7(): boolean {
+  try {
+    const version = execSync('magick --version 2>/dev/null || convert --version 2>/dev/null', {
+      encoding: 'utf-8',
+      timeout: 5000,
+    })
+    return version.includes('ImageMagick 7')
+  } catch {
+    return false
+  }
+}
+
+const describeDithering = hasImageMagick7() ? describe : describe.skip
+
+describeDithering('Dithering Module', () => {
   let testImageBuffer: Buffer
 
   beforeAll(async () => {
@@ -44,7 +61,7 @@ describe.skip('Dithering Module', () => {
           stdout.on('error', reject)
         })
     })
-  }, 15000)
+  }, 30000)
 
   // ==========================================================================
   // Constants - Test that module exports expected values
@@ -435,7 +452,7 @@ describe.skip('Dithering Module', () => {
             stdout.on('error', reject)
           })
       })
-    }, 15000)
+    }, 30000)
 
     it('produces 1-bit BW images under 50KB for 800x480', async () => {
       const result = await applyDithering(largeTestImage, {

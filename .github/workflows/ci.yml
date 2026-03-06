@@ -55,8 +55,36 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('trmnl-ha/ha-trmnl/bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
-      - name: Install ImageMagick
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
+      - name: Install ImageMagick 7 (Q16-HDRI)
+        run: |
+          # Start a container from the same IM7 image used in production
+          docker create --name im7 --entrypoint "" \
+            dpokidov/imagemagick:7.1.1-47-bookworm tail -f /dev/null
+          docker start im7
+
+          # Copy IM7 binary, libraries, and config via docker cp
+          sudo docker cp im7:/usr/local/bin/magick /usr/local/bin/
+          sudo docker cp im7:/usr/local/lib/. /usr/local/lib/
+          sudo docker cp im7:/usr/local/etc/ImageMagick-7/ /usr/local/etc/ImageMagick-7/
+
+          # Copy system libraries that Ubuntu 24.04 doesn't provide.
+          # NOTE: -L follows symlinks so we get the actual .so file, not a broken link.
+          # libjpeg62-turbo: Ubuntu has libjpeg-turbo8 (different soname)
+          # libomp5: not installed by default on Ubuntu
+          sudo docker cp -L im7:/usr/lib/x86_64-linux-gnu/libjpeg.so.62 /usr/local/lib/
+          sudo docker cp -L im7:/usr/lib/x86_64-linux-gnu/libomp.so.5 /usr/local/lib/
+
+          docker stop im7 && docker rm im7
+
+          # Wrapper script: gm package calls 'convert', IM7 uses 'magick'
+          sudo cp trmnl-ha/ha-trmnl/scripts/imagemagick-wrapper.sh /usr/local/bin/convert
+          sudo chmod +x /usr/local/bin/convert
+          sudo ln -sf /usr/local/bin/magick /usr/local/bin/identify
+          sudo ln -sf /usr/local/bin/magick /usr/local/bin/mogrify
+          sudo ldconfig
+
+          # Verify — must show "ImageMagick 7" and "Q16-HDRI"
+          /usr/local/bin/magick --version
 
       - name: Install dependencies
         working-directory: trmnl-ha/ha-trmnl
