@@ -57,11 +57,18 @@ interface NetworkResult {
   internal_url: string | null
 }
 
-/** Dashboard info from Home Assistant */
-interface DashboardInfo {
+/** Panel info from Home Assistant's get_panels WebSocket call */
+interface PanelInfo {
+  component_name: string
   url_path: string
-  title?: string
-  mode?: string
+  title: string | null
+  icon: string | null
+}
+
+/** Dashboard entry with path and display title */
+interface DashboardEntry {
+  path: string
+  title: string
 }
 
 /** Combined Home Assistant data for UI */
@@ -69,7 +76,7 @@ interface HomeAssistantData {
   themes: ThemesResult | null
   network: NetworkResult | null
   config: HassConfig | null
-  dashboards: string[] | null
+  dashboards: DashboardEntry[] | null
   presets?: PresetsConfig
 }
 
@@ -87,6 +94,46 @@ interface UIConfig {
   cachedAt: number | null
   /** Server port for constructing Fetch URLs (10000 for add-on, configurable for standalone) */
   serverPort: number
+}
+
+// =============================================================================
+// DASHBOARD LIST BUILDER
+// =============================================================================
+
+/**
+ * Builds a deduplicated dashboard list from HA panel data.
+ * Filters for lovelace panels and always includes the default dashboard.
+ *
+ * @param panelsResult - Raw panels from HA's `get_panels` WebSocket call
+ * @returns Dashboard entries with path and display title
+ */
+export function buildDashboardList(
+  panelsResult: Record<string, PanelInfo> | null,
+): DashboardEntry[] {
+  const dashboards: DashboardEntry[] = [
+    { path: '/lovelace/0', title: 'Default Dashboard' },
+  ]
+
+  if (!panelsResult || typeof panelsResult !== 'object') {
+    return dashboards
+  }
+
+  const lovelacePanels = Object.values(panelsResult)
+    .filter((p) => p.component_name === 'lovelace')
+    .map((p) => ({
+      path: `/${p.url_path}`,
+      title: p.title || p.url_path,
+    }))
+
+  const existingPaths = new Set(dashboards.map((d) => d.path))
+  lovelacePanels.forEach((p) => {
+    if (!existingPaths.has(p.path)) {
+      existingPaths.add(p.path)
+      dashboards.push(p)
+    }
+  })
+
+  return dashboards
 }
 
 // =============================================================================
@@ -406,14 +453,14 @@ async function fetchHomeAssistantData(): Promise<HomeAssistantData> {
 
     log.debug`WebSocket connected, fetching HA data...`
 
-    const [themesResult, networkResult, dashboardsResult] = await Promise.all([
+    const [themesResult, networkResult, panelsResult] = await Promise.all([
       connection.sendMessagePromise<ThemesResult>({
         type: 'frontend/get_themes',
       }),
       connection.sendMessagePromise<NetworkResult>({ type: 'network/url' }),
       connection
-        .sendMessagePromise<DashboardInfo[]>({
-          type: 'lovelace/dashboards/list',
+        .sendMessagePromise<Record<string, PanelInfo>>({
+          type: 'get_panels',
         })
         .catch(() => null),
     ])
@@ -436,33 +483,7 @@ async function fetchHomeAssistantData(): Promise<HomeAssistantData> {
       log.warn`REST API /api/config failed: ${configResponse.status} ${configResponse.statusText}`
     }
 
-    let dashboards = [
-      '/lovelace/0',
-      '/home',
-      '/map',
-      '/energy',
-      '/history',
-      '/logbook',
-      '/config',
-    ]
-
-    try {
-      if (dashboardsResult && Array.isArray(dashboardsResult)) {
-        dashboardsResult.forEach((d) => {
-          if (d.url_path) {
-            dashboards.push(`/lovelace/${d.url_path}`)
-            dashboards.push(`/${d.url_path}`)
-            dashboards.push(`/${d.url_path}/0`)
-            dashboards.push(`/lovelace/${d.url_path}/0`)
-          }
-        })
-        dashboards = [...new Set(dashboards)]
-      }
-    } catch (err) {
-      log.warn`Could not parse dashboards, using defaults: ${
-        (err as Error).message
-      }`
-    }
+    const dashboards = buildDashboardList(panelsResult)
 
     log.info`Successfully fetched HA data (${dashboards.length} dashboards)`
     lastConnectionErrorWasAuth = false // Clear on success

@@ -26,11 +26,17 @@ interface HassThemes {
   themes?: Record<string, unknown>
 }
 
+/** Dashboard entry from backend */
+interface DashboardEntry {
+  path: string
+  title: string
+}
+
 /** Home Assistant global object */
 interface Hass {
   themes?: HassThemes
   config?: HassConfig
-  dashboards?: string[]
+  dashboards?: DashboardEntry[] | string[]
 }
 
 // Extend Window to include Home Assistant global
@@ -64,7 +70,9 @@ export class DevicePresetsManager {
   }
 
   #renderPresetOptions(): void {
-    const select = document.getElementById('devicePreset') as HTMLSelectElement | null
+    const select = document.getElementById(
+      'devicePreset',
+    ) as HTMLSelectElement | null
     if (!select) return
 
     while (select.options.length > 1) {
@@ -101,7 +109,9 @@ export class DevicePresetsManager {
    * Applies selected device preset to form inputs.
    */
   applyDevicePreset(): boolean {
-    const select = document.getElementById('devicePreset') as HTMLSelectElement | null
+    const select = document.getElementById(
+      'devicePreset',
+    ) as HTMLSelectElement | null
     if (!select) return false
 
     const option = select.options[select.selectedIndex]
@@ -113,8 +123,12 @@ export class DevicePresetsManager {
 
     const device = JSON.parse(option.dataset.device || '{}')
 
-    const widthInput = document.getElementById('s_width') as HTMLInputElement | null
-    const heightInput = document.getElementById('s_height') as HTMLInputElement | null
+    const widthInput = document.getElementById(
+      's_width',
+    ) as HTMLInputElement | null
+    const heightInput = document.getElementById(
+      's_height',
+    ) as HTMLInputElement | null
 
     if (widthInput && device.viewport?.width) {
       widthInput.value = device.viewport.width
@@ -127,7 +141,9 @@ export class DevicePresetsManager {
     }
 
     if (device.rotate) {
-      const rotateSelect = document.getElementById('s_rotate') as HTMLSelectElement | null
+      const rotateSelect = document.getElementById(
+        's_rotate',
+      ) as HTMLSelectElement | null
       if (rotateSelect) {
         rotateSelect.value = device.rotate
         rotateSelect.dispatchEvent(new Event('change'))
@@ -135,7 +151,9 @@ export class DevicePresetsManager {
     }
 
     if (device.format) {
-      const formatSelect = document.getElementById('s_format') as HTMLSelectElement | null
+      const formatSelect = document.getElementById(
+        's_format',
+      ) as HTMLSelectElement | null
       if (formatSelect) {
         formatSelect.value = device.format
         formatSelect.dispatchEvent(new Event('change'))
@@ -158,7 +176,9 @@ export class DevicePresetsManager {
    * Populates theme dropdown from Home Assistant themes.
    */
   populateThemePicker(selectedTheme: string | null = null): void {
-    const themeSelect = document.getElementById('s_theme') as HTMLSelectElement | null
+    const themeSelect = document.getElementById(
+      's_theme',
+    ) as HTMLSelectElement | null
     if (!themeSelect) return
 
     themeSelect.innerHTML = '<option value="">Default</option>'
@@ -185,7 +205,9 @@ export class DevicePresetsManager {
    * Auto-fills language field from Home Assistant configuration.
    */
   prefillLanguage(): void {
-    const langInput = document.getElementById('s_lang') as HTMLInputElement | null
+    const langInput = document.getElementById(
+      's_lang',
+    ) as HTMLInputElement | null
     if (!langInput) return
 
     if (window.hass?.config?.language && !langInput.value) {
@@ -196,9 +218,12 @@ export class DevicePresetsManager {
 
   /**
    * Populates dashboard dropdown from Home Assistant dashboards.
+   * Supports both { path, title } objects (new) and plain strings (legacy).
    */
   populateDashboardPicker(): void {
-    const select = document.getElementById('dashboardSelector') as HTMLSelectElement | null
+    const select = document.getElementById(
+      'dashboardSelector',
+    ) as HTMLSelectElement | null
     if (!select) return
 
     while (select.options.length > 1) {
@@ -218,10 +243,15 @@ export class DevicePresetsManager {
       return
     }
 
-    window.hass.dashboards.forEach((path) => {
+    window.hass.dashboards.forEach((entry) => {
       const option = document.createElement('option')
-      option.value = path
-      option.textContent = path
+      if (typeof entry === 'string') {
+        option.value = entry
+        option.textContent = entry
+      } else {
+        option.value = entry.path
+        option.textContent = `${entry.title} (${entry.path})`
+      }
       select.appendChild(option)
     })
   }
@@ -230,8 +260,12 @@ export class DevicePresetsManager {
    * Copies selected dashboard path to dashboard input field.
    */
   applyDashboardSelection(): boolean {
-    const select = document.getElementById('dashboardSelector') as HTMLSelectElement | null
-    const pathInput = document.getElementById('s_path') as HTMLInputElement | null
+    const select = document.getElementById(
+      'dashboardSelector',
+    ) as HTMLSelectElement | null
+    const pathInput = document.getElementById(
+      's_path',
+    ) as HTMLInputElement | null
 
     if (!select || !pathInput) return false
 
