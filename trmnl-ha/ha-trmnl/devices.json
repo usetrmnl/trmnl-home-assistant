@@ -27,8 +27,8 @@
     "cron": "0 * * * *",
     "dashboard_path": "/lovelace/0",
     "viewport": {
-      "width": 1040,
-      "height": 780
+      "width": 1872,
+      "height": 1404 
     },
     "webhook_url": "",
     "format": "png",
