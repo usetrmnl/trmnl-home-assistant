@@ -56,64 +56,138 @@ describe('ByosHanamiFormatTransformer', () => {
     preprocessed: true,
   }
 
-  it('returns JSON string body', () => {
-    const imageBuffer = Buffer.from('test image data')
-    const result = transformer.transform(imageBuffer, 'png', validConfig)
+  const imageBuffer = Buffer.from('test')
 
-    expect(typeof result.body).toBe('string')
-    // Should be valid JSON
-    expect(() => JSON.parse(result.body as string)).not.toThrow()
+  describe('URI mode (with screenshotUrl)', () => {
+    const screenshotUrl =
+      'http://192.168.1.100:10000/lovelace/default?viewport=800x480&dithering=&dither_method=floyd-steinberg&palette=gray-4'
+
+    it('sends uri instead of data', () => {
+      const result = transformer.transform(imageBuffer, 'png', validConfig, screenshotUrl)
+      const payload = JSON.parse(result.body as string)
+
+      expect(payload.screen.uri).toBe(screenshotUrl)
+      expect(payload.screen.data).toBeUndefined()
+      expect(payload.screen.file_name).toBeUndefined()
+    })
+
+    it('includes label, name, model_id, and preprocessed', () => {
+      const result = transformer.transform(imageBuffer, 'png', validConfig, screenshotUrl)
+      const payload = JSON.parse(result.body as string)
+
+      expect(payload.screen.label).toBe('Home Assistant')
+      expect(payload.screen.name).toBe('ha-dashboard')
+      expect(payload.screen.model_id).toBe('1')
+      expect(payload.screen.preprocessed).toBe(true)
+    })
+
+    it('sets Content-Type to application/json', () => {
+      const result = transformer.transform(imageBuffer, 'png', validConfig, screenshotUrl)
+
+      expect(result.contentType).toBe('application/json')
+    })
   })
 
-  it('sets Content-Type to application/json', () => {
-    const imageBuffer = Buffer.from('test')
-    const result = transformer.transform(imageBuffer, 'png', validConfig)
+  describe('data mode (legacy fallback, no screenshotUrl)', () => {
+    it('returns JSON string body', () => {
+      const result = transformer.transform(imageBuffer, 'png', validConfig)
 
-    expect(result.contentType).toBe('application/json')
+      expect(typeof result.body).toBe('string')
+      expect(() => JSON.parse(result.body as string)).not.toThrow()
+    })
+
+    it('sets Content-Type to application/json', () => {
+      const result = transformer.transform(imageBuffer, 'png', validConfig)
+
+      expect(result.contentType).toBe('application/json')
+    })
+
+    it('base64 encodes image data correctly', () => {
+      // NOTE: Uses a distinctive payload so the round-trip decode is meaningful
+      const distinctiveBuffer = Buffer.from('test image data')
+      const result = transformer.transform(distinctiveBuffer, 'png', validConfig)
+      const payload = JSON.parse(result.body as string)
+
+      const decoded = Buffer.from(payload.screen.data, 'base64').toString()
+      expect(decoded).toBe('test image data')
+    })
+
+    it('includes all required BYOS fields', () => {
+      const result = transformer.transform(imageBuffer, 'png', validConfig)
+      const payload = JSON.parse(result.body as string)
+
+      expect(payload.screen).toBeDefined()
+      expect(payload.screen.data).toBeDefined()
+      expect(payload.screen.label).toBe('Home Assistant')
+      expect(payload.screen.name).toBe('ha-dashboard')
+      expect(payload.screen.model_id).toBe('1')
+      expect(payload.screen.file_name).toBe('ha-dashboard.png')
+      expect(payload.screen.preprocessed).toBe(true)
+    })
+
+    it('sets correct file_name extension for JPEG', () => {
+      const result = transformer.transform(imageBuffer, 'jpeg', validConfig)
+      const payload = JSON.parse(result.body as string)
+
+      expect(payload.screen.file_name).toBe('ha-dashboard.jpeg')
+    })
+
+    it('sets correct file_name extension for BMP', () => {
+      const result = transformer.transform(imageBuffer, 'bmp', validConfig)
+      const payload = JSON.parse(result.body as string)
+
+      expect(payload.screen.file_name).toBe('ha-dashboard.bmp')
+    })
   })
 
-  it('base64 encodes image data correctly', () => {
-    const imageBuffer = Buffer.from('test image data')
-    const result = transformer.transform(imageBuffer, 'png', validConfig)
-    const payload = JSON.parse(result.body as string)
+  describe('explicit delivery_mode selection', () => {
+    const screenshotUrl = 'http://192.168.1.100:10000/lovelace/default?viewport=800x480'
 
-    // Decode base64 and verify
-    const decoded = Buffer.from(payload.screen.data, 'base64').toString()
-    expect(decoded).toBe('test image data')
-  })
+    it('respects explicit data mode even when screenshotUrl is present', () => {
+      const config = { ...validConfig, delivery_mode: 'data' as const }
+      const result = transformer.transform(imageBuffer, 'png', config, screenshotUrl)
+      const payload = JSON.parse(result.body as string)
 
-  it('includes all required BYOS fields', () => {
-    const imageBuffer = Buffer.from('test')
-    const result = transformer.transform(imageBuffer, 'png', validConfig)
-    const payload = JSON.parse(result.body as string)
+      expect(payload.screen.data).toBeDefined()
+      expect(payload.screen.file_name).toBe('ha-dashboard.png')
+      expect(payload.screen.uri).toBeUndefined()
+    })
 
-    expect(payload.screen).toBeDefined()
-    expect(payload.screen.data).toBeDefined()
-    expect(payload.screen.label).toBe('Home Assistant')
-    expect(payload.screen.name).toBe('ha-dashboard')
-    expect(payload.screen.model_id).toBe('1')
-    expect(payload.screen.file_name).toBe('ha-dashboard.png')
-  })
+    it('uses uri mode when explicitly selected and screenshotUrl is present', () => {
+      const config = { ...validConfig, delivery_mode: 'uri' as const }
+      const result = transformer.transform(imageBuffer, 'png', config, screenshotUrl)
+      const payload = JSON.parse(result.body as string)
 
-  it('sets correct file_name extension for JPEG', () => {
-    const imageBuffer = Buffer.from('test')
-    const result = transformer.transform(imageBuffer, 'jpeg', validConfig)
-    const payload = JSON.parse(result.body as string)
+      expect(payload.screen.uri).toBe(screenshotUrl)
+      expect(payload.screen.data).toBeUndefined()
+    })
 
-    expect(payload.screen.file_name).toBe('ha-dashboard.jpeg')
-  })
+    it('throws when uri mode is explicitly selected but screenshotUrl is missing', () => {
+      const config = { ...validConfig, delivery_mode: 'uri' as const }
 
-  it('sets correct file_name extension for BMP', () => {
-    const imageBuffer = Buffer.from('test')
-    const result = transformer.transform(imageBuffer, 'bmp', validConfig)
-    const payload = JSON.parse(result.body as string)
+      expect(() => transformer.transform(imageBuffer, 'png', config)).toThrow(
+        /URI mode requires "Add-on URL"/,
+      )
+    })
 
-    expect(payload.screen.file_name).toBe('ha-dashboard.bmp')
+    it('treats legacy config (no delivery_mode, no url) as data mode', () => {
+      const result = transformer.transform(imageBuffer, 'png', validConfig)
+      const payload = JSON.parse(result.body as string)
+
+      expect(payload.screen.data).toBeDefined()
+      expect(payload.screen.uri).toBeUndefined()
+    })
+
+    it('defaults to uri when delivery_mode is unset but screenshotUrl is present', () => {
+      const result = transformer.transform(imageBuffer, 'png', validConfig, screenshotUrl)
+      const payload = JSON.parse(result.body as string)
+
+      expect(payload.screen.uri).toBe(screenshotUrl)
+      expect(payload.screen.data).toBeUndefined()
+    })
   })
 
   it('throws error when config is missing', () => {
-    const imageBuffer = Buffer.from('test')
-
     expect(() => transformer.transform(imageBuffer, 'png')).toThrow(
       'BYOS Hanami format requires config with label, name, and model_id',
     )
@@ -150,7 +224,6 @@ describe('getTransformer factory', () => {
   })
 
   it('returns RawFormatTransformer for unknown format (defensive fallback)', () => {
-    // Force unknown format via type assertion (simulates future format or data corruption)
     const config = {
       format: 'unknown-format',
     } as unknown as WebhookFormatConfig

@@ -33,7 +33,9 @@ import type {
   WebhookFormat,
   WebhookFormatConfig,
   ByosAuthConfig,
+  ByosDeliveryMode,
 } from '../../types/domain.js'
+import { BYOS_DEFAULT_DELIVERY_MODE } from '../../types/domain.js'
 
 // =============================================================================
 // FORM PARSING HELPERS
@@ -531,6 +533,9 @@ class App {
     if (format === 'byos-hanami') {
       const name = input('s_byos_name') || 'ha-dashboard'
       const authEnabled = checkbox('s_byos_auth_enabled')
+      const rawDeliveryMode = select('s_byos_delivery_mode')
+      const deliveryMode: ByosDeliveryMode =
+        rawDeliveryMode === 'uri' ? 'uri' : BYOS_DEFAULT_DELIVERY_MODE
 
       // Preserve existing auth tokens (managed by byosLogin/byosLogout, not form)
       // If auth is enabled but no tokens yet, create empty auth object with enabled: true
@@ -544,6 +549,8 @@ class App {
           name,
           model_id: input('s_byos_model_id') || '1',
           preprocessed: true,
+          delivery_mode: deliveryMode,
+          addon_base_url: input('s_byos_addon_url') || undefined,
           auth: authEnabled ? (existingAuth ?? { enabled: true }) : undefined,
         },
       }
@@ -906,6 +913,19 @@ class App {
     }
 
     // Save the schedule with new auth state
+    await this.updateScheduleFromForm()
+  }
+
+  /**
+   * Toggles BYOS delivery mode (URI vs legacy base64) and shows/hides the
+   * Add-on URL field which is only meaningful for URI mode.
+   */
+  async toggleByosDeliveryMode(mode: string): Promise<void> {
+    const urlField = document.getElementById('s_byos_addon_url_field')
+    if (urlField) {
+      urlField.classList.toggle('hidden', mode !== 'uri')
+    }
+
     await this.updateScheduleFromForm()
   }
 

@@ -140,6 +140,16 @@ export class DevicePresetsManager {
       heightInput.dispatchEvent(new Event('change'))
     }
 
+    // Update crop dimensions to match device viewport
+    const cropWidth = document.getElementById('s_crop_width') as HTMLInputElement | null
+    const cropHeight = document.getElementById('s_crop_height') as HTMLInputElement | null
+    if (cropWidth && device.viewport?.width) {
+      cropWidth.value = device.viewport.width
+    }
+    if (cropHeight && device.viewport?.height) {
+      cropHeight.value = device.viewport.height
+    }
+
     if (device.rotate) {
       const rotateSelect = document.getElementById(
         's_rotate',
