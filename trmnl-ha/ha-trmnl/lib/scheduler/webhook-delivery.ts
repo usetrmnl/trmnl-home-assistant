@@ -120,6 +120,8 @@ export interface WebhookDeliveryOptions {
   format: ImageFormat
   /** Webhook payload format (null/undefined = 'raw' for backward compat) */
   webhookFormat?: WebhookFormatConfig | null
+  /** Screenshot URL for BYOS URI mode (Terminus fetches from this URL) */
+  screenshotUrl?: string
   /** Callback to persist refreshed BYOS JWT tokens */
   onTokenRefresh?: (newTokens: TokenResponse) => void
 }
@@ -147,6 +149,7 @@ export async function uploadToWebhook(
     imageBuffer,
     format,
     webhookFormat,
+    screenshotUrl,
     onTokenRefresh,
   } = options
 
@@ -160,6 +163,7 @@ export async function uploadToWebhook(
     imageBuffer,
     format,
     byosConfig,
+    screenshotUrl,
   )
 
   log.info`Sending webhook: ${webhookUrl} (${contentType}, ${imageBuffer.length} bytes, format: ${webhookFormat?.format ?? 'raw'})`

@@ -135,6 +135,16 @@ export interface ScreenshotParams {
 /** Supported webhook payload formats */
 export type WebhookFormat = 'raw' | 'byos-hanami'
 
+/**
+ * BYOS Hanami payload delivery mode.
+ *
+ * - `uri`: Sends `{ screen: { uri } }`. Terminus fetches the image from the
+ *   add-on. Supported by Terminus >= 0.11.0, required from 0.52.0 onwards.
+ * - `data`: Sends `{ screen: { data, file_name } }` with base64 payload.
+ *   Legacy mode, only accepted by Terminus <= 0.51.0.
+ */
+export type ByosDeliveryMode = 'uri' | 'data'
+
 /** BYOS Hanami API configuration */
 export interface ByosHanamiConfig {
   /** Display label shown in BYOS UI */
@@ -145,6 +155,10 @@ export interface ByosHanamiConfig {
   model_id: string
   /** Whether the screen has been preprocessed */
   preprocessed: boolean
+  /** External URL of this add-on (e.g., http://192.168.1.100:10000) for Terminus URI mode */
+  addon_base_url?: string
+  /** Payload delivery mode. Omitted on legacy schedules; treat as 'data' for backward compat. */
+  delivery_mode?: ByosDeliveryMode
   /** JWT authentication settings */
   auth?: ByosAuthConfig
 }

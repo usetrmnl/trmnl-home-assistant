@@ -23,7 +23,12 @@ import { PreviewGenerator } from './preview-generator.js'
 import { CropModal } from './crop-modal.js'
 import { ConfirmModal } from './confirm-modal.js'
 import { DevicePresetsManager } from './device-presets.js'
-import { SendSchedule, LoadPalettes, ByosLogin, ImportSchedules } from './api-client.js'
+import {
+  SendSchedule,
+  LoadPalettes,
+  ByosLogin,
+  ImportSchedules,
+} from './api-client.js'
 import type { PaletteOption } from './palette-options.js'
 import type {
   Schedule,
@@ -33,7 +38,9 @@ import type {
   WebhookFormat,
   WebhookFormatConfig,
   ByosAuthConfig,
+  ByosDeliveryMode,
 } from '../../types/domain.js'
+import { BYOS_DEFAULT_DELIVERY_MODE } from '../shared/byos-constants.js'
 
 // =============================================================================
 // FORM PARSING HELPERS
@@ -531,6 +538,9 @@ class App {
     if (format === 'byos-hanami') {
       const name = input('s_byos_name') || 'ha-dashboard'
       const authEnabled = checkbox('s_byos_auth_enabled')
+      const rawDeliveryMode = select('s_byos_delivery_mode')
+      const deliveryMode: ByosDeliveryMode =
+        rawDeliveryMode === 'uri' ? 'uri' : BYOS_DEFAULT_DELIVERY_MODE
 
       // Preserve existing auth tokens (managed by byosLogin/byosLogout, not form)
       // If auth is enabled but no tokens yet, create empty auth object with enabled: true
@@ -544,6 +554,8 @@ class App {
           name,
           model_id: input('s_byos_model_id') || '1',
           preprocessed: true,
+          delivery_mode: deliveryMode,
+          addon_base_url: input('s_byos_addon_url') || undefined,
           auth: authEnabled ? (existingAuth ?? { enabled: true }) : undefined,
         },
       }
@@ -583,7 +595,9 @@ class App {
 
   /** Prompts user to select a JSON file and imports schedules */
   async importSchedules(): Promise<void> {
-    const fileInput = document.getElementById('importFileInput') as HTMLInputElement | null
+    const fileInput = document.getElementById(
+      'importFileInput',
+    ) as HTMLInputElement | null
     if (!fileInput) return
 
     // Reset so the same file can be re-selected
@@ -631,8 +645,10 @@ class App {
       message: `This will replace all ${existing} existing schedule(s) with ${incoming} imported schedule(s). This cannot be undone.`,
       confirmText: 'Import',
       cancelText: 'Cancel',
-      confirmClass: 'text-white rounded-md transition' +
-        ' ' + 'bg-blue-600 hover:bg-blue-700',
+      confirmClass:
+        'text-white rounded-md transition' +
+        ' ' +
+        'bg-blue-600 hover:bg-blue-700',
     })
 
     if (!confirmed) return
@@ -906,6 +922,19 @@ class App {
     }
 
     // Save the schedule with new auth state
+    await this.updateScheduleFromForm()
+  }
+
+  /**
+   * Toggles BYOS delivery mode (URI vs legacy base64) and shows/hides the
+   * Add-on URL field which is only meaningful for URI mode.
+   */
+  async toggleByosDeliveryMode(mode: string): Promise<void> {
+    const urlField = document.getElementById('s_byos_addon_url_field')
+    if (urlField) {
+      urlField.classList.toggle('hidden', mode !== 'uri')
+    }
+
     await this.updateScheduleFromForm()
   }
 

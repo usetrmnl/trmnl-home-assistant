@@ -12,6 +12,8 @@ import {
   uploadToWebhook,
   buildParams,
 } from './services.js'
+import { resolveScreenshotTarget } from '../../html/shared/screenshot-target.js'
+import { buildScreenshotParams } from '../../html/shared/build-screenshot-params.js'
 import {
   SCHEDULER_MAX_RETRIES,
   SCHEDULER_RETRY_DELAY_MS,
@@ -134,6 +136,27 @@ export class ScheduleExecutor {
     return outputPath
   }
 
+  /** Builds the screenshot endpoint URL for BYOS URI mode. Returns undefined when URI mode is not applicable. */
+  #buildScreenshotUrl(schedule: Schedule): string | undefined {
+    const byos = schedule.webhook_format?.byosConfig
+    if (!byos?.addon_base_url) return undefined
+    if (byos.delivery_mode === 'data') return undefined
+
+    const target = resolveScreenshotTarget(schedule)
+    const params = buildScreenshotParams(schedule)
+
+    // NOTE: In generic mode the router serves the UI at `/` unless `url` is
+    // present in the query. Thread target_url through so Terminus's fetch
+    // hits the screenshot handler instead of the UI HTML.
+    if (!target.isHAMode && target.fullUrl) {
+      params.append('url', target.fullUrl)
+    }
+
+    const path = target.path.replace(/^\//, '')
+
+    return `${byos.addon_base_url.replace(/\/+$/, '')}/${path}?${params.toString()}`
+  }
+
   /** Uploads to webhook if configured, returns result for UI feedback */
   async #uploadIfConfigured(
     schedule: Schedule,
@@ -143,6 +166,7 @@ export class ScheduleExecutor {
     if (!schedule.webhook_url) return undefined
 
     const webhookUrl = schedule.webhook_url
+    const screenshotUrl = this.#buildScreenshotUrl(schedule)
 
     try {
       const result = await uploadToWebhook({
@@ -151,6 +175,7 @@ export class ScheduleExecutor {
         imageBuffer,
         format: format as 'png' | 'jpeg' | 'bmp',
         webhookFormat: schedule.webhook_format,
+        screenshotUrl,
         onTokenRefresh: (newTokens) => {
           const byosConfig = schedule.webhook_format?.byosConfig
           if (!byosConfig?.auth) return
