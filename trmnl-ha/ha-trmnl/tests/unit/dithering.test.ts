@@ -520,4 +520,87 @@ describeDithering('Dithering Module', () => {
       expect(result[1]).toBe(0x4d) // 'M'
     })
   })
+
+  // ==========================================================================
+  // Regression: issue #47 — PNG rejected by TRMNL firmware
+  // ==========================================================================
+  //
+  // Aggressive chunk stripping (`png:exclude-chunks=all` or an unconditional
+  // `.strip()`) produced minimal PNGs containing only IHDR, IDAT and IEND.
+  // These are technically valid per the PNG spec, but TRMNL firmware expects
+  // ancillary chunks (bKGD in particular) and rejects the image with a
+  // misleading "First two header bytes are invalid" error when they're
+  // missing. The fix: don't strip chunks at all for PNG output — the saving
+  // is under 0.5% of the 50KB budget and not worth the compatibility risk.
+  //
+  // Assertion locks in the observable effect: grayscale PNG output from
+  // applyDithering must contain ancillary chunks beyond the bare IHDR / IDAT
+  // / IEND minimum. This catches any future regression that reintroduces
+  // chunk stripping in applyDithering or configureOutputFormat, without
+  // hard-coding the specific chunk name ImageMagick happens to emit today.
+
+  describe('PNG chunk preservation (issue #47)', () => {
+    const PNG_SIGNATURE = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ])
+
+    // Walks a PNG byte buffer and returns the ordered list of chunk type
+    // codes. A chunk is [4-byte length][4-byte type][data][4-byte CRC].
+    // Stops after IEND. Kept inline — ~15 lines is cheaper than a dependency.
+    function parsePngChunks(buffer: Buffer): string[] {
+      if (!buffer.subarray(0, 8).equals(PNG_SIGNATURE)) {
+        throw new Error('Not a PNG: signature mismatch')
+      }
+      const chunks: string[] = []
+      let offset = 8
+      while (offset + 12 <= buffer.length) {
+        const length = buffer.readUInt32BE(offset)
+        const type = buffer.toString('ascii', offset + 4, offset + 8)
+        chunks.push(type)
+        offset += 12 + length // 4 length + 4 type + data + 4 CRC
+        if (type === 'IEND') break
+      }
+      return chunks
+    }
+
+    const grayscalePalettes = ['bw', 'gray-4', 'gray-16'] as const
+
+    for (const palette of grayscalePalettes) {
+      describe(`with ${palette} palette`, () => {
+        let output: Buffer
+
+        beforeAll(async () => {
+          output = await applyDithering(testImageBuffer, {
+            method: 'floyd-steinberg',
+            palette,
+            format: 'png',
+          })
+        })
+
+        it('starts with a valid PNG signature', () => {
+          expect(output.subarray(0, 8).equals(PNG_SIGNATURE)).toBe(true)
+        })
+
+        it('contains required PNG chunks (IHDR, IDAT, IEND)', () => {
+          const chunks = parsePngChunks(output)
+
+          expect(chunks).toContain('IHDR')
+          expect(chunks).toContain('IDAT')
+          expect(chunks).toContain('IEND')
+        })
+
+        it('preserves ancillary chunks for firmware compatibility', () => {
+          // NOTE: Regression guard for issue #47. The minimum-viable PNG is
+          // IHDR + IDAT + IEND (3 chunks). Any output with more than that
+          // means at least one ancillary chunk (bKGD, tIME, tEXt, ...) has
+          // survived — which is what TRMNL firmware needs. Asserting
+          // `> 3 chunks` is robust against IM version changes that might
+          // swap which specific ancillary chunks get emitted by default.
+          const chunks = parsePngChunks(output)
+
+          expect(chunks.length).toBeGreaterThan(3)
+        })
+      })
+    }
+  })
 })

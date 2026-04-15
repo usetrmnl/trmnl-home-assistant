@@ -277,15 +277,11 @@ function configureOutputFormat(
       image = image.out('-type', 'Grayscale').out('-depth', String(bitDepth))
       log.debug`Outputting ${bitDepth}-bit grayscale PNG for e-ink`
     }
-    // NOTE: Skip exclude-chunks for color palettes - removes PLTE chunk
-    if (isColorPalette) {
-      image = image.define(`png:compression-level=${compressionLevel}`)
-    } else {
+    image = image.define(`png:compression-level=${compressionLevel}`)
+    if (!isColorPalette) {
       image = image
-        .define(`png:compression-level=${compressionLevel}`)
         .define('png:compression-filter=5')
         .define('png:compression-strategy=1')
-        .define('png:exclude-chunks=all')
     }
     log.debug`PNG compression level: ${compressionLevel}`
   }
@@ -490,8 +486,13 @@ export async function applyDithering(
     image = image.out('-negate')
   }
 
-  // Strip metadata for smaller files (skip for color palettes - breaks colormap)
-  if (!isColorPaletteMode) {
+  // Strip metadata for smaller files.
+  // - Skip for color palettes: `-strip` removes the colormap.
+  // - Skip for PNG: `-strip` removes ancillary chunks (bKGD, etc.) that some
+  //   embedded PNG parsers (TRMNL firmware) rely on. The saving is ~170 bytes
+  //   on a typical 800x480 image — under 0.5% of the 50KB budget — and not
+  //   worth the firmware compatibility risk. See issue #47.
+  if (!isColorPaletteMode && format !== 'png') {
     image = image.strip()
   }
 
