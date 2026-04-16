@@ -546,7 +546,7 @@
     },
     "webhook_url": "",
     "format": "png",
-    "rotate": 90,
+    "rotate": 0,
     "dithering": {
       "enabled": true,
       "method": "floyd-steinberg",
@@ -569,7 +569,7 @@
     },
     "webhook_url": "",
     "format": "png",
-    "rotate": 90,
+    "rotate": 0,
     "dithering": {
       "enabled": true,
       "method": "floyd-steinberg",
@@ -638,7 +638,7 @@
     },
     "webhook_url": "",
     "format": "png",
-    "rotate": 90,
+    "rotate": 0,
     "dithering": {
       "enabled": true,
       "method": "floyd-steinberg",
