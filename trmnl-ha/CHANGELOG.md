@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-04-16
+
+### Added
+
+- Add colour palletes and new devices
+
+### Changed
+
+- Update kobo device rotation
+- Fixed PNG chunk stripping breaking TRMNL firmware
+
+### Fixed
+
+- Use -colors 2 instead of -monochrome for Floyd-Steinberg 1-bit dithering
 ## [0.8.0] - 2026-04-14
 
 ### Changed
@@ -248,4 +262,5 @@ Based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main
 [0.6.9]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.6.8...v0.6.9
 [0.7.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.6.9...v0.7.0
 [0.8.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.7.0...v0.8.0
+[0.8.1]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.8.0...v0.8.1
 [0.2.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.1.0...v0.2.0
