@@ -66,6 +66,23 @@ export function isColorPalette(palette: string): palette is ColorPalette {
   return palette in COLOR_PALETTES
 }
 
+/**
+ * Full-spectrum palette IDs that use per-channel bit depth reduction
+ * instead of discrete color mapping.
+ */
+const FULL_SPECTRUM_PALETTES: readonly ColorPalette[] = [
+  'color-12bit',
+  'color-24bit',
+]
+
+/**
+ * Checks if a palette is full-spectrum (12-bit or 24-bit).
+ * These palettes skip the mpr: palette pipeline and use posterize or passthrough.
+ */
+export function isFullSpectrumPalette(palette: string): boolean {
+  return FULL_SPECTRUM_PALETTES.includes(palette as ColorPalette)
+}
+
 // =============================================================================
 // TYPE DEFINITIONS
 // =============================================================================
@@ -454,7 +471,14 @@ export async function applyDithering(
   let bitDepth: number | null = null
 
   // Process based on palette type
-  if (isColorPaletteMode) {
+  if (isColorPaletteMode && isFullSpectrumPalette(palette)) {
+    image = applyFullSpectrumProcessing(image, {
+      palette: palette as ColorPalette,
+      method,
+      normalize,
+      saturationBoost,
+    })
+  } else if (isColorPaletteMode) {
     image = applyColorDithering(image, {
       palette: palette as ColorPalette,
       method,
@@ -644,6 +668,42 @@ function applyColorDithering(
   // Remap to the in-memory palette
   image = image.out('-remap', 'mpr:palette')
   image = image.colorspace('sRGB')
+
+  return image
+}
+
+/**
+ * Applies full-spectrum color processing for 12-bit and 24-bit palettes.
+ *
+ * Unlike discrete palettes (3bwr, 7a, etc.) which map to explicit hex colors
+ * via mpr:, full-spectrum palettes reduce per-channel bit depth:
+ * - 12-bit: posterize to 16 levels/channel (4096 colors) with dithering
+ * - 24-bit: passthrough at full color depth (no reduction)
+ */
+function applyFullSpectrumProcessing(
+  image: State,
+  options: ColorDitheringOptions
+): State {
+  const { palette, method, normalize, saturationBoost } = options
+
+  if (saturationBoost) {
+    image = image.modulate(110, 150)
+  }
+
+  if (normalize) {
+    image = image.normalize()
+  }
+
+  image = image.colorspace('sRGB')
+
+  if (palette === 'color-12bit') {
+    // 16 levels per channel (4 bits × 3 channels = 12-bit color)
+    // Strategy sets the dithering method; -posterize applies it per-channel
+    const strategy = getStrategy(method)
+    image = strategy.call(image, { mode: 'color' as DitheringMode })
+    image = image.out('-posterize', '16')
+  }
+  // 24-bit: no color reduction — full spectrum passthrough
 
   return image
 }

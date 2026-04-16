@@ -23,10 +23,15 @@ export const GRAYSCALE_OPTIONS: PaletteOption[] = [
 
 /** Color palette options */
 export const COLOR_OPTIONS: PaletteOption[] = [
+  { value: 'color-3bwr', label: '3-color (B/W/R)' },
+  { value: 'color-3bwy', label: '3-color (B/W/Y)' },
+  { value: 'color-4bwry', label: '4-color (B/W/R/Y)' },
   { value: 'color-6a', label: '6-color (Inky 13.3)' },
   { value: 'color-7a', label: '7-color (Inky 7.3)' },
   { value: 'color-7b', label: '7-color Cyan (RTM1002)' },
   { value: 'color-8a', label: '8-color (Spectra 6)' },
+  { value: 'color-12bit', label: '12-bit (4096 colors)' },
+  { value: 'color-24bit', label: '24-bit (full color)' },
 ]
 
 /** All palette options (for UI dropdown) */

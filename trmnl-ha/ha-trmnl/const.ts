@@ -375,6 +375,18 @@ export const PALETTES: Record<Palette, PaletteConfig> = {
   'gray-16': { label: label('gray-16'), levels: 16 },
   'gray-256': { label: label('gray-256'), levels: 256 },
   // Color palettes (labels from palette-options.ts)
+  'color-3bwr': {
+    label: label('color-3bwr'),
+    colors: ['#000000', '#FF0000', '#FFFFFF'],
+  },
+  'color-3bwy': {
+    label: label('color-3bwy'),
+    colors: ['#000000', '#FFFF00', '#FFFFFF'],
+  },
+  'color-4bwry': {
+    label: label('color-4bwry'),
+    colors: ['#000000', '#FF0000', '#FFFFFF', '#FFFF00'],
+  },
   'color-6a': {
     label: label('color-6a'),
     colors: ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00'],
@@ -416,6 +428,11 @@ export const PALETTES: Record<Palette, PaletteConfig> = {
       '#FF8C00',
     ],
   },
+  // NOTE: Full-spectrum palettes use empty color arrays — they reduce bit depth
+  // per channel rather than mapping to discrete colors. Handled by
+  // applyFullSpectrumProcessing() in lib/dithering.ts, not the mpr: pipeline.
+  'color-12bit': { label: label('color-12bit'), colors: [] },
+  'color-24bit': { label: label('color-24bit'), colors: [] },
 }
 
 // =============================================================================

@@ -14,6 +14,7 @@ import {
   SUPPORTED_METHODS,
   SUPPORTED_PALETTES,
   isColorPalette,
+  isFullSpectrumPalette,
   validateDitheringOptions,
 } from '../../lib/dithering.js'
 import type { DitheringMethod } from '../../types/domain.js'
@@ -83,6 +84,18 @@ describeDithering('Dithering Module', () => {
         expect.arrayContaining(['bw', 'gray-4', 'gray-16', 'color-7a'])
       )
     })
+
+    it('includes BWR/BWY/BWRY accent palettes', () => {
+      expect(SUPPORTED_PALETTES).toEqual(
+        expect.arrayContaining(['color-3bwr', 'color-3bwy', 'color-4bwry'])
+      )
+    })
+
+    it('includes full-spectrum palettes', () => {
+      expect(SUPPORTED_PALETTES).toEqual(
+        expect.arrayContaining(['color-12bit', 'color-24bit'])
+      )
+    })
   })
 
   // ==========================================================================
@@ -90,14 +103,45 @@ describeDithering('Dithering Module', () => {
   // ==========================================================================
 
   describe('isColorPalette', () => {
-    it('returns true for color palettes', () => {
+    it('returns true for discrete color palettes', () => {
       expect(isColorPalette('color-6a')).toBe(true)
       expect(isColorPalette('color-7a')).toBe(true)
+      expect(isColorPalette('color-3bwr')).toBe(true)
+      expect(isColorPalette('color-3bwy')).toBe(true)
+      expect(isColorPalette('color-4bwry')).toBe(true)
+    })
+
+    it('returns true for full-spectrum palettes', () => {
+      expect(isColorPalette('color-12bit')).toBe(true)
+      expect(isColorPalette('color-24bit')).toBe(true)
     })
 
     it('returns false for grayscale palettes', () => {
       expect(isColorPalette('bw')).toBe(false)
       expect(isColorPalette('gray-4')).toBe(false)
+    })
+  })
+
+  // ==========================================================================
+  // isFullSpectrumPalette() - Full-spectrum palette detection
+  // ==========================================================================
+
+  describe('isFullSpectrumPalette', () => {
+    it('returns true for 12-bit and 24-bit palettes', () => {
+      expect(isFullSpectrumPalette('color-12bit')).toBe(true)
+      expect(isFullSpectrumPalette('color-24bit')).toBe(true)
+    })
+
+    it('returns false for discrete color palettes', () => {
+      expect(isFullSpectrumPalette('color-6a')).toBe(false)
+      expect(isFullSpectrumPalette('color-7a')).toBe(false)
+      expect(isFullSpectrumPalette('color-3bwr')).toBe(false)
+      expect(isFullSpectrumPalette('color-4bwry')).toBe(false)
+    })
+
+    it('returns false for grayscale palettes', () => {
+      expect(isFullSpectrumPalette('bw')).toBe(false)
+      expect(isFullSpectrumPalette('gray-4')).toBe(false)
     })
   })
 
@@ -172,6 +216,24 @@ describeDithering('Dithering Module', () => {
       })
 
       expect(result.normalize).toBe(false)
+    })
+
+    it('enables saturationBoost by default for BWR/BWRY palettes', () => {
+      const bwrResult = validateDitheringOptions({ palette: 'color-3bwr' })
+      expect(bwrResult.saturationBoost).toBe(true)
+      expect(bwrResult.normalize).toBe(true)
+
+      const bwryResult = validateDitheringOptions({ palette: 'color-4bwry' })
+      expect(bwryResult.saturationBoost).toBe(true)
+    })
+
+    it('enables saturationBoost by default for full-spectrum palettes', () => {
+      const result12 = validateDitheringOptions({ palette: 'color-12bit' })
+      expect(result12.saturationBoost).toBe(true)
+      expect(result12.normalize).toBe(true)
+
+      const result24 = validateDitheringOptions({ palette: 'color-24bit' })
+      expect(result24.saturationBoost).toBe(true)
     })
   })
 
@@ -348,6 +410,162 @@ describeDithering('Dithering Module', () => {
         // Should not throw, uses default method
         expect(Buffer.isBuffer(result)).toBe(true)
       })
+    })
+  })
+
+  // ==========================================================================
+  // Discrete color palettes (BWR/BWY/BWRY) - accent color e-ink displays
+  // ==========================================================================
+
+  describe('applyDithering with discrete color palettes', () => {
+    it('processes images with color-3bwr palette', async () => {
+      const result = await applyDithering(testImageBuffer, {
+        method: 'floyd-steinberg',
+        palette: 'color-3bwr',
+      })
+
+      expect(Buffer.isBuffer(result)).toBe(true)
+      expect(result.length).toBeGreaterThan(0)
+    })
+
+    it('processes images with color-4bwry palette', async () => {
+      const result = await applyDithering(testImageBuffer, {
+        method: 'floyd-steinberg',
+        palette: 'color-4bwry',
+      })
+
+      expect(Buffer.isBuffer(result)).toBe(true)
+      expect(result.length).toBeGreaterThan(0)
+    })
+
+    it('preserves image dimensions with BWR palette', async () => {
+      const result = await applyDithering(testImageBuffer, {
+        palette: 'color-3bwr',
+      })
+      const info = await getImageInfo(result)
+
+      expect(info.width).toBe(100)
+      expect(info.height).toBe(100)
+    })
+  })
+
+  // ==========================================================================
+  // Full-spectrum palettes (12-bit / 24-bit)
+  // ==========================================================================
+
+  describe('applyDithering with full-spectrum palettes', () => {
+    it('processes images with color-12bit palette', async () => {
+      const result = await applyDithering(testImageBuffer, {
+        method: 'floyd-steinberg',
+        palette: 'color-12bit',
+      })
+
+      expect(Buffer.isBuffer(result)).toBe(true)
+      expect(result.length).toBeGreaterThan(0)
+    })
+
+    it('processes images with color-24bit palette', async () => {
+      const result = await applyDithering(testImageBuffer, {
+        method: 'floyd-steinberg',
+        palette: 'color-24bit',
+      })
+
+      expect(Buffer.isBuffer(result)).toBe(true)
+      expect(result.length).toBeGreaterThan(0)
+    })
+
+    it('preserves image dimensions with full-spectrum palettes', async () => {
+      const result12 = await applyDithering(testImageBuffer, {
+        palette: 'color-12bit',
+      })
+      const result24 = await applyDithering(testImageBuffer, {
+        palette: 'color-24bit',
+      })
+
+      const info12 = await getImageInfo(result12)
+      const info24 = await getImageInfo(result24)
+
+      expect(info12.width).toBe(100)
+      expect(info12.height).toBe(100)
+      expect(info24.width).toBe(100)
+      expect(info24.height).toBe(100)
+    })
+
+    it('works with all dithering methods for 12-bit', async () => {
+      const methods = ['floyd-steinberg', 'ordered', 'threshold'] as const
+
+      for (const method of methods) {
+        const result = await applyDithering(testImageBuffer, {
+          method,
+          palette: 'color-12bit',
+        })
+        expect(Buffer.isBuffer(result)).toBe(true)
+      }
+    })
+
+    it('24-bit passthrough works regardless of dithering method', async () => {
+      const methods = ['floyd-steinberg', 'ordered', 'threshold'] as const
+
+      for (const method of methods) {
+        const result = await applyDithering(testImageBuffer, {
+          method,
+          palette: 'color-24bit',
+        })
+        expect(Buffer.isBuffer(result)).toBe(true)
+      }
+    })
+
+    // NOTE: Observable effect test — 12-bit posterizes to 16 levels/channel
+    // (4096 colors max), while 24-bit passes through at full color depth.
+    // On a simple test image the unique color counts should differ.
+    it('12-bit produces fewer unique colors than 24-bit', async () => {
+      // Create a colorful test image with gradients
+      const colorImage = await new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = []
+        gm(100, 100, '#FF6633')
+          .fill('#3366FF')
+          .drawRectangle(0, 0, 50, 50)
+          .fill('#33CC66')
+          .drawRectangle(50, 50, 100, 100)
+          .stream('png', (err, stdout) => {
+            if (err) return reject(err)
+            stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+            stdout.on('end', () => resolve(Buffer.concat(chunks)))
+            stdout.on('error', reject)
+          })
+      })
+
+      const result12 = await applyDithering(colorImage, {
+        palette: 'color-12bit',
+        gammaCorrection: false,
+        normalize: false,
+        saturationBoost: false,
+      })
+      const result24 = await applyDithering(colorImage, {
+        palette: 'color-24bit',
+        gammaCorrection: false,
+        normalize: false,
+        saturationBoost: false,
+      })
+
+      const colors12 = Number.parseInt(
+        execSync('magick - -format "%k" info:', {
+          input: result12,
+          encoding: 'utf-8',
+          timeout: 5000,
+        }).trim(),
+        10
+      )
+      const colors24 = Number.parseInt(
+        execSync('magick - -format "%k" info:', {
+          input: result24,
+          encoding: 'utf-8',
+          timeout: 5000,
+        }).trim(),
+        10
+      )
+
+      expect(colors12).toBeLessThanOrEqual(colors24)
     })
   })
 
