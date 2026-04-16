@@ -96,6 +96,7 @@ docker run -it --rm \
   -v "${APP_DIR}/scheduler.ts:/app/scheduler.ts" \
   -v "${APP_DIR}/ui.ts:/app/ui.ts" \
   -v "${APP_DIR}/devices.ts:/app/devices.ts" \
+  -v "${APP_DIR}/devices.json:/app/devices.json:ro" \
   -v "${APP_DIR}/types:/app/types" \
   "${IMAGE_NAME}" \
   bun --watch run main.ts

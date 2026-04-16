@@ -40,10 +40,15 @@ export type GrayscalePalette = 'bw' | 'gray-4' | 'gray-16' | 'gray-256'
 
 /** Color palette types for color e-ink displays */
 export type ColorPalette =
+  | 'color-3bwr' // 3-color: Black, White, Red
+  | 'color-3bwy' // 3-color: Black, White, Yellow
+  | 'color-4bwry' // 4-color: Black, White, Red, Yellow
   | 'color-6a' // 6-color: R, G, B, Y, Black, White
   | 'color-7a' // 7-color ACeP/Gallery with Orange
   | 'color-7b' // 7-color with Cyan (instead of Orange)
   | 'color-8a' // 8-color Spectra 6 T2000 (both Cyan + Orange)
+  | 'color-12bit' // 12-bit: 4096 colors (4 bits/channel)
+  | 'color-24bit' // 24-bit: 16.7M colors (full spectrum)
 
 /** All supported palettes */
 export type Palette = GrayscalePalette | ColorPalette
