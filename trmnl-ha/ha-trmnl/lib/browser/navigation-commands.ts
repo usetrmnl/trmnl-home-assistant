@@ -53,13 +53,22 @@ export class NavigateToPage {
    *
    * @param pagePath - Page path relative to HA base (e.g., "/lovelace/kitchen")
    * @param targetUrl - Full URL to navigate to (overrides pagePath resolution)
+   * @param pageQuery - Extra query string to append to the HA URL (e.g. "kiosk")
    * @returns Recommended wait time in milliseconds
    * @throws CannotOpenPageError If navigation fails
    */
-  async call(pagePath: string, targetUrl?: string): Promise<NavigationResult> {
+  async call(pagePath: string, targetUrl?: string, pageQuery?: string): Promise<NavigationResult> {
     // Resolve the final URL: use targetUrl if provided, otherwise resolve against HA base
-    const pageUrl =
-      targetUrl || new URL(pagePath, this.#homeAssistantUrl).toString()
+    let pageUrl: string
+    if (targetUrl) {
+      pageUrl = targetUrl
+    } else {
+      const url = new URL(pagePath, this.#homeAssistantUrl)
+      if (pageQuery) {
+        new URLSearchParams(pageQuery).forEach((v, k) => url.searchParams.set(k, v))
+      }
+      pageUrl = url.toString()
+    }
     const injectAuth = this.#shouldInjectAuth(pageUrl)
 
     log.info`Navigating to: ${pageUrl} (HA auth: ${injectAuth ? 'yes' : 'no'})`

@@ -22,6 +22,8 @@ import type {
 /** Parsed screenshot parameters */
 export interface ParsedScreenshotParams {
   pagePath: string
+  /** Query string to append to the HA navigation URL (e.g. "kiosk") */
+  pageQuery?: string
   /** Full target URL (if provided, overrides pagePath + base URL resolution) */
   targetUrl?: string
   viewport: Viewport
@@ -55,8 +57,12 @@ export class ScreenshotParamsParser {
     // Full URL param for generic (non-HA) screenshots
     const targetUrl = requestUrl.searchParams.get('url') || undefined
 
+    // Page-specific query params to forward to HA navigation (e.g. kiosk mode)
+    const pageQuery = requestUrl.searchParams.get('page_query') || undefined
+
     return {
       pagePath: requestUrl.pathname,
+      pageQuery,
       targetUrl,
       viewport,
       ...this.#parseProcessing(requestUrl),

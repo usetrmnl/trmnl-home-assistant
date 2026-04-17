@@ -19,6 +19,8 @@ import type { Schedule } from '../../types/domain.js'
 export interface ScreenshotTarget {
   /** Path for the request (dashboard path for HA, '/' for generic) */
   path: string
+  /** Query string to append to the HA navigation URL (e.g. "kiosk" for kiosk mode) */
+  pageQuery?: string
   /** Full URL for generic mode (undefined for HA mode) */
   fullUrl?: string
   /** Whether using Home Assistant mode */
@@ -46,8 +48,14 @@ export function resolveScreenshotTarget(schedule: Schedule): ScreenshotTarget {
   const isHAMode = schedule.ha_mode ?? true
 
   if (isHAMode) {
+    const rawPath = schedule.dashboard_path || DEFAULT_DASHBOARD_PATH
+    const qIdx = rawPath.indexOf('?')
+    const path = qIdx >= 0 ? rawPath.slice(0, qIdx) : rawPath
+    const pageQuery = qIdx >= 0 ? rawPath.slice(qIdx + 1) : undefined
+
     return {
-      path: schedule.dashboard_path || DEFAULT_DASHBOARD_PATH,
+      path,
+      pageQuery: pageQuery || undefined,
       fullUrl: undefined,
       isHAMode: true,
     }

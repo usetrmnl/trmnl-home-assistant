@@ -69,6 +69,30 @@ describe('resolveScreenshotTarget', () => {
       expect(target.path).toBe('/lovelace/home')
       expect(target.fullUrl).toBeUndefined()
     })
+
+    it('extracts query string from dashboard_path into pageQuery', () => {
+      const schedule = { ...baseSchedule, ha_mode: true, dashboard_path: '/lovelace/0?kiosk' }
+      const target = resolveScreenshotTarget(schedule)
+
+      expect(target.path).toBe('/lovelace/0')
+      expect(target.pageQuery).toBe('kiosk')
+    })
+
+    it('extracts multiple query params from dashboard_path', () => {
+      const schedule = { ...baseSchedule, ha_mode: true, dashboard_path: '/lovelace/0?kiosk&sidebar=hidden' }
+      const target = resolveScreenshotTarget(schedule)
+
+      expect(target.path).toBe('/lovelace/0')
+      expect(target.pageQuery).toBe('kiosk&sidebar=hidden')
+    })
+
+    it('sets pageQuery to undefined when no query string in dashboard_path', () => {
+      const schedule = { ...baseSchedule, ha_mode: true, dashboard_path: '/lovelace/0' }
+      const target = resolveScreenshotTarget(schedule)
+
+      expect(target.path).toBe('/lovelace/0')
+      expect(target.pageQuery).toBeUndefined()
+    })
   })
 
   describe('Generic Mode (ha_mode: false)', () => {

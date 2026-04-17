@@ -152,6 +152,11 @@ export class ScheduleExecutor {
       params.append('url', target.fullUrl)
     }
 
+    // Forward page-specific query params (e.g. kiosk mode) to the screenshot handler
+    if (target.pageQuery) {
+      params.append('page_query', target.pageQuery)
+    }
+
     const path = target.path.replace(/^\//, '')
 
     return `${byos.addon_base_url.replace(/\/+$/, '')}/${path}?${params.toString()}`

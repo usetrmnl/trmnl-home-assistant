@@ -55,6 +55,22 @@ describe('ScreenshotParamsParser', () => {
       expect(result).not.toBeNull()
       expect(result!.pagePath).toBe('/lovelace/0')
     })
+
+    it('parses page_query param for kiosk mode', () => {
+      const url = createUrl('/lovelace/0', { viewport: '800x600', page_query: 'kiosk' })
+
+      const result = parser.call(url)
+
+      expect(result!.pageQuery).toBe('kiosk')
+    })
+
+    it('sets pageQuery to undefined when page_query is absent', () => {
+      const url = createUrl('/lovelace/0', { viewport: '800x600' })
+
+      const result = parser.call(url)
+
+      expect(result!.pageQuery).toBeUndefined()
+    })
   })
 
   // ==========================================================================

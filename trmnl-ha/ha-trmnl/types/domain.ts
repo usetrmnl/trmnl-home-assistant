@@ -93,6 +93,9 @@ export interface ScreenshotParams {
   /** Dashboard page path (e.g., "/lovelace/default") */
   pagePath: string
 
+  /** Query string to append to the HA navigation URL (e.g. "kiosk") */
+  pageQuery?: string
+
   /** Full target URL (if provided, overrides pagePath + base URL resolution) */
   targetUrl?: string
 

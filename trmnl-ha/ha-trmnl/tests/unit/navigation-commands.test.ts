@@ -228,6 +228,45 @@ describe('NavigateToPage', () => {
       ])
     })
 
+    it('appends pageQuery to HA navigation URL', async () => {
+      const nav = new NavigateToPage(
+        mockPage,
+        STUB_AUTH,
+        'http://homeassistant:8123',
+      )
+
+      await nav.call('/lovelace/0', undefined, 'kiosk')
+
+      expect(mockPage.calls.goto).toEqual([
+        'http://homeassistant:8123/lovelace/0?kiosk=',
+      ])
+    })
+
+    it('appends multiple pageQuery params to HA navigation URL', async () => {
+      const nav = new NavigateToPage(
+        mockPage,
+        STUB_AUTH,
+        'http://homeassistant:8123',
+      )
+
+      await nav.call('/lovelace/0', undefined, 'kiosk&sidebar=hidden')
+
+      expect(mockPage.calls.goto[0]).toContain('kiosk')
+      expect(mockPage.calls.goto[0]).toContain('sidebar=hidden')
+    })
+
+    it('does not append pageQuery when targetUrl is provided', async () => {
+      const nav = new NavigateToPage(
+        mockPage,
+        STUB_AUTH,
+        'http://homeassistant:8123',
+      )
+
+      await nav.call('/unused', 'http://external.com/page', 'kiosk')
+
+      expect(mockPage.calls.goto).toEqual(['http://external.com/page'])
+    })
+
     it('cleans up evaluateOnNewDocument after successful HA navigation', async () => {
       const nav = new NavigateToPage(
         mockPage,

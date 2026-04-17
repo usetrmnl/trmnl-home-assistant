@@ -127,6 +127,8 @@ const PUPPETEER_ARGS: string[] = [
 /** Navigation parameters for navigatePage() */
 export interface NavigateParams {
   pagePath: string
+  /** Query string to append to the HA navigation URL (e.g. "kiosk") */
+  pageQuery?: string
   /** Full target URL (if provided, overrides pagePath + base URL resolution) */
   targetUrl?: string
   viewport: Viewport
@@ -413,6 +415,7 @@ export class Browser {
    */
   async navigatePage({
     pagePath,
+    pageQuery,
     targetUrl,
     viewport,
     extraWait,
@@ -440,7 +443,7 @@ export class Browser {
         authStorage,
         this.#homeAssistantUrl,
       )
-      await navigateCmd.call(pagePath, targetUrl)
+      await navigateCmd.call(pagePath, targetUrl, pageQuery)
 
       // Check if we landed on HA login/auth page (indicates invalid token)
       const currentUrl = page.url()

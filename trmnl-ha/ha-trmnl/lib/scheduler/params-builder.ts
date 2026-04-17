@@ -36,6 +36,7 @@ export function buildParams(schedule: Schedule): ScreenshotParams {
 
   return {
     pagePath: target.path,
+    pageQuery: target.pageQuery,
     targetUrl: target.fullUrl,
     format: schedule.format || DEFAULTS.format,
     viewport: schedule.viewport ?? DEFAULTS.viewport,

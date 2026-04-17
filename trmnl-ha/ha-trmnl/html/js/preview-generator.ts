@@ -167,10 +167,16 @@ export class PreviewGenerator {
         params.append('url', target.fullUrl)
       }
 
+      // Forward page-specific query params (e.g. kiosk mode) to the screenshot handler
+      if (target.pageQuery) {
+        params.append('page_query', target.pageQuery)
+      }
+
       // Build the display URL (what's actually being captured)
       // @ts-expect-error window.uiConfig is injected by server
       const uiConfig = window.uiConfig || { hassUrl: '' }
-      const displayUrl = target.fullUrl || `${uiConfig.hassUrl}${target.path}`
+      const rawPath = schedule.dashboard_path || '/lovelace/0'
+      const displayUrl = target.fullUrl || `${uiConfig.hassUrl}${rawPath}`
 
       const blob = await this.#fetchPreviewCmd.call(target.path, params)
       const imageUrl = URL.createObjectURL(blob)
