@@ -78,21 +78,74 @@ export class NavigateToPage {
       )
     }
 
-    let response
-    try {
-      response = await this.#page.goto(pageUrl, { waitUntil: 'networkidle2' })
-    } catch (err) {
-      if (evaluateId) {
-        this.#page.removeScriptToEvaluateOnNewDocument(evaluateId.identifier)
+    // For HA URLs that aren't root: do an in-app router transition, not a
+    // direct hard-navigation. Cold-loading directly into a dashboard path
+    // races dashboard-config arrival with card mount, causing async WebSocket
+    // subscriptions (notably weather/subscribe_forecast) to be dropped in
+    // ~9/10 attempts. Loading root first, waiting for HA to be ready, then
+    // doing a client-side navigation triggers HA's router transition path —
+    // which the diagnostic showed correlates 1:1 with successful subscriptions.
+    const targetUrlObj = new URL(pageUrl)
+    const targetPath = targetUrlObj.pathname + targetUrlObj.search
+    const useTransition = injectAuth && targetPath !== '/'
+
+    let response: Awaited<ReturnType<Page['goto']>> | null = null
+    let usedTransition = false
+
+    if (useTransition) {
+      const rootUrl = new URL('/', this.#homeAssistantUrl).toString()
+      try {
+        log.debug`Two-step nav: hard-load ${rootUrl}, then client-side to ${targetPath}`
+        response = await this.#page.goto(rootUrl, { waitUntil: 'networkidle2' })
+        if (!response?.ok()) {
+          throw new Error(
+            `Root navigation returned ${response?.status() ?? 'no response'}`,
+          )
+        }
+        // Wait for HA to bootstrap before triggering router transition
+        await this.#page.waitForFunction(
+          () => {
+            const haEl = document.querySelector('home-assistant') as
+              | (Element & {
+                  hass?: { states?: Record<string, unknown> }
+                })
+              | null
+            return !!(
+              haEl?.hass?.states &&
+              Object.keys(haEl.hass.states).length > 0
+            )
+          },
+          { timeout: 10000, polling: 100 },
+        )
+        await this.#page.evaluate((path: string) => {
+          history.pushState(null, '', path)
+          window.dispatchEvent(new PopStateEvent('popstate'))
+        }, targetPath)
+        usedTransition = true
+      } catch (err) {
+        log.debug`Two-step nav failed, falling back to direct goto: ${(err as Error).message}`
+        response = null
       }
-      throw new CannotOpenPageError(0, pageUrl, (err as Error).message)
     }
 
-    if (!response?.ok()) {
-      if (evaluateId) {
-        this.#page.removeScriptToEvaluateOnNewDocument(evaluateId.identifier)
+    if (!usedTransition) {
+      try {
+        response = await this.#page.goto(pageUrl, {
+          waitUntil: 'networkidle2',
+        })
+      } catch (err) {
+        if (evaluateId) {
+          this.#page.removeScriptToEvaluateOnNewDocument(evaluateId.identifier)
+        }
+        throw new CannotOpenPageError(0, pageUrl, (err as Error).message)
       }
-      throw new CannotOpenPageError(response?.status() ?? 0, pageUrl)
+
+      if (!response?.ok()) {
+        if (evaluateId) {
+          this.#page.removeScriptToEvaluateOnNewDocument(evaluateId.identifier)
+        }
+        throw new CannotOpenPageError(response?.status() ?? 0, pageUrl)
+      }
     }
 
     if (evaluateId) {
