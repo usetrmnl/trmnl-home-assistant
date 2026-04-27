@@ -30,6 +30,7 @@ interface MockPageCalls {
   evaluateOnNewDocument: number
   removeScriptToEvaluateOnNewDocument: number
   goto: string[]
+  gotoOptions: unknown[]
   evaluate: { fn: unknown; args: unknown[] }[]
   waitForFunction: number
 }
@@ -49,6 +50,7 @@ function createMockPage(
     evaluateOnNewDocument: 0,
     removeScriptToEvaluateOnNewDocument: 0,
     goto: [],
+    gotoOptions: [],
     evaluate: [],
     waitForFunction: 0,
   }
@@ -62,8 +64,9 @@ function createMockPage(
     removeScriptToEvaluateOnNewDocument: async () => {
       calls.removeScriptToEvaluateOnNewDocument++
     },
-    goto: async (url: string, _opts?: unknown) => {
+    goto: async (url: string, opts?: unknown) => {
       calls.goto.push(url)
+      calls.gotoOptions.push(opts)
       if (options.gotoError) throw options.gotoError
       return 'gotoResponse' in options
         ? options.gotoResponse
@@ -250,6 +253,25 @@ describe('NavigateToPage', () => {
       await nav.call('/unused', 'http://external.com/page')
 
       expect(mockPage.calls.removeScriptToEvaluateOnNewDocument).toBe(0)
+    })
+
+    it('passes NAVIGATION_TIMEOUT to page.goto (fixes #58)', async () => {
+      const { NAVIGATION_TIMEOUT } = await import('../../const.js')
+      const nav = new NavigateToPage(
+        mockPage,
+        STUB_AUTH,
+        'http://homeassistant:8123',
+      )
+
+      await nav.call('/lovelace/0')
+
+      expect(mockPage.calls.gotoOptions).toHaveLength(1)
+      const opts = mockPage.calls.gotoOptions[0] as {
+        waitUntil?: string
+        timeout?: number
+      }
+      expect(opts.waitUntil).toBe('networkidle2')
+      expect(opts.timeout).toBe(NAVIGATION_TIMEOUT)
     })
   })
 

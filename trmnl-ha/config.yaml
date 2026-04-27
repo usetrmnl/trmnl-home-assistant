@@ -39,6 +39,7 @@ options:
   keep_browser_open: false
   debug_logging: false
   server_port: 10000
+  navigation_timeout_ms: 60000
 
 # Schema for options validation
 schema:
@@ -48,6 +49,7 @@ schema:
   keep_browser_open: bool?
   debug_logging: bool?
   server_port: "int(1024,65535)?"
+  navigation_timeout_ms: "int(10000,180000)?"
 
 # Exclude regeneratable data from HA backups
 backup_exclude:
