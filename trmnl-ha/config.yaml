@@ -39,7 +39,7 @@ options:
   keep_browser_open: false
   debug_logging: false
   server_port: 10000
-  navigation_timeout_ms: 60000
+  navigation_timeout_ms: 30000
 
 # Schema for options validation
 schema:
