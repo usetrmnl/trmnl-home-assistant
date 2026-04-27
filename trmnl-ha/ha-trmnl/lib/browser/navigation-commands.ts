@@ -16,6 +16,7 @@ import {
   isAddOn,
   DEFAULT_WAIT_TIME,
   COLD_START_EXTRA_WAIT,
+  NAVIGATION_TIMEOUT,
 } from '../../const.js'
 import { CannotOpenPageError } from '../../error.js'
 import type { NavigationResult } from '../../types/domain.js'
@@ -80,7 +81,10 @@ export class NavigateToPage {
 
     let response
     try {
-      response = await this.#page.goto(pageUrl, { waitUntil: 'networkidle2' })
+      response = await this.#page.goto(pageUrl, {
+        waitUntil: 'networkidle2',
+        timeout: NAVIGATION_TIMEOUT,
+      })
     } catch (err) {
       if (evaluateId) {
         this.#page.removeScriptToEvaluateOnNewDocument(evaluateId.identifier)

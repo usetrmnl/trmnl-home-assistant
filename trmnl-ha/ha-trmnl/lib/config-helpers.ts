@@ -18,6 +18,7 @@ export interface Options {
   keep_browser_open?: boolean
   debug_logging?: boolean
   server_port?: number
+  navigation_timeout_ms?: number
 }
 
 /**

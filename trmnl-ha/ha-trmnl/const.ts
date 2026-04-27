@@ -135,6 +135,7 @@ const options: Options = {
     process.env['SERVER_PORT'] !== undefined
       ? parseInt(process.env['SERVER_PORT'], 10)
       : fileOptions.server_port,
+  navigation_timeout_ms: fileOptions.navigation_timeout_ms,
 }
 
 // Log configuration source for debugging
@@ -324,6 +325,18 @@ if (
 export const BROWSER_TIMEOUT: number = parseInt(
   process.env['BROWSER_TIMEOUT'] || '60000',
 )
+
+/**
+ * Navigation timeout for page.goto() in milliseconds.
+ * Default 60s (puppeteer's own default of 30s is too short for complex
+ * Home Assistant dashboards on lower-powered hardware like Pi 4).
+ * Configurable via the add-on `navigation_timeout_ms` option or the
+ * NAVIGATION_TIMEOUT environment variable.
+ * Fixes #58.
+ */
+export const NAVIGATION_TIMEOUT: number =
+  options.navigation_timeout_ms ??
+  parseInt(process.env['NAVIGATION_TIMEOUT'] || '60000')
 
 /**
  * Maximum screenshots before proactive browser restart (memory cleanup)
