@@ -200,7 +200,11 @@ describe('NavigateToPage', () => {
   // ==========================================================================
 
   describe('navigation', () => {
-    it('always uses page.goto', async () => {
+    it('two-step nav for HA non-root URLs: hard-load root then client-side transition', async () => {
+      // Cold-loading directly into a dashboard URL races dashboard-config
+      // arrival with card mount and drops async WebSocket subscriptions
+      // (e.g. weather/subscribe_forecast). The two-step flow re-mounts via
+      // HA's router so subscriptions fire deterministically.
       const nav = new NavigateToPage(
         mockPage,
         STUB_AUTH,
@@ -209,9 +213,46 @@ describe('NavigateToPage', () => {
 
       await nav.call('/lovelace/kitchen')
 
-      expect(mockPage.calls.goto).toEqual([
+      expect(mockPage.calls.goto).toEqual(['http://homeassistant:8123/'])
+      expect(mockPage.calls.waitForFunction).toBe(1)
+      expect(mockPage.calls.evaluate).toHaveLength(1)
+      expect(mockPage.calls.evaluate[0]?.args[0]).toBe('/lovelace/kitchen')
+    })
+
+    it('skips two-step for HA root URL', async () => {
+      const nav = new NavigateToPage(
+        mockPage,
+        STUB_AUTH,
+        'http://homeassistant:8123',
+      )
+
+      await nav.call('/')
+
+      expect(mockPage.calls.goto).toEqual(['http://homeassistant:8123/'])
+      expect(mockPage.calls.waitForFunction).toBe(0)
+      expect(mockPage.calls.evaluate).toHaveLength(0)
+    })
+
+    it('falls back to direct goto when two-step waitForFunction times out', async () => {
+      // If HA never bootstraps (e.g. waitForFunction times out), the two-step
+      // path is unsafe to complete — fall back to a single direct goto so
+      // navigation still produces a result rather than throwing.
+      const flakyPage = createMockPage({
+        waitForFunctionError: new Error('Waiting for function timed out'),
+      })
+      const nav = new NavigateToPage(
+        flakyPage,
+        STUB_AUTH,
+        'http://homeassistant:8123',
+      )
+
+      await nav.call('/lovelace/kitchen')
+
+      expect(flakyPage.calls.goto).toEqual([
+        'http://homeassistant:8123/',
         'http://homeassistant:8123/lovelace/kitchen',
       ])
+      expect(flakyPage.calls.evaluate).toHaveLength(0)
     })
 
     it('uses targetUrl directly when provided', async () => {
