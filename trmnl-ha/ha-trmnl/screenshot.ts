@@ -471,44 +471,50 @@ export class Browser {
         this.#lastRequestedDarkMode = dark
       }
 
-      // Wait strategy: explicit fixed wait OR multi-stage readiness detection
+      // Wait strategy: always run multi-stage readiness detection.
+      // extraWait is an additional tail pad applied AFTER detection — it
+      // covers late WebSocket data and slow renders that the smart signals
+      // can't catch (so users with flaky dashboards can add safety margin
+      // without losing the readiness checks).
       // NOTE: page.goto() already uses waitUntil:'networkidle2' so network is settled
+
+      // Stage 1: Wait for network to re-settle after theme/language changes
+      // Theme and language changes trigger WebSocket messages and cascading renders
+      if (setupResult.themeChanged || setupResult.langChanged) {
+        log.debug`Waiting for network idle after page setup changes`
+        try {
+          await page.waitForNetworkIdle({ idleTime: 500, concurrency: 2 })
+        } catch (_err) {
+          log.debug`Network idle wait timed out after page setup`
+        }
+      }
+
+      // Stage 2: Wait for HA entity data to load (HA pages only)
+      if (!isGenericUrl) {
+        const hassReadyCmd = new WaitForHassReady(page)
+        await hassReadyCmd.call()
+      }
+
+      // Stage 3: Wait for loading indicators to clear
+      const loadingCmd = new WaitForLoadingComplete(page, 15000)
+      const loadingWait = await loadingCmd.call()
+      log.debug`Loading indicators cleared after ${loadingWait}ms`
+
+      // Stage 4: Dismiss notification toasts (HA pages only)
+      if (!isGenericUrl) {
+        const dismissCmd = new DismissToasts(page)
+        const count = await dismissCmd.call()
+        if (count > 0) log.debug`Dismissed ${count} notification toast(s)`
+      }
+
+      // Stage 5: Wait for rendering pipeline to flush
+      const paintCmd = new WaitForPaintStability(page)
+      await paintCmd.call()
+
+      // Stage 6: Optional user-configured tail pad
       if (extraWait && extraWait > 0) {
-        log.debug`Explicit wait: ${extraWait}ms`
+        log.debug`Extra wait pad: ${extraWait}ms`
         await new Promise((resolve) => setTimeout(resolve, extraWait))
-      } else {
-        // Stage 1: Wait for network to re-settle after theme/language changes
-        // Theme and language changes trigger WebSocket messages and cascading renders
-        if (setupResult.themeChanged || setupResult.langChanged) {
-          log.debug`Waiting for network idle after page setup changes`
-          try {
-            await page.waitForNetworkIdle({ idleTime: 500, concurrency: 2 })
-          } catch (_err) {
-            log.debug`Network idle wait timed out after page setup`
-          }
-        }
-
-        // Stage 2: Wait for HA entity data to load (HA pages only)
-        if (!isGenericUrl) {
-          const hassReadyCmd = new WaitForHassReady(page)
-          await hassReadyCmd.call()
-        }
-
-        // Stage 3: Wait for loading indicators to clear
-        const loadingCmd = new WaitForLoadingComplete(page, 15000)
-        const loadingWait = await loadingCmd.call()
-        log.debug`Loading indicators cleared after ${loadingWait}ms`
-
-        // Stage 4: Dismiss notification toasts (HA pages only)
-        if (!isGenericUrl) {
-          const dismissCmd = new DismissToasts(page)
-          const count = await dismissCmd.call()
-          if (count > 0) log.debug`Dismissed ${count} notification toast(s)`
-        }
-
-        // Stage 5: Wait for rendering pipeline to flush
-        const paintCmd = new WaitForPaintStability(page)
-        await paintCmd.call()
       }
 
       return { time: Date.now() - start }
