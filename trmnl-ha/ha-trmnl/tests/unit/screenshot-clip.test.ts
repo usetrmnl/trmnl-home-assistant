@@ -53,7 +53,7 @@ let currentMockPage: MockPage
 function createMockPage(): MockPage {
   // Map from event name to list of handlers. Tests can fire 'console' events
   // via fireConsole() to exercise the orphan-detection retry path.
-  const handlers = new Map<string, Array<(arg: unknown) => void>>()
+  const handlers = new Map<string, ((arg: unknown) => void)[]>()
 
   const page: MockPage = {
     screenshot: mock(
