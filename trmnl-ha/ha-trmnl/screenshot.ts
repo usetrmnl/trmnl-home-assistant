@@ -16,7 +16,12 @@
  */
 
 import puppeteer from 'puppeteer'
-import type { Browser as PuppeteerBrowser, Page, Viewport } from 'puppeteer'
+import type {
+  Browser as PuppeteerBrowser,
+  ConsoleMessage,
+  Page,
+  Viewport,
+} from 'puppeteer'
 import {
   debugLogging as defaultDebugLogging,
   chromiumExecutable as defaultChromiumExecutable,
@@ -411,7 +416,48 @@ export class Browser {
    * If targetUrl is provided, navigates directly to that URL (generic mode).
    * Otherwise, resolves pagePath against the configured base URL (HA mode).
    */
-  async navigatePage({
+  async navigatePage(params: NavigateParams): Promise<NavigateResult> {
+    if (this.#busy) throw new Error('Browser is busy')
+
+    const start = Date.now()
+    this.#busy = true
+
+    try {
+      // home-assistant-js-websocket's subscribeMessage() has a microtask race
+      // between handler registration and incoming WS frames. When the server's
+      // response arrives faster than the registration microtask completes
+      // (notably on cold cache where RTT is ~15ms vs ~38ms warm), HA logs
+      // "Received event for unknown subscription N. Unsubscribing." and drops
+      // the forecast/render-template data. The card never re-subscribes, so
+      // forecast renders empty.
+      //
+      // Retry once with a fresh page when this happens. By the second attempt
+      // the cache is warm enough that response latency exceeds registration
+      // latency, and the subscription holds.
+      const MAX_ATTEMPTS = 2
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        const orphaned = await this.#runNavigationAttempt(params)
+        if (!orphaned || attempt === MAX_ATTEMPTS) {
+          return { time: Date.now() - start }
+        }
+        log.info`HA WS subscription race detected on attempt ${attempt}; retrying navigation with fresh page`
+      }
+      // Loop always returns or throws; this is unreachable.
+      return { time: Date.now() - start }
+    } finally {
+      this.#busy = false
+    }
+  }
+
+  /**
+   * Runs a single navigation attempt and reports whether the HA WS
+   * subscription race was observed during the run. Throws on hard errors
+   * (browser crash, navigation failure) so the retry loop does not mask them.
+   *
+   * @returns true if a "Received event for unknown subscription" console
+   *   warning fired during this attempt (callable race), false otherwise.
+   */
+  async #runNavigationAttempt({
     pagePath,
     targetUrl,
     viewport,
@@ -420,11 +466,11 @@ export class Browser {
     lang,
     theme,
     dark,
-  }: NavigateParams): Promise<NavigateResult> {
-    if (this.#busy) throw new Error('Browser is busy')
+  }: NavigateParams): Promise<boolean> {
+    let orphanDetected = false
+    let consoleHandler: ((msg: ConsoleMessage) => void) | undefined
+    let listeningPage: Page | undefined
 
-    const start = Date.now()
-    this.#busy = true
     try {
       // Fresh page per request: close existing page to eliminate accumulated
       // stale state (WebSocket connections, cached renders, component state)
@@ -432,6 +478,24 @@ export class Browser {
 
       const page = await this.#getPage()
       await page.setViewport(viewport)
+
+      // Listen for the orphaned-subscription console warning that signals
+      // the HA WS subscribeMessage race. Attaching here (after #getPage)
+      // catches warnings from the entire navigation, including card-mount
+      // subscribes triggered by pushState.
+      consoleHandler = (msg) => {
+        // Puppeteer 24+ returns 'warn'; older versions returned 'warning'.
+        // Accept both so we don't break if puppeteer's enum shifts again.
+        const type = msg.type()
+        if (
+          (type === 'warn' || type === 'warning') &&
+          msg.text().includes('Received event for unknown subscription')
+        ) {
+          orphanDetected = true
+        }
+      }
+      page.on('console', consoleHandler)
+      listeningPage = page
 
       // Always first navigation on fresh page - injects auth + full page.goto()
       const authStorage = this.#buildAuthStorage()
@@ -511,7 +575,7 @@ export class Browser {
         await paintCmd.call()
       }
 
-      return { time: Date.now() - start }
+      return orphanDetected
     } catch (err) {
       this.#pageErrorDetected = false
 
@@ -533,7 +597,15 @@ export class Browser {
 
       throw err
     } finally {
-      this.#busy = false
+      // Detach the orphan listener so listeners don't accumulate across
+      // retries / subsequent screenshots. Page may be closed already; ignore.
+      if (consoleHandler && listeningPage) {
+        try {
+          listeningPage.off('console', consoleHandler)
+        } catch (_err) {
+          /* page closed */
+        }
+      }
     }
   }
 
