@@ -102,18 +102,43 @@ export class NavigateToPage {
             `Root navigation returned ${response?.status() ?? 'no response'}`,
           )
         }
-        // Wait for HA to bootstrap before triggering router transition
+        // Pre-transition gate: wait for HA core data to be FULLY settled
+        // (states + registries) before firing the router transition.
+        //
+        // The card we're transitioning to mounts as soon as the router lands,
+        // and cards like hui-weather-forecast-card call hassSubscribe ONCE at
+        // mount time — silently skipping if entity/device/area registries are
+        // not yet populated on `hass`. A weaker gate (states only) leaks a
+        // race window where step 1 of HA's connection-mixin has completed
+        // (states) but steps 3-5 (entity/device/area registry) have not.
+        //
+        // Predicate intentionally kept in sync with WaitForHassReady below.
         await this.#page.waitForFunction(
           () => {
             const haEl = document.querySelector('home-assistant') as
               | (Element & {
-                  hass?: { states?: Record<string, unknown> }
+                  hass?: {
+                    connected?: boolean
+                    states?: Record<string, unknown>
+                    config?: { state?: string }
+                    entities?: Record<string, unknown>
+                    devices?: Record<string, unknown>
+                    areas?: Record<string, unknown>
+                  }
                 })
               | null
-            return !!(
-              haEl?.hass?.states &&
-              Object.keys(haEl.hass.states).length > 0
-            )
+            if (!haEl?.hass) return false
+            const h = haEl.hass
+
+            if (!h.states || Object.keys(h.states).length === 0) return false
+            if ('connected' in h && !h.connected) return false
+            if (h.config && 'state' in h.config && h.config.state !== 'RUNNING')
+              return false
+            if ('entities' in h && !h.entities) return false
+            if ('devices' in h && !h.devices) return false
+            if ('areas' in h && !h.areas) return false
+
+            return true
           },
           { timeout: 10000, polling: 100 },
         )
