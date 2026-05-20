@@ -688,7 +688,7 @@ export class RenderScheduleContent {
             class="w-full px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
             placeholder="Auto"
             onchange="window.app.updateScheduleFromForm()"
-            title="Additional delay added after automatic readiness detection (for slow-loading cards or late websocket data)" />
+            title="Extra delay before screenshot (for slow-loading cards)" />
         </div>
       </div>
       <p class="text-xs text-gray-500 mt-1">Zoom: Scale content (e.g., 0.8 for smaller text) | Wait: Extra loading time for charts/images</p>
