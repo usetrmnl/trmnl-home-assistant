@@ -382,11 +382,13 @@ describe('Browser', () => {
         expect(pageCreatedCount).toBe(1)
       })
 
-      it('caps retries at one (no infinite loop even on persistent race)', async () => {
+      it('caps retries at MAX_ATTEMPTS (no infinite loop on persistent race)', async () => {
         const browser = new Browser(BASE_URL, TOKEN, mockDeps)
         mockBrowserInstance.newPage.mockClear()
 
-        // Both attempts orphan — verify we still return after 2 pages.
+        // Every attempt orphans — verify we still return after the cap.
+        // Cap matches the MAX_ATTEMPTS constant in screenshot.ts (currently 5).
+        const MAX_ATTEMPTS = 5
         let pageCreatedCount = 0
         mockBrowserInstance.newPage.mockImplementation(async () => {
           pageCreatedCount++
@@ -400,7 +402,7 @@ describe('Browser', () => {
           viewport: DEFAULT_VIEWPORT,
         })
 
-        expect(pageCreatedCount).toBe(2)
+        expect(pageCreatedCount).toBe(MAX_ATTEMPTS)
         expect(typeof result.time).toBe('number')
       })
 

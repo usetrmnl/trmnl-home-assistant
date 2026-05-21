@@ -431,13 +431,22 @@ export class Browser {
       // the forecast/render-template data. The card never re-subscribes, so
       // forecast renders empty.
       //
-      // Retry once with a fresh page when this happens. By the second attempt
-      // the cache is warm enough that response latency exceeds registration
-      // latency, and the subscription holds.
-      const MAX_ATTEMPTS = 2
+      // Retry with a fresh page when this happens. Each subsequent attempt
+      // benefits from a warmer V8 / disk cache so the registration microtask
+      // wins. On slower hardware (e.g. Raspberry Pi 4) the race can lose
+      // more than once in a row, so allow up to MAX_ATTEMPTS - 1 retries.
+      //
+      // Cost is paid only on attempts that detect the orphan warning;
+      // dashboards built from REST/static cards (no subscribeMessage calls)
+      // never trigger the retry path.
+      const MAX_ATTEMPTS = 5
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         const orphaned = await this.#runNavigationAttempt(params)
-        if (!orphaned || attempt === MAX_ATTEMPTS) {
+        if (!orphaned) {
+          return { time: Date.now() - start }
+        }
+        if (attempt === MAX_ATTEMPTS) {
+          log.warn`HA WS subscription race persisted after ${MAX_ATTEMPTS} attempts; some card data may be missing from this screenshot`
           return { time: Date.now() - start }
         }
         log.info`HA WS subscription race detected on attempt ${attempt}; retrying navigation with fresh page`
