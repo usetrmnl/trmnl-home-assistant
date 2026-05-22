@@ -431,17 +431,22 @@ export class Browser {
       // the forecast/render-template data. The card never re-subscribes, so
       // forecast renders empty.
       //
-      // Retry with a fresh page when this happens. Each subsequent attempt
-      // benefits from a warmer V8 / disk cache so the registration microtask
-      // wins. On slower hardware (e.g. Raspberry Pi 4) the race can lose
-      // more than once in a row, so allow up to MAX_ATTEMPTS - 1 retries.
+      // Retry strategy on detection:
+      //   - Attempt 1 is always a full fresh-page navigation (the per-request
+      //     reset that issue #34 mandates).
+      //   - Attempts 2..N reuse the live page and re-mount the panel via an
+      //     in-app router transition (pushState to '/', then back to the
+      //     target). The WebSocket connection stays open and the JS heap
+      //     stays hot, which is what actually makes the race stop losing.
+      //     Closing and re-creating the page on each retry threw away the
+      //     warmth we needed.
       //
       // Cost is paid only on attempts that detect the orphan warning;
       // dashboards built from REST/static cards (no subscribeMessage calls)
       // never trigger the retry path.
       const MAX_ATTEMPTS = 5
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        const orphaned = await this.#runNavigationAttempt(params)
+        const orphaned = await this.#runNavigationAttempt(params, attempt === 1)
         if (!orphaned) {
           return { time: Date.now() - start }
         }
@@ -449,7 +454,7 @@ export class Browser {
           log.warn`HA WS subscription race persisted after ${MAX_ATTEMPTS} attempts; some card data may be missing from this screenshot`
           return { time: Date.now() - start }
         }
-        log.info`HA WS subscription race detected on attempt ${attempt}; retrying navigation with fresh page`
+        log.info`HA WS subscription race detected on attempt ${attempt}; soft-retrying via in-page router transition`
       }
       // Loop always returns or throws; this is unreachable.
       return { time: Date.now() - start }
@@ -463,30 +468,40 @@ export class Browser {
    * subscription race was observed during the run. Throws on hard errors
    * (browser crash, navigation failure) so the retry loop does not mask them.
    *
+   * @param freshPage true to discard the current page and do a full
+   *   page.goto() (the per-request reset); false to reuse the live page and
+   *   re-mount the panel via an in-app router transition (used by retries).
    * @returns true if a "Received event for unknown subscription" console
    *   warning fired during this attempt (callable race), false otherwise.
    */
-  async #runNavigationAttempt({
-    pagePath,
-    targetUrl,
-    viewport,
-    extraWait,
-    zoom = 1,
-    lang,
-    theme,
-    dark,
-  }: NavigateParams): Promise<boolean> {
+  async #runNavigationAttempt(
+    {
+      pagePath,
+      targetUrl,
+      viewport,
+      extraWait,
+      zoom = 1,
+      lang,
+      theme,
+      dark,
+    }: NavigateParams,
+    freshPage: boolean,
+  ): Promise<boolean> {
     let orphanDetected = false
     let consoleHandler: ((msg: ConsoleMessage) => void) | undefined
     let listeningPage: Page | undefined
 
     try {
-      // Fresh page per request: close existing page to eliminate accumulated
-      // stale state (WebSocket connections, cached renders, component state)
-      await this.#closePage()
+      if (freshPage) {
+        // Fresh page per request: close existing page to eliminate accumulated
+        // stale state (WebSocket connections, cached renders, component state)
+        await this.#closePage()
+      }
 
       const page = await this.#getPage()
-      await page.setViewport(viewport)
+      if (freshPage) {
+        await page.setViewport(viewport)
+      }
 
       // Listen for the orphaned-subscription console warning that signals
       // the HA WS subscribeMessage race. Attaching here (after #getPage)
@@ -506,14 +521,20 @@ export class Browser {
       page.on('console', consoleHandler)
       listeningPage = page
 
-      // Always first navigation on fresh page - injects auth + full page.goto()
-      const authStorage = this.#buildAuthStorage()
-      const navigateCmd = new NavigateToPage(
-        page,
-        authStorage,
-        this.#homeAssistantUrl,
-      )
-      await navigateCmd.call(pagePath, targetUrl)
+      if (freshPage) {
+        // First attempt: full fresh navigation — injects auth, full page.goto()
+        const authStorage = this.#buildAuthStorage()
+        const navigateCmd = new NavigateToPage(
+          page,
+          authStorage,
+          this.#homeAssistantUrl,
+        )
+        await navigateCmd.call(pagePath, targetUrl)
+      } else {
+        // Warm retry: re-mount the panel via SPA pushState on the live page.
+        // WS connection, JS heap, and auth all carry over from attempt 1.
+        await this.#softReroute(page, pagePath, targetUrl)
+      }
 
       // Check if we landed on HA login/auth page (indicates invalid token)
       const currentUrl = page.url()
@@ -616,6 +637,42 @@ export class Browser {
         }
       }
     }
+  }
+
+  /**
+   * Re-mounts the panel on the live page by routing to '/' and then back to
+   * the target path via pushState + popstate. Used by retries instead of a
+   * fresh page.goto() so the existing WebSocket connection and JS heap are
+   * preserved — those are the actual carriers of "warmth" that win the
+   * subscribeMessage race on slow hardware.
+   */
+  async #softReroute(
+    page: Page,
+    pagePath: string,
+    targetUrl?: string,
+  ): Promise<void> {
+    const pageUrl =
+      targetUrl || new URL(pagePath, this.#homeAssistantUrl).toString()
+    const u = new URL(pageUrl)
+    const targetPath = u.pathname + u.search
+
+    // Unmount the current panel by routing to '/'
+    await page.evaluate(() => {
+      history.pushState(null, '', '/')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+
+    // Brief settle so HA's partial-panel-resolver tears down the panel
+    // before we route back. Without this, the back-transition can merge
+    // with the unmount and skip a full remount cycle.
+    await new Promise((resolve) => setTimeout(resolve, 300))
+
+    // Route back to the target path; cards re-mount and re-subscribe on
+    // top of the live connection.
+    await page.evaluate((path: string) => {
+      history.pushState(null, '', path)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, targetPath)
   }
 
   /**

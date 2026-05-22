@@ -306,8 +306,10 @@ describe('Browser', () => {
     // home-assistant-js-websocket has a microtask race between subscribe
     // handler registration and incoming WS frames. When triggered, HA logs
     // "Received event for unknown subscription N" and drops forecast data.
-    // The orphan-detector listens for these warnings and retries once with
-    // a fresh page so the warm-cache attempt avoids the race.
+    // The orphan-detector listens for these warnings and retries by re-mounting
+    // the panel via in-page SPA pushState on the same live page (warm WS
+    // connection + warm JS heap is what wins the race on slow hardware).
+    // Attempt 1 is always a fresh page.goto(); attempts 2..N reuse the page.
     // ------------------------------------------------------------------------
 
     describe('retry on WS subscription race', () => {
@@ -321,12 +323,10 @@ describe('Browser', () => {
         )
       })
 
-      // Test helper: wrap a fresh page's goto() so it fires a chosen console
-      // warning AFTER the navigation handler has been attached. goto() is
-      // called from inside NavigateToPage well after #runNavigationAttempt
-      // has registered its orphan listener, so the message reaches the
-      // listener synchronously.
-      function makePageWithConsoleTrigger(
+      // Wrap a fresh page's goto() so it fires a chosen console warning AFTER
+      // the navigation handler has been attached. Used to trigger the orphan
+      // on attempt 1 (the only attempt that calls goto).
+      function makePageWithGotoTrigger(
         text: string,
         type: string = 'warn',
       ): MockPage {
@@ -340,18 +340,38 @@ describe('Browser', () => {
         return page
       }
 
-      it('retries the navigation once when an orphan warning fires', async () => {
+      // Wrap both goto() and evaluate() so the orphan warning fires on
+      // attempt 1 (via goto) AND every soft-retry (via softReroute's
+      // pushState evaluate calls). Used to exercise the MAX_ATTEMPTS cap.
+      function makePagePersistentlyOrphaning(
+        text: string,
+        type: string = 'warn',
+      ): MockPage {
+        const page = makePageWithGotoTrigger(text, type)
+        const origEvaluate = page.evaluate
+        page.evaluate = mock(
+          async (fn: (...args: unknown[]) => unknown, ...args: unknown[]) => {
+            const result = await origEvaluate(fn, ...args)
+            page.fireConsole(text, type)
+            return result
+          },
+        ) as MockFn
+        return page
+      }
+
+      it('soft-retries on the same page when an orphan warning fires', async () => {
         const browser = new Browser(BASE_URL, TOKEN, mockDeps)
         mockBrowserInstance.newPage.mockClear()
 
         let pageCreatedCount = 0
         mockBrowserInstance.newPage.mockImplementation(async () => {
           pageCreatedCount++
-          return pageCreatedCount === 1
-            ? makePageWithConsoleTrigger(
-                'Received event for unknown subscription 42. Unsubscribing.',
-              )
-            : createMockPage()
+          // First (and only) page created: orphans on goto, succeeds on
+          // soft-retry (softReroute uses evaluate, not goto, so the trigger
+          // doesn't re-fire).
+          return makePageWithGotoTrigger(
+            'Received event for unknown subscription 42. Unsubscribing.',
+          )
         })
 
         const result = await browser.navigatePage({
@@ -359,8 +379,10 @@ describe('Browser', () => {
           viewport: DEFAULT_VIEWPORT,
         })
 
-        // Two pages created = first attempt + retry
-        expect(pageCreatedCount).toBe(2)
+        // Soft retry reuses the same page — only one newPage() call total.
+        expect(pageCreatedCount).toBe(1)
+        // goto called exactly once (attempt 1); retry used pushState evaluate.
+        expect(currentMockPage.goto).toHaveBeenCalledTimes(1)
         expect(typeof result.time).toBe('number')
       })
 
@@ -386,14 +408,14 @@ describe('Browser', () => {
         const browser = new Browser(BASE_URL, TOKEN, mockDeps)
         mockBrowserInstance.newPage.mockClear()
 
-        // Every attempt orphans — verify we still return after the cap.
+        // Every attempt orphans (goto on attempt 1, evaluate on each retry).
+        // Verify we still return after the cap and never create extra pages.
         // Cap matches the MAX_ATTEMPTS constant in screenshot.ts (currently 5).
-        const MAX_ATTEMPTS = 5
         let pageCreatedCount = 0
         mockBrowserInstance.newPage.mockImplementation(async () => {
           pageCreatedCount++
-          return makePageWithConsoleTrigger(
-            `Received event for unknown subscription ${pageCreatedCount}. Unsubscribing.`,
+          return makePagePersistentlyOrphaning(
+            'Received event for unknown subscription 1. Unsubscribing.',
           )
         })
 
@@ -402,7 +424,10 @@ describe('Browser', () => {
           viewport: DEFAULT_VIEWPORT,
         })
 
-        expect(pageCreatedCount).toBe(MAX_ATTEMPTS)
+        // Still only one page across all soft retries.
+        expect(pageCreatedCount).toBe(1)
+        // goto called exactly once (only attempt 1 does a hard navigation).
+        expect(currentMockPage.goto).toHaveBeenCalledTimes(1)
         expect(typeof result.time).toBe('number')
       })
 
@@ -413,7 +438,7 @@ describe('Browser', () => {
         let pageCreatedCount = 0
         mockBrowserInstance.newPage.mockImplementation(async () => {
           pageCreatedCount++
-          return makePageWithConsoleTrigger('Some unrelated browser warning')
+          return makePageWithGotoTrigger('Some unrelated browser warning')
         })
 
         await browser.navigatePage({
@@ -426,15 +451,15 @@ describe('Browser', () => {
       })
 
       it('ignores orphan-like warnings of non-warning type', async () => {
-        // Detector only matches type() === 'warning'. An 'info' or 'log'
-        // message with similar text shouldn't trigger a retry.
+        // Detector only matches type() === 'warn' | 'warning'. An 'info' or
+        // 'log' message with similar text shouldn't trigger a retry.
         const browser = new Browser(BASE_URL, TOKEN, mockDeps)
         mockBrowserInstance.newPage.mockClear()
 
         let pageCreatedCount = 0
         mockBrowserInstance.newPage.mockImplementation(async () => {
           pageCreatedCount++
-          return makePageWithConsoleTrigger(
+          return makePageWithGotoTrigger(
             'Received event for unknown subscription 7. Unsubscribing.',
             'info',
           )
@@ -452,15 +477,11 @@ describe('Browser', () => {
         const browser = new Browser(BASE_URL, TOKEN, mockDeps)
         mockBrowserInstance.newPage.mockClear()
 
-        let pageCreatedCount = 0
-        mockBrowserInstance.newPage.mockImplementation(async () => {
-          pageCreatedCount++
-          return pageCreatedCount === 1
-            ? makePageWithConsoleTrigger(
-                'Received event for unknown subscription 99. Unsubscribing.',
-              )
-            : createMockPage()
-        })
+        mockBrowserInstance.newPage.mockImplementation(async () =>
+          makePageWithGotoTrigger(
+            'Received event for unknown subscription 99. Unsubscribing.',
+          ),
+        )
 
         await browser.navigatePage({
           pagePath: '/lovelace/0',
