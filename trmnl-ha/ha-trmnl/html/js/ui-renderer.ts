@@ -549,6 +549,17 @@ export class RenderScheduleContent {
             </label>
           </div>
           <p class="text-xs text-gray-500 mt-1">Flips black↔white (for inverted e-ink displays)</p>
+
+          <!-- Timestamp overlay toggle -->
+          <div class="flex items-center mt-3">
+            <label class="flex items-center" title="Stamp the capture time in the bottom-right corner of the screenshot">
+              <input type="checkbox" id="s_timestamp" ${s.timestamp ? 'checked' : ''}
+                class="h-4 w-4 border-gray-300 rounded"
+                onchange="window.app.updateScheduleFromForm()" />
+              <span class="ml-2 text-sm text-gray-700">Show Capture Time</span>
+            </label>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Small timestamp in the bottom-right corner so you can tell at a glance how fresh the screen is</p>
         </div>
       </div>
     `

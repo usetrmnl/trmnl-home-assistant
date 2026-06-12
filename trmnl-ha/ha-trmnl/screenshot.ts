@@ -147,6 +147,7 @@ export interface ScreenshotCaptureParams {
   invert?: boolean
   dithering?: DitheringConfig
   crop?: CropRegion | null
+  timestamp?: boolean
 }
 
 /** Navigation result */
@@ -546,6 +547,7 @@ export class Browser {
     invert,
     dithering,
     crop,
+    timestamp,
   }: ScreenshotCaptureParams): Promise<ScreenshotResult> {
     if (this.#busy) throw new Error('Browser is busy')
 
@@ -574,6 +576,7 @@ export class Browser {
         rotate,
         invert,
         dithering,
+        timestamp,
       })
       log.debug`Image processing took ${Date.now() - startProcess}ms`
 

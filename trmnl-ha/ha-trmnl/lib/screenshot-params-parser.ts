@@ -29,6 +29,7 @@ export interface ParsedScreenshotParams {
   zoom: number
   crop: CropRegion | null
   invert: boolean
+  timestamp: boolean
   format: ImageFormat
   rotate?: RotationAngle
   lang?: string
@@ -122,6 +123,9 @@ export class ScreenshotParamsParser {
     // Invert
     const invert = url.searchParams.has('invert')
 
+    // Timestamp overlay
+    const timestamp = url.searchParams.has('timestamp')
+
     // Format
     let format = (url.searchParams.get('format') || 'png') as ImageFormat
     if (!VALID_FORMATS.includes(format)) format = 'png'
@@ -146,6 +150,7 @@ export class ScreenshotParamsParser {
       zoom,
       crop,
       invert,
+      timestamp,
       format,
       rotate,
       lang,

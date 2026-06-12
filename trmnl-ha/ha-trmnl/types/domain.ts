@@ -111,6 +111,9 @@ export interface ScreenshotParams {
   /** Invert colors (for e-ink displays) */
   invert: boolean
 
+  /** Stamp the capture time in the bottom-right corner */
+  timestamp?: boolean
+
   /** Output image format */
   format: ImageFormat
 
@@ -259,6 +262,9 @@ export interface Schedule {
 
   /** Invert colors */
   invert: boolean
+
+  /** Stamp the capture time in the bottom-right corner */
+  timestamp?: boolean
 
   /** Dithering configuration */
   dithering: DitheringConfig

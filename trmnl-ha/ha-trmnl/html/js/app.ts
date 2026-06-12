@@ -479,6 +479,7 @@ class App {
       zoom: parseFloatOrDefault(input('s_zoom'), 1),
       wait: this.#parseWait(input('s_wait')),
       invert: checkbox('s_invert'),
+      timestamp: checkbox('s_timestamp'),
       dithering: {
         enabled: checkbox('s_dithering'),
         method: select('s_method') || 'floyd-steinberg',

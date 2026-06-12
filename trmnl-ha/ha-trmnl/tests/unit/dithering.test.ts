@@ -251,6 +251,17 @@ describeDithering('Dithering Module', () => {
       expect(result.length).toBeGreaterThan(0)
     })
 
+    it('changes the image when timestamp overlay is enabled', async () => {
+      const plain = await processImage(testImageBuffer, { format: 'png' })
+
+      const stamped = await processImage(testImageBuffer, {
+        format: 'png',
+        timestamp: true,
+      })
+
+      expect(stamped.equals(plain)).toBe(false)
+    })
+
     it('applies dithering when dithering.enabled is true', async () => {
       const result = await processImage(testImageBuffer, {
         format: 'png',

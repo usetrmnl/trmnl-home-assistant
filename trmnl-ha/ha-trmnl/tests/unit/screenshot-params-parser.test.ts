@@ -224,6 +224,25 @@ describe('ScreenshotParamsParser', () => {
 
       expect(result!.invert).toBe(false)
     })
+
+    it('parses timestamp flag when present', () => {
+      const url = createUrl('/lovelace/0', {
+        viewport: '800x600',
+        timestamp: true,
+      })
+
+      const result = parser.call(url)
+
+      expect(result!.timestamp).toBe(true)
+    })
+
+    it('sets timestamp to false when absent', () => {
+      const url = createUrl('/lovelace/0', { viewport: '800x600' })
+
+      const result = parser.call(url)
+
+      expect(result!.timestamp).toBe(false)
+    })
   })
 
   // ==========================================================================

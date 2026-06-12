@@ -244,6 +244,22 @@ describe('params-builder', () => {
       expect(params.zoom).toBe(1)
     })
 
+    it('includes timestamp', () => {
+      const schedule = createSchedule({ timestamp: true })
+
+      const params = buildParams(schedule)
+
+      expect(params.timestamp).toBe(true)
+    })
+
+    it('defaults timestamp to false', () => {
+      const schedule = createSchedule({})
+
+      const params = buildParams(schedule)
+
+      expect(params.timestamp).toBe(false)
+    })
+
     it('includes invert', () => {
       const schedule = createSchedule({ invert: true })
 

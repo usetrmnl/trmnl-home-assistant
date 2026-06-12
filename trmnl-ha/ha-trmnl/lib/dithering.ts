@@ -93,6 +93,8 @@ export interface ProcessImageOptions {
   rotate?: RotationAngle
   invert?: boolean
   dithering?: DitheringOptions
+  /** Stamp the capture time in the bottom-right corner */
+  timestamp?: boolean
 }
 
 /** Options for dithering */
@@ -317,9 +319,15 @@ export async function processImage(
   imageBuffer: Buffer,
   options: ProcessImageOptions = {}
 ): Promise<Buffer> {
-  const { format = 'png', rotate, invert, dithering } = options
+  const { format = 'png', rotate, invert, dithering, timestamp } = options
 
   let buffer = imageBuffer
+
+  // Annotate before dithering so the text survives 1-bit palettes and
+  // format conversion like any other page content
+  if (timestamp) {
+    buffer = await annotateTimestamp(buffer)
+  }
 
   // Apply dithering if enabled (includes format conversion in single pipeline)
   if (dithering?.enabled) {
@@ -342,6 +350,35 @@ export async function processImage(
   }
 
   return buffer
+}
+
+/** Formats capture time as "YYYY-MM-DD HH:MM" in the configured timezone */
+function formatTimestamp(date: Date): string {
+  return date.toLocaleString('sv-SE', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  })
+}
+
+/**
+ * Stamps the capture time in the bottom-right corner on a white backing
+ * so it stays legible over busy dashboards.
+ */
+async function annotateTimestamp(imageBuffer: Buffer): Promise<Buffer> {
+  const image = gm(imageBuffer).out(
+    '-gravity',
+    'SouthEast',
+    '-undercolor',
+    'white',
+    '-fill',
+    'black',
+    '-pointsize',
+    '14',
+    '-annotate',
+    '+4+4',
+    ` ${formatTimestamp(new Date())} `,
+  )
+  return streamToBuffer(image, { format: 'png' })
 }
 
 /**

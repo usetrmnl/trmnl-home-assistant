@@ -86,6 +86,11 @@ export function buildScreenshotParams(
     params.append('invert', '')
   }
 
+  // Timestamp overlay
+  if (schedule.timestamp) {
+    params.append('timestamp', '')
+  }
+
   // Dithering
   if (schedule.dithering?.enabled) {
     params.append('dithering', '')

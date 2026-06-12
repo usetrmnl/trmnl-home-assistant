@@ -44,6 +44,7 @@ export function buildParams(schedule: Schedule): ScreenshotParams {
     extraWait: schedule.wait ?? DEFAULTS.extraWait,
     zoom: schedule.zoom ?? DEFAULTS.zoom,
     invert: schedule.invert ?? DEFAULTS.invert,
+    timestamp: schedule.timestamp ?? false,
     dark: schedule.dark ?? DEFAULTS.dark,
     rotate: schedule.rotate ?? undefined,
     lang: schedule.lang ?? undefined,
