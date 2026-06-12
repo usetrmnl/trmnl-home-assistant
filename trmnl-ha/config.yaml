@@ -40,6 +40,7 @@ options:
   debug_logging: false
   server_port: 10000
   navigation_timeout_ms: 30000
+  timestamp_overlay: false
 
 # Schema for options validation
 schema:
@@ -50,6 +51,7 @@ schema:
   debug_logging: bool?
   server_port: "int(1024,65535)?"
   navigation_timeout_ms: "int(10000,180000)?"
+  timestamp_overlay: bool?
 
 # Exclude regeneratable data from HA backups
 backup_exclude:

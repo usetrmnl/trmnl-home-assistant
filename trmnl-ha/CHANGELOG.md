@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Optional capture-time overlay: a small timestamp in the bottom-right corner of the screenshot, enabled per schedule or with the `timestamp` URL parameter, so stale screens are visible at a glance
+- Optional capture-time overlay: a small timestamp in the bottom-right corner of the screenshot, enabled globally via the `timestamp_overlay` add-on option, per schedule, or with the `timestamp` URL parameter, so stale screens are visible at a glance
 
 ### Changed
 

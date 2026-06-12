@@ -363,22 +363,30 @@ function formatTimestamp(date: Date): string {
 /**
  * Stamps the capture time in the bottom-right corner on a white backing
  * so it stays legible over busy dashboards.
+ *
+ * Falls back to the original image when annotation fails (e.g. no fonts
+ * available to ImageMagick) — the overlay must never break delivery.
  */
-async function annotateTimestamp(imageBuffer: Buffer): Promise<Buffer> {
-  const image = gm(imageBuffer).out(
-    '-gravity',
-    'SouthEast',
-    '-undercolor',
-    'white',
-    '-fill',
-    'black',
-    '-pointsize',
-    '14',
-    '-annotate',
-    '+4+4',
-    ` ${formatTimestamp(new Date())} `,
-  )
-  return streamToBuffer(image, { format: 'png' })
+export async function annotateTimestamp(imageBuffer: Buffer): Promise<Buffer> {
+  try {
+    const image = gm(imageBuffer).out(
+      '-gravity',
+      'SouthEast',
+      '-undercolor',
+      'white',
+      '-fill',
+      'black',
+      '-pointsize',
+      '14',
+      '-annotate',
+      '+4+4',
+      ` ${formatTimestamp(new Date())} `,
+    )
+    return await streamToBuffer(image, { format: 'png' })
+  } catch (err) {
+    log.warn`Timestamp overlay failed, returning image without it: ${(err as Error).message}`
+    return imageBuffer
+  }
 }
 
 /**

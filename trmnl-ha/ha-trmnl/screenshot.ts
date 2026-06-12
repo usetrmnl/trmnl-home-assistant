@@ -18,6 +18,7 @@
 import puppeteer from 'puppeteer'
 import type { Browser as PuppeteerBrowser, Page, Viewport } from 'puppeteer'
 import {
+  TIMESTAMP_OVERLAY,
   debugLogging as defaultDebugLogging,
   chromiumExecutable as defaultChromiumExecutable,
 } from './const.js'
@@ -576,7 +577,7 @@ export class Browser {
         rotate,
         invert,
         dithering,
-        timestamp,
+        timestamp: timestamp || TIMESTAMP_OVERLAY,
       })
       log.debug`Image processing took ${Date.now() - startProcess}ms`
 

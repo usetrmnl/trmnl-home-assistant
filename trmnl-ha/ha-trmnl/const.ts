@@ -128,6 +128,10 @@ const options: Options = {
     process.env['KEEP_BROWSER_OPEN'] !== undefined
       ? process.env['KEEP_BROWSER_OPEN'] === 'true'
       : fileOptions.keep_browser_open,
+  timestamp_overlay:
+    process.env['TIMESTAMP_OVERLAY'] !== undefined
+      ? process.env['TIMESTAMP_OVERLAY'] === 'true'
+      : fileOptions.timestamp_overlay,
   debug_logging:
     process.env['DEBUG_LOGGING'] !== undefined
       ? process.env['DEBUG_LOGGING'] === 'true'
@@ -281,6 +285,13 @@ export const chromiumExecutable: string | undefined =
  * Keep browser instance open between requests for performance
  */
 export const keepBrowserOpen: boolean = options.keep_browser_open ?? false
+
+/**
+ * Stamp the capture time on every screenshot regardless of per-schedule or
+ * URL flags. Set via the timestamp_overlay add-on option or the
+ * TIMESTAMP_OVERLAY environment variable.
+ */
+export const TIMESTAMP_OVERLAY: boolean = options.timestamp_overlay ?? false
 
 /**
  * Enable debug logging (from HA add-on configuration)

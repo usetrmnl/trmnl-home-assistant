@@ -16,6 +16,7 @@ export interface Options {
   timezone?: string
   chromium_executable?: string
   keep_browser_open?: boolean
+  timestamp_overlay?: boolean
   debug_logging?: boolean
   server_port?: number
   navigation_timeout_ms?: number

@@ -37,6 +37,21 @@ function hasImageMagick7(): boolean {
 
 const describeDithering = hasImageMagick7() ? describe : describe.skip
 
+// Annotation needs a font ImageMagick can resolve; bare CI runners may lack one
+function canAnnotateText(): boolean {
+  try {
+    const out = execSync(
+      "convert -size 40x20 xc:white -pointsize 10 -annotate +2+12 'x' png:-",
+      { timeout: 5000, maxBuffer: 1_000_000 },
+    )
+    return out.length > 0
+  } catch {
+    return false
+  }
+}
+
+const itWithFont = canAnnotateText() ? it : it.skip
+
 describeDithering('Dithering Module', () => {
   let testImageBuffer: Buffer
 
@@ -251,7 +266,7 @@ describeDithering('Dithering Module', () => {
       expect(result.length).toBeGreaterThan(0)
     })
 
-    it('changes the image when timestamp overlay is enabled', async () => {
+    itWithFont('changes the image when timestamp overlay is enabled', async () => {
       const plain = await processImage(testImageBuffer, { format: 'png' })
 
       const stamped = await processImage(testImageBuffer, {
@@ -260,6 +275,16 @@ describeDithering('Dithering Module', () => {
       })
 
       expect(stamped.equals(plain)).toBe(false)
+    })
+
+    it('returns a valid image with timestamp enabled even without fonts', async () => {
+      const stamped = await processImage(testImageBuffer, {
+        format: 'png',
+        timestamp: true,
+      })
+
+      expect(Buffer.isBuffer(stamped)).toBe(true)
+      expect(stamped.length).toBeGreaterThan(0)
     })
 
     it('applies dithering when dithering.enabled is true', async () => {
