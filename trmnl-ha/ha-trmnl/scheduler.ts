@@ -22,7 +22,11 @@ import path from 'node:path'
 import { loadSchedules, updateSchedule } from './lib/scheduleStore.js'
 import { ScheduleExecutor, type ScreenshotFunction, type ExecutionResult } from './lib/scheduler/schedule-executor.js'
 import { CronJobManager } from './lib/scheduler/cron-job-manager.js'
-import { getValidAccessToken, isRefreshable } from './lib/scheduler/byos-auth.js'
+import {
+  buildRefreshedAuthUpdate,
+  getValidAccessToken,
+  isRefreshable,
+} from './lib/scheduler/byos-auth.js'
 import { SCHEDULER_RELOAD_INTERVAL_MS, SCHEDULER_OUTPUT_DIR_NAME, DATA_DIR } from './const.js'
 import type { Schedule } from './types/domain.js'
 import { schedulerLogger } from './lib/logger.js'
@@ -80,10 +84,10 @@ export class Scheduler {
     void this.#loadAndSchedule()
     void this.#keepByosTokensFresh()
 
-    // Reload schedules periodically; same tick keeps BYOS tokens fresh —
-    // the server only accepts refreshes while the access token (30 min) is
-    // still valid, so send-time refresh alone fails for any schedule whose
-    // interval exceeds the token lifetime
+    // The same tick keeps BYOS tokens fresh: the server only accepts
+    // refreshes while the access token is still valid, so refreshing at
+    // send time alone fails for schedules running less often than the
+    // token lifetime
     this.#reloadInterval = setInterval(() => {
       void this.#loadAndSchedule()
       void this.#keepByosTokensFresh()
@@ -125,9 +129,8 @@ export class Scheduler {
   async #loadAndSchedule(): Promise<void> {
     const schedules = await loadSchedules()
 
-    // NOTE: Skip when nothing changed — re-registering cron jobs every reload
-    // tick churned node-cron tasks 1,440x/day per schedule and spammed INFO
-    // logs that made healthy installs look broken (issue #64)
+    // Re-registering unchanged jobs every tick churns node-cron tasks and
+    // floods the log
     const snapshot = changedSnapshot(schedules, this.#lastSnapshot)
     if (snapshot === null) return
     this.#lastSnapshot = snapshot
@@ -161,15 +164,12 @@ export class Scheduler {
   }
 
   /**
-   * Proactively refreshes BYOS tokens before they expire (issue #62 thread).
+   * Proactively refreshes BYOS tokens before they expire.
    *
-   * getValidAccessToken() is a no-op while tokens are fresh (<25 min) and
-   * refreshes in the 25-30 min window, so calling it every reload tick keeps
-   * the single-use refresh chain alive indefinitely. Disabled schedules are
-   * included so paused schedules don't silently lose auth. Tokens past the
-   * 30 min server expiry are skipped — refresh would be rejected, and
-   * retrying every tick would only spam the log; the send path surfaces the
-   * re-auth error.
+   * Disabled schedules are included so paused schedules keep working auth.
+   * Tokens already past the server's expiry are skipped — the server would
+   * reject the refresh, and the send path surfaces the re-auth error once
+   * instead of every tick.
    */
   async #keepByosTokensFresh(): Promise<void> {
     if (this.#refreshingTokens) return
@@ -183,20 +183,10 @@ export class Scheduler {
 
         await getValidAccessToken(schedule.webhook_url, auth, (newTokens) => {
           log.info`Refreshed BYOS tokens for schedule "${schedule.name}"`
-          void updateSchedule(schedule.id, {
-            webhook_format: {
-              ...schedule.webhook_format!,
-              byosConfig: {
-                ...schedule.webhook_format!.byosConfig!,
-                auth: {
-                  ...auth,
-                  access_token: newTokens.access_token,
-                  refresh_token: newTokens.refresh_token,
-                  obtained_at: Date.now(),
-                },
-              },
-            },
-          }).catch((err: unknown) => {
+          const updates = buildRefreshedAuthUpdate(schedule, newTokens)
+          if (!updates) return
+
+          void updateSchedule(schedule.id, updates).catch((err: unknown) => {
             log.error`Failed to persist refreshed BYOS tokens: ${(err as Error).message}`
           })
         })

@@ -7,7 +7,11 @@
  * @module lib/scheduler/byos-auth
  */
 
-import type { ByosAuthConfig } from '../../types/domain.js'
+import type {
+  ByosAuthConfig,
+  Schedule,
+  ScheduleUpdate,
+} from '../../types/domain.js'
 import { webhookLogger } from '../logger.js'
 
 const log = webhookLogger()
@@ -26,9 +30,8 @@ const ACCESS_TOKEN_VALIDITY_MS = 25 * 60 * 1000
  * Access token hard expiry on the BYOS server (rodauth's
  * jwt_access_token_period, 1800s by default in Terminus).
  *
- * NOTE: Terminus does not allow refreshing with an expired access token
- * (rodauth allow_refresh_with_expired_jwt_access_token? is false), so once
- * this window passes the only recovery is re-authentication.
+ * NOTE: Stock Terminus rejects refresh requests once the access token has
+ * expired, so past this window the only recovery is re-authentication.
  */
 const ACCESS_TOKEN_EXPIRY_MS = 30 * 60 * 1000
 
@@ -59,6 +62,35 @@ export function isRefreshable(auth: ByosAuthConfig): boolean {
   if (!auth.access_token || !auth.refresh_token || !auth.obtained_at)
     return false
   return Date.now() - auth.obtained_at < ACCESS_TOKEN_EXPIRY_MS
+}
+
+/**
+ * Builds a schedule update that swaps in newly refreshed tokens while
+ * preserving every other byosConfig field.
+ *
+ * @returns Update for persistence, or null when the schedule has no auth
+ */
+export function buildRefreshedAuthUpdate(
+  schedule: Schedule,
+  newTokens: TokenResponse,
+): ScheduleUpdate | null {
+  const byosConfig = schedule.webhook_format?.byosConfig
+  if (!byosConfig?.auth) return null
+
+  return {
+    webhook_format: {
+      ...schedule.webhook_format!,
+      byosConfig: {
+        ...byosConfig,
+        auth: {
+          ...byosConfig.auth,
+          access_token: newTokens.access_token,
+          refresh_token: newTokens.refresh_token,
+          obtained_at: Date.now(),
+        },
+      },
+    },
+  }
 }
 
 /**

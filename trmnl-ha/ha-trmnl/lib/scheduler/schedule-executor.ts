@@ -22,6 +22,7 @@ import {
   isSchedulerNetworkError,
 } from '../../const.js'
 import { loadSchedules, updateSchedule } from '../scheduleStore.js'
+import { buildRefreshedAuthUpdate } from './byos-auth.js'
 import type {
   Schedule,
   ScreenshotParams,
@@ -177,23 +178,10 @@ export class ScheduleExecutor {
         webhookFormat: schedule.webhook_format,
         screenshotUrl,
         onTokenRefresh: (newTokens) => {
-          const byosConfig = schedule.webhook_format?.byosConfig
-          if (!byosConfig?.auth) return
+          const updates = buildRefreshedAuthUpdate(schedule, newTokens)
+          if (!updates) return
 
-          updateSchedule(schedule.id, {
-            webhook_format: {
-              ...schedule.webhook_format!,
-              byosConfig: {
-                ...byosConfig,
-                auth: {
-                  ...byosConfig.auth,
-                  access_token: newTokens.access_token,
-                  refresh_token: newTokens.refresh_token,
-                  obtained_at: Date.now(),
-                },
-              },
-            },
-          }).catch((err: unknown) => {
+          updateSchedule(schedule.id, updates).catch((err: unknown) => {
             log.error`Failed to persist refreshed BYOS tokens: ${(err as Error).message}`
           })
         },

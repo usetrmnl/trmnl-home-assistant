@@ -15,12 +15,13 @@
 
 import { describe, it, expect, beforeEach, afterAll, mock } from 'bun:test'
 import {
+  buildRefreshedAuthUpdate,
   getBaseUrl,
   getValidAccessToken,
   isRefreshable,
   login,
 } from '../../lib/scheduler/byos-auth.js'
-import type { ByosAuthConfig } from '../../types/domain.js'
+import type { ByosAuthConfig, Schedule } from '../../types/domain.js'
 
 // ---------------------------------------------------------------------------
 // Fetch mock — scoped to this file, restored in afterAll
@@ -86,6 +87,76 @@ describe('byos-auth', () => {
   // -------------------------------------------------------------------------
   // getValidAccessToken — token state logic
   // -------------------------------------------------------------------------
+
+  describe('#buildRefreshedAuthUpdate', () => {
+    const newTokens = {
+      access_token: 'new-access',
+      refresh_token: 'new-refresh',
+    }
+
+    function buildByosSchedule(): Schedule {
+      return {
+        id: 'schedule-1',
+        webhook_format: {
+          format: 'byos-hanami',
+          byosConfig: {
+            label: 'Home Assistant',
+            name: 'ha-dashboard',
+            model_id: '1',
+            preprocessed: true,
+            delivery_mode: 'uri',
+            addon_base_url: 'http://ha.local:10000',
+            auth: {
+              enabled: true,
+              access_token: 'old-access',
+              refresh_token: 'old-refresh',
+              obtained_at: 1,
+            },
+          },
+        },
+      } as Schedule
+    }
+
+    it('returns null when schedule has no auth config', () => {
+      const schedule = { id: 'schedule-1' } as Schedule
+
+      expect(buildRefreshedAuthUpdate(schedule, newTokens)).toBeNull()
+    })
+
+    it('swaps in the new token pair', () => {
+      const update = buildRefreshedAuthUpdate(buildByosSchedule(), newTokens)
+
+      expect(update?.webhook_format?.byosConfig?.auth).toMatchObject({
+        access_token: 'new-access',
+        refresh_token: 'new-refresh',
+      })
+    })
+
+    it('stamps a fresh obtained_at', () => {
+      const before = Date.now()
+
+      const update = buildRefreshedAuthUpdate(buildByosSchedule(), newTokens)
+
+      expect(
+        update?.webhook_format?.byosConfig?.auth?.obtained_at,
+      ).toBeGreaterThanOrEqual(before)
+    })
+
+    it('preserves delivery configuration', () => {
+      const update = buildRefreshedAuthUpdate(buildByosSchedule(), newTokens)
+
+      expect(update?.webhook_format?.byosConfig).toMatchObject({
+        delivery_mode: 'uri',
+        addon_base_url: 'http://ha.local:10000',
+      })
+    })
+
+    it('preserves auth enablement', () => {
+      const update = buildRefreshedAuthUpdate(buildByosSchedule(), newTokens)
+
+      expect(update?.webhook_format?.byosConfig?.auth?.enabled).toBe(true)
+    })
+  })
 
   describe('#isRefreshable', () => {
     it('returns true while the access token is within its 30 min lifetime', () => {
