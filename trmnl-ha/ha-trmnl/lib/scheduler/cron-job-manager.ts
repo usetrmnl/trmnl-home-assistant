@@ -10,7 +10,7 @@
  * Solution: Always stop + recreate jobs on upsert, ensuring fresh closures.
  *
  * NOTE: This module is owned by Scheduler class - don't instantiate directly.
- * NOTE: When modifying upsertJob(), preserve the stop-before-recreate pattern.
+ * NOTE: When modifying upsertJob(), preserve the destroy-before-recreate pattern.
  *
  * @module lib/scheduler/cron-job-manager
  */
@@ -57,10 +57,11 @@ export class CronJobManager {
       return false
     }
 
-    // Always stop existing job to ensure fresh callback with latest data
+    // Destroy existing job (not just stop) so node-cron drops it from its
+    // global registry — stopped tasks otherwise accumulate forever
     const existingJob = this.#jobs.get(schedule.id)
     if (existingJob) {
-      existingJob.stop()
+      existingJob.destroy()
     }
 
     // Create new job with fresh callback
@@ -83,7 +84,7 @@ export class CronJobManager {
   removeJob(id: string, name?: string): boolean {
     const job = this.#jobs.get(id)
     if (job) {
-      job.stop()
+      job.destroy()
       this.#jobs.delete(id)
       const logName = name ? name : id
       log.info`Stopped job: ${logName}`
@@ -102,7 +103,7 @@ export class CronJobManager {
     let prunedCount = 0
     for (const [id, job] of this.#jobs) {
       if (!activeIds.has(id)) {
-        job.stop()
+        job.destroy()
         this.#jobs.delete(id)
         log.info`Removed deleted schedule job: ${id}`
         prunedCount++
@@ -116,7 +117,7 @@ export class CronJobManager {
    */
   stopAll(): void {
     for (const [_id, job] of this.#jobs) {
-      job.stop()
+      job.destroy()
     }
     this.#jobs.clear()
   }

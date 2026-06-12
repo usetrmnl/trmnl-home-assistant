@@ -29,6 +29,21 @@ import { schedulerLogger } from './lib/logger.js'
 const log = schedulerLogger()
 
 /**
+ * Detects whether loaded schedules differ from the previous reload.
+ *
+ * @param schedules - Schedules loaded from disk this tick
+ * @param lastSnapshot - Serialized snapshot from the previous reload
+ * @returns New snapshot string when changed, null when identical
+ */
+export function changedSnapshot(
+  schedules: Schedule[],
+  lastSnapshot: string,
+): string | null {
+  const snapshot = JSON.stringify(schedules)
+  return snapshot === lastSnapshot ? null : snapshot
+}
+
+/**
  * High-level scheduler orchestrating cron jobs and screenshot execution.
  */
 export class Scheduler {
@@ -36,6 +51,7 @@ export class Scheduler {
   #cronManager: CronJobManager
   #executor: ScheduleExecutor
   #reloadInterval: ReturnType<typeof setInterval> | undefined
+  #lastSnapshot = ''
 
   /**
    * Creates scheduler instance with injected screenshot function.
@@ -101,6 +117,14 @@ export class Scheduler {
    */
   async #loadAndSchedule(): Promise<void> {
     const schedules = await loadSchedules()
+
+    // NOTE: Skip when nothing changed — re-registering cron jobs every reload
+    // tick churned node-cron tasks 1,440x/day per schedule and spammed INFO
+    // logs that made healthy installs look broken (issue #64)
+    const snapshot = changedSnapshot(schedules, this.#lastSnapshot)
+    if (snapshot === null) return
+    this.#lastSnapshot = snapshot
+
     const activeIds = new Set<string>()
     const enabledSchedules = schedules.filter((s) => s.enabled)
 
