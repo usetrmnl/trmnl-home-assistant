@@ -214,7 +214,9 @@ export class FetchPreview {
     const response = await fetch(url)
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      // Server sends plain-text failure details (e.g. "Cannot open page: ...")
+      const body = await response.text()
+      throw new Error(body || `HTTP ${response.status}: ${response.statusText}`)
     }
 
     return response.blob()

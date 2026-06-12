@@ -1,0 +1,54 @@
+/**
+ * Tests for API Client
+ */
+
+import { describe, it, expect, afterEach } from 'bun:test'
+import { FetchPreview } from '../../html/js/api-client.js'
+
+const originalFetch = globalThis.fetch
+
+const stubFetch = (response: Response): void => {
+  globalThis.fetch = (async () => response) as unknown as typeof fetch
+}
+
+afterEach(() => {
+  globalThis.fetch = originalFetch
+})
+
+describe('FetchPreview', () => {
+  describe('#call', () => {
+    it('rejects with response body text when request fails', async () => {
+      stubFetch(
+        new Response(
+          'Cannot open page: http://homeassistant:8123/lovelace/0 (net::ERR_NAME_NOT_RESOLVED)',
+          { status: 404, statusText: 'Not Found' },
+        ),
+      )
+
+      const fetchPreview = new FetchPreview()
+
+      expect(fetchPreview.call('/lovelace/0', new URLSearchParams())).rejects.toThrow(
+        'Cannot open page: http://homeassistant:8123/lovelace/0 (net::ERR_NAME_NOT_RESOLVED)',
+      )
+    })
+
+    it('rejects with HTTP status when error body is empty', async () => {
+      stubFetch(new Response(null, { status: 404, statusText: 'Not Found' }))
+
+      const fetchPreview = new FetchPreview()
+
+      expect(fetchPreview.call('/lovelace/0', new URLSearchParams())).rejects.toThrow(
+        'HTTP 404: Not Found',
+      )
+    })
+
+    it('resolves with blob when request succeeds', async () => {
+      stubFetch(new Response('image-bytes', { status: 200 }))
+
+      const fetchPreview = new FetchPreview()
+      const blob = await fetchPreview.call('/lovelace/0', new URLSearchParams())
+
+      expect(blob.size).toBeGreaterThan(0)
+    })
+  })
+})
