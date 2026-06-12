@@ -1,9 +1,8 @@
 /**
  * Unit tests for Scheduler change detection.
  *
- * The reload loop uses changedSnapshot() to skip cron re-registration when
- * schedules.json is unchanged — re-registering every tick churned node-cron
- * tasks and spammed INFO logs (issue #64).
+ * changedSnapshot() decides whether the reload loop re-registers cron jobs:
+ * only when schedules.json content actually changed.
  *
  * @module tests/unit/scheduler
  */

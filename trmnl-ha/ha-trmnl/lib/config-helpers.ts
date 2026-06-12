@@ -85,11 +85,11 @@ export function findBrowser(): string | undefined {
 export function isValidTimezone(timezone: string): boolean {
   if (Intl.supportedValuesOf('timeZone').includes(timezone)) return true
 
-  // NOTE: supportedValuesOf only lists canonical zone names and omits valid
-  // aliases like Etc/UTC (the Docker image's own default TZ), causing false
-  // warnings on every boot. Accept Area/Location-form zones the runtime can
-  // resolve, while still rejecting abbreviations (EST) and offsets (+05:30)
-  // whose TZ semantics are ambiguous.
+  // supportedValuesOf only lists canonical zone names, omitting valid
+  // aliases like Etc/UTC (the Docker image's default TZ). Accept
+  // Area/Location zones the runtime can resolve while still rejecting
+  // abbreviations (EST) and offsets (+05:30), whose TZ semantics are
+  // ambiguous.
   if (!timezone.includes('/')) return false
   try {
     new Intl.DateTimeFormat(undefined, { timeZone: timezone })
