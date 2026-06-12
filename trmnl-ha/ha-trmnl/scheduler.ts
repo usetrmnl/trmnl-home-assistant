@@ -58,6 +58,7 @@ export class Scheduler {
   #reloadInterval: ReturnType<typeof setInterval> | undefined
   #lastSnapshot = ''
   #refreshingTokens = false
+  #deadTokensWarned = new Set<string>()
 
   /**
    * Creates scheduler instance with injected screenshot function.
@@ -179,7 +180,15 @@ export class Scheduler {
       for (const schedule of schedules) {
         const auth = schedule.webhook_format?.byosConfig?.auth
         if (!schedule.webhook_url || !auth?.enabled) continue
-        if (!isRefreshable(auth)) continue
+
+        if (!isRefreshable(auth)) {
+          if (auth.access_token && !this.#deadTokensWarned.has(schedule.id)) {
+            this.#deadTokensWarned.add(schedule.id)
+            log.warn`BYOS tokens for "${schedule.name}" expired beyond the refresh window — re-authenticate in the schedule settings`
+          }
+          continue
+        }
+        this.#deadTokensWarned.delete(schedule.id)
 
         await getValidAccessToken(schedule.webhook_url, auth, (newTokens) => {
           log.info`Refreshed BYOS tokens for schedule "${schedule.name}"`

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional capture-time overlay: a small timestamp in the bottom-right corner of the screenshot, enabled per schedule or with the `timestamp` URL parameter, so stale screens are visible at a glance
+
+### Changed
+
+- BYOS tokens now refresh once they are 10 minutes old (was 25), so restarts and outages of up to ~20 minutes no longer kill the refresh chain
+- When stored BYOS tokens expire beyond the refresh window, the scheduler logs one clear re-authenticate warning instead of failing silently at send time
+
 ### Fixed
 
 - BYOS token operations (login, logout, manual save) no longer reset Delivery Mode to legacy or clear the Add-on URL (#62)

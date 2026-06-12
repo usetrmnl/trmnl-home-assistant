@@ -23,8 +23,13 @@ export interface TokenResponse {
   success?: string
 }
 
-/** Token validity duration (25 min to refresh before 30 min expiry) */
-const ACCESS_TOKEN_VALIDITY_MS = 25 * 60 * 1000
+/**
+ * Token staleness threshold: refresh well before the 30 min server expiry.
+ * The server rejects refreshes once the access token expires, so a fresher
+ * token means restarts and outages of up to ~20 minutes keep the refresh
+ * chain alive without re-authentication.
+ */
+const ACCESS_TOKEN_VALIDITY_MS = 10 * 60 * 1000
 
 /**
  * Access token hard expiry on the BYOS server (rodauth's
