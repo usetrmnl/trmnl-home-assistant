@@ -230,6 +230,9 @@ export interface Schedule {
   /** Viewport dimensions */
   viewport: Viewport
 
+  /** Device preset id from devices.json (null = custom configuration) */
+  device?: string | null
+
   /** Crop region configuration */
   crop: CropRegion & { enabled: boolean }
 

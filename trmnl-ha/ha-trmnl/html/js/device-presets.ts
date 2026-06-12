@@ -98,11 +98,30 @@ export class DevicePresetsManager {
   /**
    * Restores all dropdown state after DOM re-render.
    */
-  afterDOMRender(schedule?: { theme?: string | null }): void {
+  afterDOMRender(schedule?: {
+    theme?: string | null
+    device?: string | null
+  }): void {
     this.renderPresets()
+    this.#restoreDeviceSelection(schedule?.device ?? null)
     this.populateThemePicker(schedule?.theme ?? null)
     this.populateDashboardPicker()
     this.prefillLanguage()
+  }
+
+  /**
+   * Re-selects the schedule's persisted device preset after re-render.
+   * Falls back to "Custom Configuration" when the preset no longer exists.
+   */
+  #restoreDeviceSelection(device: string | null): void {
+    if (!device) return
+    const select = document.getElementById(
+      'devicePreset',
+    ) as HTMLSelectElement | null
+    if (!select) return
+
+    select.value = device
+    if (select.value !== device) select.value = ''
   }
 
   /**
