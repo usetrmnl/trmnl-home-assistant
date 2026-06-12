@@ -55,6 +55,12 @@ describe('isValidTimezone', () => {
     it('accepts Etc/GMT offset format', () => {
       expect(isValidTimezone('Etc/GMT+5')).toBe(true)
     })
+
+    // NOTE: Etc/UTC is the Docker image's default TZ but is absent from
+    // Intl.supportedValuesOf, which only lists canonical zone names
+    it('accepts Etc/UTC alias', () => {
+      expect(isValidTimezone('Etc/UTC')).toBe(true)
+    })
   })
 
   describe('invalid timezone values', () => {
