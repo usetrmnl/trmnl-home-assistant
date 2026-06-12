@@ -23,6 +23,16 @@ export interface TokenResponse {
 const ACCESS_TOKEN_VALIDITY_MS = 25 * 60 * 1000
 
 /**
+ * Access token hard expiry on the BYOS server (rodauth's
+ * jwt_access_token_period, 1800s by default in Terminus).
+ *
+ * NOTE: Terminus does not allow refreshing with an expired access token
+ * (rodauth allow_refresh_with_expired_jwt_access_token? is false), so once
+ * this window passes the only recovery is re-authentication.
+ */
+const ACCESS_TOKEN_EXPIRY_MS = 30 * 60 * 1000
+
+/**
  * Extracts base URL from webhook URL.
  * e.g., "https://example.com/api/screens" → "https://example.com"
  */
@@ -38,6 +48,17 @@ function isTokenValid(auth: ByosAuthConfig): boolean {
   if (!auth.obtained_at || !auth.access_token) return false
   const elapsed = Date.now() - auth.obtained_at
   return elapsed < ACCESS_TOKEN_VALIDITY_MS
+}
+
+/**
+ * Checks whether stored tokens can still be refreshed. The BYOS server
+ * rejects refresh requests once the access token itself has expired, so
+ * callers should skip refresh attempts (and prompt re-auth) past this window.
+ */
+export function isRefreshable(auth: ByosAuthConfig): boolean {
+  if (!auth.access_token || !auth.refresh_token || !auth.obtained_at)
+    return false
+  return Date.now() - auth.obtained_at < ACCESS_TOKEN_EXPIRY_MS
 }
 
 /**
