@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- BYOS token operations (login, logout, manual save) no longer reset Delivery Mode to legacy or clear the Add-on URL (#62)
+- Scheduler reload no longer re-registers cron jobs and logs every 60 seconds when schedules are unchanged (#64)
+- Replaced cron jobs are now destroyed instead of stopped, preventing unbounded task accumulation in node-cron's registry
+- Timezone validation no longer warns on valid zone aliases like Etc/UTC, the Docker image's default TZ
 ## [0.8.1] - 2026-04-16
 
 ### Added
