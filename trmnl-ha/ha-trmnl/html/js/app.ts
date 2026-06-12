@@ -128,8 +128,8 @@ class App {
 
       await this.#devicePresetsManager.loadAndRenderPresets()
 
-      // Initial renderUI ran before presets arrived, so the device dropdown
-      // restored against an empty option list — restore again now
+      // renderUI ran before the async preset fetch resolved, so the device
+      // dropdown restored against an empty option list — restore again now
       const active = this.#scheduleManager.activeSchedule
       if (active) this.#devicePresetsManager.afterDOMRender(active)
 
@@ -460,9 +460,6 @@ class App {
         width: parseIntOrDefault(input('s_width'), schedule.viewport.width),
         height: parseIntOrDefault(input('s_height'), schedule.viewport.height),
       },
-      // Persist the device preset so re-renders can restore the selection —
-      // it previously lived only in the DOM and reset to "Custom
-      // Configuration" on every render
       device: select('devicePreset') || null,
       crop: {
         enabled: checkbox('s_crop_enabled'),
@@ -898,9 +895,6 @@ class App {
       webhook_format: {
         format: 'byos-hanami',
         byosConfig: {
-          // NOTE: Spread existing config first so token updates never drop
-          // fields added after this builder was written (delivery_mode,
-          // addon_base_url) — rebuilding from a hardcoded list caused #62
           ...existing,
           label: existing?.label || 'Home Assistant',
           name: existing?.name || 'ha-dashboard',
