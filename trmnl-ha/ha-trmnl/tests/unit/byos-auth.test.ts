@@ -17,6 +17,7 @@ import { describe, it, expect, beforeEach, afterAll, mock } from 'bun:test'
 import {
   getBaseUrl,
   getValidAccessToken,
+  isRefreshable,
   login,
 } from '../../lib/scheduler/byos-auth.js'
 import type { ByosAuthConfig } from '../../types/domain.js'
@@ -85,6 +86,46 @@ describe('byos-auth', () => {
   // -------------------------------------------------------------------------
   // getValidAccessToken — token state logic
   // -------------------------------------------------------------------------
+
+  describe('#isRefreshable', () => {
+    it('returns true while the access token is within its 30 min lifetime', () => {
+      const auth: ByosAuthConfig = {
+        enabled: true,
+        access_token: 'token',
+        refresh_token: 'refresh',
+        obtained_at: Date.now() - 26 * 60 * 1000,
+      }
+
+      expect(isRefreshable(auth)).toBe(true)
+    })
+
+    it('returns false once the access token has expired server-side', () => {
+      const auth: ByosAuthConfig = {
+        enabled: true,
+        access_token: 'token',
+        refresh_token: 'refresh',
+        obtained_at: Date.now() - 31 * 60 * 1000,
+      }
+
+      expect(isRefreshable(auth)).toBe(false)
+    })
+
+    it('returns false when tokens are missing', () => {
+      const auth: ByosAuthConfig = { enabled: true, obtained_at: Date.now() }
+
+      expect(isRefreshable(auth)).toBe(false)
+    })
+
+    it('returns false when obtained_at is missing', () => {
+      const auth: ByosAuthConfig = {
+        enabled: true,
+        access_token: 'token',
+        refresh_token: 'refresh',
+      }
+
+      expect(isRefreshable(auth)).toBe(false)
+    })
+  })
 
   describe('#getValidAccessToken', () => {
     it('returns null when no access_token stored', async () => {

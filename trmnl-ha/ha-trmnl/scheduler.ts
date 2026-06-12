@@ -19,9 +19,10 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { loadSchedules } from './lib/scheduleStore.js'
+import { loadSchedules, updateSchedule } from './lib/scheduleStore.js'
 import { ScheduleExecutor, type ScreenshotFunction, type ExecutionResult } from './lib/scheduler/schedule-executor.js'
 import { CronJobManager } from './lib/scheduler/cron-job-manager.js'
+import { getValidAccessToken, isRefreshable } from './lib/scheduler/byos-auth.js'
 import { SCHEDULER_RELOAD_INTERVAL_MS, SCHEDULER_OUTPUT_DIR_NAME, DATA_DIR } from './const.js'
 import type { Schedule } from './types/domain.js'
 import { schedulerLogger } from './lib/logger.js'
@@ -52,6 +53,7 @@ export class Scheduler {
   #executor: ScheduleExecutor
   #reloadInterval: ReturnType<typeof setInterval> | undefined
   #lastSnapshot = ''
+  #refreshingTokens = false
 
   /**
    * Creates scheduler instance with injected screenshot function.
@@ -76,10 +78,15 @@ export class Scheduler {
     log.info`Starting scheduler...`
     // Fire-and-forget initial load (errors logged by loadAndSchedule)
     void this.#loadAndSchedule()
+    void this.#keepByosTokensFresh()
 
-    // Reload schedules periodically
+    // Reload schedules periodically; same tick keeps BYOS tokens fresh —
+    // the server only accepts refreshes while the access token (30 min) is
+    // still valid, so send-time refresh alone fails for any schedule whose
+    // interval exceeds the token lifetime
     this.#reloadInterval = setInterval(() => {
       void this.#loadAndSchedule()
+      void this.#keepByosTokensFresh()
     }, SCHEDULER_RELOAD_INTERVAL_MS)
   }
 
@@ -151,6 +158,54 @@ export class Scheduler {
 
     // Remove jobs for deleted schedules (delegates to CronJobManager)
     this.#cronManager.pruneInactiveJobs(activeIds)
+  }
+
+  /**
+   * Proactively refreshes BYOS tokens before they expire (issue #62 thread).
+   *
+   * getValidAccessToken() is a no-op while tokens are fresh (<25 min) and
+   * refreshes in the 25-30 min window, so calling it every reload tick keeps
+   * the single-use refresh chain alive indefinitely. Disabled schedules are
+   * included so paused schedules don't silently lose auth. Tokens past the
+   * 30 min server expiry are skipped — refresh would be rejected, and
+   * retrying every tick would only spam the log; the send path surfaces the
+   * re-auth error.
+   */
+  async #keepByosTokensFresh(): Promise<void> {
+    if (this.#refreshingTokens) return
+    this.#refreshingTokens = true
+    try {
+      const schedules = await loadSchedules()
+      for (const schedule of schedules) {
+        const auth = schedule.webhook_format?.byosConfig?.auth
+        if (!schedule.webhook_url || !auth?.enabled) continue
+        if (!isRefreshable(auth)) continue
+
+        await getValidAccessToken(schedule.webhook_url, auth, (newTokens) => {
+          log.info`Refreshed BYOS tokens for schedule "${schedule.name}"`
+          void updateSchedule(schedule.id, {
+            webhook_format: {
+              ...schedule.webhook_format!,
+              byosConfig: {
+                ...schedule.webhook_format!.byosConfig!,
+                auth: {
+                  ...auth,
+                  access_token: newTokens.access_token,
+                  refresh_token: newTokens.refresh_token,
+                  obtained_at: Date.now(),
+                },
+              },
+            },
+          }).catch((err: unknown) => {
+            log.error`Failed to persist refreshed BYOS tokens: ${(err as Error).message}`
+          })
+        })
+      }
+    } catch (err) {
+      log.error`BYOS token keepalive failed: ${(err as Error).message}`
+    } finally {
+      this.#refreshingTokens = false
+    }
   }
 
   /**

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replaced cron jobs are now destroyed instead of stopped, preventing unbounded task accumulation in node-cron's registry
 - Timezone validation no longer warns on valid zone aliases like Etc/UTC, the Docker image's default TZ
 - Device preset selection is now saved on the schedule and restored on every render — it previously reset to "Custom Configuration" immediately, inviting re-picks that overwrote customised viewport, crop, rotation and format values
+- BYOS access tokens are refreshed proactively on the scheduler tick. Terminus only accepts refreshes while the 30-minute access token is still valid, so the previous send-time-only refresh failed with 401s for any schedule running less often than every 30 minutes
 ## [0.8.1] - 2026-04-16
 
 ### Added
