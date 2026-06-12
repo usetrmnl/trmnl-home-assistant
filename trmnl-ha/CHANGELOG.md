@@ -5,25 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.2] - 2026-06-12
 
 ### Added
 
 - Optional capture-time overlay: a small timestamp in the bottom-right corner of the screenshot, enabled globally via the `timestamp_overlay` add-on option, per schedule, or with the `timestamp` URL parameter, so stale screens are visible at a glance
+- Configurable navigation timeout: `navigation_timeout_ms` add-on option (`NAVIGATION_TIMEOUT` environment variable in standalone) for complex dashboards on slower hardware (#58)
 
 ### Changed
 
 - BYOS tokens now refresh once they are 10 minutes old (was 25), so restarts and outages of up to ~20 minutes no longer kill the refresh chain
 - When stored BYOS tokens expire beyond the refresh window, the scheduler logs one clear re-authenticate warning instead of failing silently at send time
+- Failed previews now show the server's failure details instead of only the HTTP status
 
 ### Fixed
 
 - BYOS token operations (login, logout, manual save) no longer reset Delivery Mode to legacy or clear the Add-on URL (#62)
+- BYOS access tokens are refreshed proactively on the scheduler tick. Terminus only accepts refreshes while the 30-minute access token is still valid, so the previous send-time-only refresh failed with 401s for any schedule running less often than every 30 minutes
 - Scheduler reload no longer re-registers cron jobs and logs every 60 seconds when schedules are unchanged (#64)
 - Replaced cron jobs are now destroyed instead of stopped, preventing unbounded task accumulation in node-cron's registry
-- Timezone validation no longer warns on valid zone aliases like Etc/UTC, the Docker image's default TZ
 - Device preset selection is now saved on the schedule and restored on every render — it previously reset to "Custom Configuration" immediately, inviting re-picks that overwrote customised viewport, crop, rotation and format values
-- BYOS access tokens are refreshed proactively on the scheduler tick. Terminus only accepts refreshes while the 30-minute access token is still valid, so the previous send-time-only refresh failed with 401s for any schedule running less often than every 30 minutes
+- Timezone validation no longer warns on valid zone aliases like Etc/UTC, the Docker image's default TZ
+- A non-numeric NAVIGATION_TIMEOUT value no longer disables the navigation timeout entirely
+
 ## [0.8.1] - 2026-04-16
 
 ### Added
@@ -282,4 +286,5 @@ Based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main
 [0.7.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.6.9...v0.7.0
 [0.8.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.7.0...v0.8.0
 [0.8.1]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.8.0...v0.8.1
+[0.8.2]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.8.1...v0.8.2
 [0.2.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.1.0...v0.2.0
