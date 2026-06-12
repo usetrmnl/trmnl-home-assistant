@@ -21,10 +21,38 @@ import {
   parseEnvBoolean,
   isNetworkError,
   parseOptionsFile,
+  resolveNavigationTimeout,
   OptionsParseError,
   BROWSER_PATHS,
   NETWORK_ERROR_PATTERNS,
 } from '../../lib/config-helpers.js'
+
+// =============================================================================
+// Navigation Timeout Resolution
+// =============================================================================
+
+describe('resolveNavigationTimeout', () => {
+  it('prefers the options file value', () => {
+    expect(resolveNavigationTimeout(60000, '90000')).toBe(60000)
+  })
+
+  it('falls back to the environment variable', () => {
+    expect(resolveNavigationTimeout(undefined, '90000')).toBe(90000)
+  })
+
+  it('defaults to 30s when neither is set', () => {
+    expect(resolveNavigationTimeout(undefined, undefined)).toBe(30000)
+  })
+
+  // puppeteer treats a NaN timeout as 0, which disables the timeout entirely
+  it('defaults to 30s for a non-numeric environment value', () => {
+    expect(resolveNavigationTimeout(undefined, 'abc')).toBe(30000)
+  })
+
+  it('defaults to 30s for an empty environment value', () => {
+    expect(resolveNavigationTimeout(undefined, '')).toBe(30000)
+  })
+})
 
 // =============================================================================
 // Timezone Validation

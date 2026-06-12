@@ -47,6 +47,7 @@ import {
   findBrowser,
   isNetworkError,
   parseOptionsFile,
+  resolveNavigationTimeout,
   OptionsParseError,
   type Options,
   NETWORK_ERROR_PATTERNS as SCHEDULER_NETWORK_ERROR_PATTERNS_IMPORT,
@@ -332,11 +333,11 @@ export const BROWSER_TIMEOUT: number = parseInt(
  * `navigation_timeout_ms` option or the NAVIGATION_TIMEOUT environment
  * variable when running complex Home Assistant dashboards on lower-powered
  * hardware (e.g. Pi 4), where the default may be too short.
- * Fixes #58.
  */
-export const NAVIGATION_TIMEOUT: number =
-  options.navigation_timeout_ms ??
-  parseInt(process.env['NAVIGATION_TIMEOUT'] || '30000')
+export const NAVIGATION_TIMEOUT: number = resolveNavigationTimeout(
+  options.navigation_timeout_ms,
+  process.env['NAVIGATION_TIMEOUT'],
+)
 
 /**
  * Maximum screenshots before proactive browser restart (memory cleanup)

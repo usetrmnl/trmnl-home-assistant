@@ -101,6 +101,25 @@ export function isValidTimezone(timezone: string): boolean {
 }
 
 /**
+ * Resolves the navigation timeout from the options file or environment.
+ *
+ * Guards against non-numeric values: puppeteer treats a NaN timeout as 0,
+ * which disables the navigation timeout entirely and lets hung pages block
+ * the request queue.
+ *
+ * @param fileValue - navigation_timeout_ms from the options file
+ * @param envValue - NAVIGATION_TIMEOUT environment variable
+ * @returns Timeout in milliseconds, defaulting to puppeteer's 30s
+ */
+export function resolveNavigationTimeout(
+  fileValue: number | undefined,
+  envValue: string | undefined,
+): number {
+  const raw = fileValue ?? parseInt(envValue || '30000', 10)
+  return Number.isFinite(raw) ? raw : 30000
+}
+
+/**
  * Check if running with environment variable configuration
  * @param env - Environment variables object (defaults to process.env)
  * @returns true if HOME_ASSISTANT_URL or ACCESS_TOKEN env vars are set
