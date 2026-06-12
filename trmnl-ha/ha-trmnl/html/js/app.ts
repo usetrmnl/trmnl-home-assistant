@@ -889,6 +889,10 @@ class App {
       webhook_format: {
         format: 'byos-hanami',
         byosConfig: {
+          // NOTE: Spread existing config first so token updates never drop
+          // fields added after this builder was written (delivery_mode,
+          // addon_base_url) — rebuilding from a hardcoded list caused #62
+          ...existing,
           label: existing?.label || 'Home Assistant',
           name: existing?.name || 'ha-dashboard',
           model_id: existing?.model_id || '1',
