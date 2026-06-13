@@ -85,6 +85,7 @@ export class ScheduleManager {
       name: 'New Schedule',
       enabled: true,
       cron: '0 */3 * * *',
+      interval_minutes: 180,
       ha_mode: uiConfig.haConnected, // Default to HA mode if connected
       dashboard_path: '/home',
       viewport: { width: 800, height: 480 },

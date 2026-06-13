@@ -15,6 +15,7 @@ import type {
   ScheduleUpdate,
 } from '../types/domain.js'
 import { DATA_DIR } from '../const.js'
+import { cronToIntervalMinutes } from './scheduler/cron-interval.js'
 import { schedulerLogger } from './logger.js'
 
 const log = schedulerLogger()
@@ -89,10 +90,20 @@ function migrateSchedule(schedule: Partial<Schedule>): Schedule {
         }
       : schedule.dithering
 
+  // Legacy schedules predate interval_minutes; derive it from their cron once.
+  // An explicit value (including null for cron-mode) is always respected.
+  const interval_minutes =
+    'interval_minutes' in schedule
+      ? schedule.interval_minutes
+      : schedule.cron
+        ? cronToIntervalMinutes(schedule.cron)
+        : null
+
   return {
     ...schedule,
     // Default ha_mode based on whether target_url is set (for existing schedules)
     ha_mode: schedule.ha_mode ?? !schedule.target_url,
+    interval_minutes,
     dithering,
   } as Schedule
 }
