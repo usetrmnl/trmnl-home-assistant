@@ -7,11 +7,11 @@
  * Responsibilities:
  * 1. Lifecycle Management - start() initializes, stop() cleans up
  * 2. Hot-Reload - Periodic schedule file reload (every 60s by default)
- * 3. Cron Orchestration - Delegates to CronJobManager for job management
+ * 3. Job Orchestration - Delegates to JobManager for interval/cron job management
  * 4. Execution Delegation - Delegates to ScheduleExecutor for screenshot capture
  * 5. Manual Execution - "Send Now" API for on-demand screenshot triggers
  *
- * NOTE: Scheduler owns CronJobManager and ScheduleExecutor instances.
+ * NOTE: Scheduler owns JobManager and ScheduleExecutor instances.
  * NOTE: When modifying reload logic, preserve upsert/prune synchronization pattern.
  *
  * @module scheduler
@@ -21,7 +21,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { loadSchedules, updateSchedule } from './lib/scheduleStore.js'
 import { ScheduleExecutor, type ScreenshotFunction, type ExecutionResult } from './lib/scheduler/schedule-executor.js'
-import { CronJobManager } from './lib/scheduler/cron-job-manager.js'
+import { JobManager } from './lib/scheduler/job-manager.js'
 import { CooldownTracker } from './lib/scheduler/cooldown-tracker.js'
 import {
   buildRefreshedAuthUpdate,
@@ -70,7 +70,7 @@ export function jitterMs(maxMs: number, rand: () => number = Math.random): numbe
  */
 export class Scheduler {
   #outputDir: string
-  #cronManager: CronJobManager
+  #jobManager: JobManager
   #executor: ScheduleExecutor
   #reloadInterval: ReturnType<typeof setInterval> | undefined
   #lastSnapshot = ''
@@ -85,7 +85,7 @@ export class Scheduler {
    */
   constructor(screenshotFn: ScreenshotFunction) {
     this.#outputDir = path.join(DATA_DIR, SCHEDULER_OUTPUT_DIR_NAME)
-    this.#cronManager = new CronJobManager()
+    this.#jobManager = new JobManager()
     this.#executor = new ScheduleExecutor(screenshotFn, this.#outputDir)
 
     // Ensure output directory exists
@@ -119,7 +119,7 @@ export class Scheduler {
   stop(): void {
     log.info`Stopping scheduler...`
     clearInterval(this.#reloadInterval)
-    this.#cronManager.stopAll()
+    this.#jobManager.stopAll()
   }
 
   /**
@@ -162,24 +162,23 @@ export class Scheduler {
     for (const schedule of schedules) {
       if (!schedule.enabled) {
         log.debug`Schedule "${schedule.name}" is disabled`
-        this.#cronManager.removeJob(schedule.id, schedule.name)
+        this.#jobManager.removeJob(schedule.id, schedule.name)
         continue
       }
 
-      // Log active schedules at info level for visibility
+      const cadence =
+        schedule.interval_minutes != null
+          ? `every ${schedule.interval_minutes} min`
+          : schedule.cron
       const webhookStatus = schedule.webhook_url ? '→ webhook' : '→ file only'
-      log.info`  • ${schedule.name} [${schedule.cron}] ${webhookStatus}`
+      log.info`  • ${schedule.name} [${cadence}] ${webhookStatus}`
 
       activeIds.add(schedule.id)
 
-      // Create/update cron job (delegates to CronJobManager)
-      this.#cronManager.upsertJob(schedule, () => {
-        this.#runSchedule(schedule)
-      })
+      this.#jobManager.upsertJob(schedule, () => this.#runSchedule(schedule))
     }
 
-    // Remove jobs for deleted schedules (delegates to CronJobManager)
-    this.#cronManager.pruneInactiveJobs(activeIds)
+    this.#jobManager.pruneInactiveJobs(activeIds)
   }
 
   /**

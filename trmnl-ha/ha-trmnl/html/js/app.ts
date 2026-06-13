@@ -446,6 +446,12 @@ class App {
       checkbox,
     )
 
+    // Timing: interval picker by default, raw cron via the advanced toggle
+    const intervalValue = parseIntOrDefault(input('s_interval_value'), 3)
+    const intervalMinutes = checkbox('s_cron_advanced')
+      ? null
+      : Math.max(1, select('s_interval_unit') === 'hours' ? intervalValue * 60 : intervalValue)
+
     return {
       ...schedule,
       // Mode toggle - always save the current state
@@ -454,6 +460,7 @@ class App {
       // Common fields (always update from form)
       name: input('s_name') || schedule.name,
       cron: input('s_cron') || schedule.cron,
+      interval_minutes: intervalMinutes,
       webhook_url: input('s_webhook') || null,
       webhook_format: webhookFormat,
       viewport: {

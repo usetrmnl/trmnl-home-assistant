@@ -133,6 +133,59 @@ export class RenderScheduleContent {
     `
   }
 
+  /** Interval picker with an advanced cron escape hatch. */
+  #renderTiming(s: Schedule): string {
+    const advanced = s.interval_minutes == null
+    const useHours =
+      s.interval_minutes != null &&
+      s.interval_minutes >= 60 &&
+      s.interval_minutes % 60 === 0
+    const value =
+      s.interval_minutes == null
+        ? 3
+        : useHours
+          ? s.interval_minutes / 60
+          : s.interval_minutes
+    const unit = s.interval_minutes == null || useHours ? 'hours' : 'minutes'
+
+    return `
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Schedule</label>
+
+            <div id="s_interval_row" class="items-center gap-2" style="display: ${advanced ? 'none' : 'flex'}">
+              <span class="text-sm text-gray-700">Every</span>
+              <input type="number" id="s_interval_value" min="1" value="${value}"
+                class="w-24 px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
+                onchange="window.app.updateScheduleFromForm()" />
+              <select id="s_interval_unit"
+                class="px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
+                onchange="window.app.updateScheduleFromForm()">
+                <option value="minutes" ${unit === 'minutes' ? 'selected' : ''}>minutes</option>
+                <option value="hours" ${unit === 'hours' ? 'selected' : ''}>hours</option>
+              </select>
+            </div>
+
+            <div id="s_cron_row" style="display: ${advanced ? 'block' : 'none'}">
+              <input type="text" id="s_cron" value="${s.cron || ''}"
+                class="w-full px-3 py-2 border rounded-md font-mono" style="border-color: var(--primary-light)"
+                onchange="window.app.updateScheduleFromForm()"
+                placeholder="0 9 * * 1-5"
+                title="Unix cron format: minute hour day month weekday" />
+              <p class="text-xs text-gray-500 mt-1">
+                Cron for time-specific schedules (e.g., <code>0 9 * * 1-5</code> = 9am weekdays).
+                <a href="https://crontab.guru" target="_blank" class="underline" style="color: var(--primary)">Cron helper →</a>
+              </p>
+            </div>
+
+            <label class="flex items-center gap-2 mt-2 text-xs text-gray-600">
+              <input type="checkbox" id="s_cron_advanced" ${advanced ? 'checked' : ''}
+                onchange="window.app.updateScheduleFromForm()" />
+              Advanced (cron expression)
+            </label>
+            <p class="text-xs text-gray-500 mt-1">A random delay of up to 30 seconds is added to spread load on the TRMNL server.</p>
+          </div>`
+  }
+
   #renderScheduleSettings(): string {
     const s = this.schedule
     const enabledClass = s.enabled
@@ -174,19 +227,7 @@ export class RenderScheduleContent {
             <p class="text-xs text-gray-500 mt-1">Descriptive name for this schedule</p>
           </div>
 
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Cron Expression</label>
-            <input type="text" id="s_cron" value="${s.cron || ''}"
-              class="w-full px-3 py-2 border rounded-md font-mono" style="border-color: var(--primary-light)"
-              onchange="window.app.updateScheduleFromForm()"
-              placeholder="0 */3 * * *"
-              title="Unix cron format: minute hour day month weekday" />
-            <p class="text-xs text-gray-500 mt-1">
-              Schedule timing in cron format (e.g., <code>0 */3 * * *</code> = every 3 hours).
-              A random delay of up to 10 minutes is added to spread load on the TRMNL server.
-              <a href="https://crontab.guru" target="_blank" class="underline" style="color: var(--primary)">Use cron helper →</a>
-            </p>
-          </div>
+          ${this.#renderTiming(s)}
 
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>

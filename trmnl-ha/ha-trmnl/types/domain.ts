@@ -209,8 +209,11 @@ export interface Schedule {
   /** Whether schedule is active */
   enabled: boolean
 
-  /** Cron expression for scheduling */
+  /** Cron expression, used when interval_minutes is null (advanced escape hatch) */
   cron: string
+
+  /** Interval between runs in minutes; null means use cron */
+  interval_minutes?: number | null
 
   /** Webhook URL to POST screenshot to (null if local-only) */
   webhook_url: string | null

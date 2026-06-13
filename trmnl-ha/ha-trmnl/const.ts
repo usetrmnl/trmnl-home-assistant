@@ -514,7 +514,7 @@ export const SCHEDULER_RELOAD_INTERVAL_MS: number = 60000 // 1 minute
  * second; the random delay spreads them across a window.
  */
 export const SCHEDULER_JITTER_MAX_MS: number = parseInt(
-  process.env['SCHEDULER_JITTER_MAX_MS'] || '600000', // 10 minutes
+  process.env['SCHEDULER_JITTER_MAX_MS'] || '30000', // 30 seconds (must stay below the 1-min minimum interval)
   10,
 )
 
