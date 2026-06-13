@@ -509,6 +509,19 @@ export const CONTENT_TYPES: ContentTypeMap = {
 export const SCHEDULER_RELOAD_INTERVAL_MS: number = 60000 // 1 minute
 
 /**
+ * Maximum random pre-capture delay. node-cron fires every install at the top of
+ * the interval, so without this they all hit the TRMNL server on the same
+ * second; the random delay spreads them across a window.
+ */
+export const SCHEDULER_JITTER_MAX_MS: number = parseInt(
+  process.env['SCHEDULER_JITTER_MAX_MS'] || '600000', // 10 minutes
+  10,
+)
+
+/** Backoff used when a 429/503 arrives without a usable Retry-After header. */
+export const SCHEDULER_COOLDOWN_DEFAULT_MS: number = 5 * 60 * 1000 // 5 minutes
+
+/**
  * Maximum retry attempts for failed schedules
  */
 export const SCHEDULER_MAX_RETRIES: number = 3

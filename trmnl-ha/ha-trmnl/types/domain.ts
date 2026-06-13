@@ -290,6 +290,8 @@ export interface WebhookResult {
   success: boolean
   /** HTTP status code from webhook (if attempted) */
   statusCode?: number
+  /** Parsed Retry-After delay in ms (set on 429/503 when the server provides one) */
+  retryAfterMs?: number
   /** Error message (if failed) */
   error?: string
   /** Webhook URL that was called */
