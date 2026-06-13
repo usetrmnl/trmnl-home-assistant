@@ -84,7 +84,7 @@ export class ScheduleManager {
     const defaultSchedule: ScheduleInput = {
       name: 'New Schedule',
       enabled: true,
-      cron: '*/10 * * * *',
+      cron: '0 */3 * * *',
       ha_mode: uiConfig.haConnected, // Default to HA mode if connected
       dashboard_path: '/home',
       viewport: { width: 800, height: 480 },

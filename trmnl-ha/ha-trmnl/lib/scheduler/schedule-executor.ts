@@ -10,10 +10,12 @@ import {
   saveScreenshot,
   cleanupOldScreenshots,
   uploadToWebhook,
+  WebhookHttpError,
   buildParams,
 } from './services.js'
 import { resolveScreenshotTarget } from '../../html/shared/screenshot-target.js'
 import { buildScreenshotParams } from '../../html/shared/build-screenshot-params.js'
+import { sleep } from '../sleep.js'
 import {
   SCHEDULER_MAX_RETRIES,
   SCHEDULER_RETRY_DELAY_MS,
@@ -86,7 +88,7 @@ export class ScheduleExecutor {
       } catch (err) {
         if (!this.#shouldRetry(err as Error, attempt)) throw err
         this.#logRetry(schedule.name, err as Error, attempt)
-        await this.#delay(SCHEDULER_RETRY_DELAY_MS)
+        await sleep(SCHEDULER_RETRY_DELAY_MS)
       }
     }
     throw new Error(`Failed after ${SCHEDULER_MAX_RETRIES} attempts`)
@@ -199,16 +201,22 @@ export class ScheduleExecutor {
       const errorMessage = (err as Error).message
       log.error`Schedule "${schedule.name}" webhook failed: ${errorMessage}`
 
-      // Extract status code from error message if present (e.g., "HTTP 404: Not Found")
-      const statusMatch = errorMessage.match(/HTTP (\d+):/)
-      const statusCode = statusMatch?.[1]
-        ? parseInt(statusMatch[1], 10)
-        : undefined
+      // Network errors carry no status, so fall back to scraping the message.
+      let statusCode: number | undefined
+      let retryAfterMs: number | undefined
+      if (err instanceof WebhookHttpError) {
+        statusCode = err.status
+        retryAfterMs = err.retryAfterMs ?? undefined
+      } else {
+        const statusMatch = errorMessage.match(/HTTP (\d+):/)
+        statusCode = statusMatch?.[1] ? parseInt(statusMatch[1], 10) : undefined
+      }
 
       return {
         attempted: true,
         success: false,
         statusCode,
+        retryAfterMs,
         error: errorMessage,
         url: webhookUrl,
       }
@@ -222,9 +230,5 @@ export class ScheduleExecutor {
   #logRetry(name: string, err: Error, attempt: number): void {
     log.warn`Network error (${attempt}/${SCHEDULER_MAX_RETRIES}) for ${name}: ${err.message}`
     log.info`Retrying in ${SCHEDULER_RETRY_DELAY_MS / 1000}s...`
-  }
-
-  #delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 }

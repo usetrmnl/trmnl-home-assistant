@@ -17,7 +17,7 @@ export { saveScreenshot, type SaveScreenshotOptions, type SaveResult } from './s
 export { cleanupOldScreenshots, type CleanupOptions, type CleanupResult } from './screenshot-cleanup.js'
 
 // Webhook Operations
-export { uploadToWebhook, type WebhookDeliveryOptions, type WebhookDeliveryResult } from './webhook-delivery.js'
+export { uploadToWebhook, WebhookHttpError, type WebhookDeliveryOptions, type WebhookDeliveryResult } from './webhook-delivery.js'
 
 // Parameter Building
 export { buildParams, getDefaults } from './params-builder.js'

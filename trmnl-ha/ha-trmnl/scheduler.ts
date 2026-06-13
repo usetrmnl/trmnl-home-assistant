@@ -22,12 +22,20 @@ import path from 'node:path'
 import { loadSchedules, updateSchedule } from './lib/scheduleStore.js'
 import { ScheduleExecutor, type ScreenshotFunction, type ExecutionResult } from './lib/scheduler/schedule-executor.js'
 import { CronJobManager } from './lib/scheduler/cron-job-manager.js'
+import { CooldownTracker } from './lib/scheduler/cooldown-tracker.js'
 import {
   buildRefreshedAuthUpdate,
   getValidAccessToken,
   isRefreshable,
 } from './lib/scheduler/byos-auth.js'
-import { SCHEDULER_RELOAD_INTERVAL_MS, SCHEDULER_OUTPUT_DIR_NAME, DATA_DIR } from './const.js'
+import { sleep } from './lib/sleep.js'
+import {
+  SCHEDULER_RELOAD_INTERVAL_MS,
+  SCHEDULER_OUTPUT_DIR_NAME,
+  SCHEDULER_JITTER_MAX_MS,
+  SCHEDULER_COOLDOWN_DEFAULT_MS,
+  DATA_DIR,
+} from './const.js'
 import type { Schedule } from './types/domain.js'
 import { schedulerLogger } from './lib/logger.js'
 
@@ -49,6 +57,15 @@ export function changedSnapshot(
 }
 
 /**
+ * Random delay in ms within [0, maxMs), used to desynchronize cron fires across
+ * installs so they don't all hit the TRMNL server on the same second.
+ */
+export function jitterMs(maxMs: number, rand: () => number = Math.random): number {
+  if (maxMs <= 0) return 0
+  return Math.floor(rand() * maxMs)
+}
+
+/**
  * High-level scheduler orchestrating cron jobs and screenshot execution.
  */
 export class Scheduler {
@@ -59,6 +76,7 @@ export class Scheduler {
   #lastSnapshot = ''
   #refreshingTokens = false
   #deadTokensWarned = new Set<string>()
+  #cooldowns = new CooldownTracker(SCHEDULER_COOLDOWN_DEFAULT_MS)
 
   /**
    * Creates scheduler instance with injected screenshot function.
@@ -207,13 +225,27 @@ export class Scheduler {
     }
   }
 
-  /**
-   * Executes a schedule via delegation to ScheduleExecutor (cron callback).
-   */
+  /** Cron callback: skips while cooling down, jitters, then executes. */
   async #runSchedule(schedule: Schedule): Promise<void> {
+    const blockedUntil = this.#cooldowns.blockedUntil(schedule.id)
+    if (blockedUntil !== null) {
+      log.info`Skipping "${schedule.name}": server cooldown active until ${new Date(blockedUntil).toISOString()}`
+      return
+    }
+
+    const delay = jitterMs(SCHEDULER_JITTER_MAX_MS)
+    if (delay > 0) {
+      log.debug`Jittering ${delay}ms before "${schedule.name}"`
+      await sleep(delay)
+    }
+
     log.info`Cron triggered: ${schedule.name}`
     try {
-      await this.#executor.call(schedule)
+      const result = await this.#executor.call(schedule)
+      const cooldownUntil = this.#cooldowns.record(schedule.id, result.webhook)
+      if (cooldownUntil !== null) {
+        log.warn`Server asked "${schedule.name}" to back off (HTTP ${result.webhook?.statusCode}); pausing fires until ${new Date(cooldownUntil).toISOString()}`
+      }
     } catch (err) {
       log.error`Schedule "${schedule.name}" failed: ${(err as Error).message}`
     }

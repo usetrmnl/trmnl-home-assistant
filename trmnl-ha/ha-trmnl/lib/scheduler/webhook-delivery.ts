@@ -15,6 +15,36 @@ import { getValidAccessToken, getBaseUrl, type TokenResponse } from './byos-auth
 
 const log = webhookLogger()
 
+/**
+ * HTTP error from a webhook send, carrying the status and any parsed
+ * Retry-After delay so the scheduler can apply a cooldown without re-parsing
+ * the error message.
+ */
+export class WebhookHttpError extends Error {
+  readonly status: number
+  readonly retryAfterMs: number | null
+
+  constructor(message: string, status: number, retryAfterMs: number | null) {
+    super(message)
+    this.name = 'WebhookHttpError'
+    this.status = status
+    this.retryAfterMs = retryAfterMs
+  }
+}
+
+/**
+ * Parses the Retry-After header into milliseconds. Only the delta-seconds form
+ * is supported; an HTTP-date, missing, or unparseable header returns null so
+ * the caller falls back to its default cooldown.
+ */
+export function parseRetryAfterMs(header: string | null): number | null {
+  if (!header) return null
+  const trimmed = header.trim()
+  // Number() accepts "" and whitespace as 0; require explicit digits
+  if (!/^\d+$/.test(trimmed)) return null
+  return Number(trimmed) * 1000
+}
+
 /** Screen object from BYOS API */
 interface ByosScreen {
   id: number
@@ -258,8 +288,10 @@ export async function uploadToWebhook(
       }
     }
 
-    throw new Error(
+    throw new WebhookHttpError(
       `HTTP ${response.status}: ${response.statusText}${errorDetail}`,
+      response.status,
+      parseRetryAfterMs(response.headers.get('Retry-After')),
     )
   }
 

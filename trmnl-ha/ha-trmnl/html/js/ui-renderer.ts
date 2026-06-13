@@ -179,10 +179,11 @@ export class RenderScheduleContent {
             <input type="text" id="s_cron" value="${s.cron || ''}"
               class="w-full px-3 py-2 border rounded-md font-mono" style="border-color: var(--primary-light)"
               onchange="window.app.updateScheduleFromForm()"
-              placeholder="*/10 * * * *"
+              placeholder="0 */3 * * *"
               title="Unix cron format: minute hour day month weekday" />
             <p class="text-xs text-gray-500 mt-1">
-              Schedule timing in cron format (e.g., <code>*/10 * * * *</code> = every 10 minutes).
+              Schedule timing in cron format (e.g., <code>0 */3 * * *</code> = every 3 hours).
+              A random delay of up to 10 minutes is added to spread load on the TRMNL server.
               <a href="https://crontab.guru" target="_blank" class="underline" style="color: var(--primary)">Use cron helper →</a>
             </p>
           </div>
