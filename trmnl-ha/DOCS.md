@@ -473,6 +473,7 @@ curl http://localhost:10000/health | jq
 
 - [Bun](https://bun.sh) 1.3.5+
 - Docker (for container testing)
+- [VS Code](https://code.visualstudio.com) with the Dev Containers extension (for the Home Assistant devcontainer)
 
 ### Setup
 
@@ -502,6 +503,16 @@ bun install && bun run dev
 ```bash
 ./scripts/docker-build.sh && ./scripts/docker-run.sh
 ```
+
+### Home Assistant devcontainer (test as a real add-on)
+
+Runs the add-on inside a full Home Assistant + Supervisor, so you can verify the add-on lifecycle, options schema, and Ingress — not just the app in isolation.
+
+1. Open the `trmnl-ha` folder in VS Code and **Reopen in Container** when prompted.
+2. Run the **Start Home Assistant** task (Terminal → Run Task).
+3. Open Home Assistant at [http://localhost:7123](http://localhost:7123); the add-on appears under **Settings → Add-ons** as a local app.
+
+To install your local changes instead of the published image, comment out the `image:` line in `config.yaml` before installing the add-on.
 
 ### Scripts
 
