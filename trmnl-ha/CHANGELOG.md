@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-06-24
+
+### Added
+
+- Interval-based scheduling — pick a simple "every N minutes/hours" cadence instead of writing cron. Cron remains as an advanced escape hatch for specific times and weekdays, and existing cron schedules that map to a simple interval are migrated automatically on load
+- Schedule jitter — a small random delay (up to 30s, configurable via `SCHEDULER_JITTER_MAX_MS`) before each capture, so installs don't all hit the TRMNL server on the same second
+
+### Changed
+
+- The scheduler now backs off when the TRMNL server returns 429 or 503, honouring the `Retry-After` header (5-minute default when absent), instead of retrying on the next tick
+
 ## [0.8.2] - 2026-06-12
 
 ### Added
@@ -287,4 +298,5 @@ Based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main
 [0.8.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.7.0...v0.8.0
 [0.8.1]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.8.0...v0.8.1
 [0.8.2]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.8.1...v0.8.2
+[0.9.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.8.2...v0.9.0
 [0.2.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.1.0...v0.2.0
