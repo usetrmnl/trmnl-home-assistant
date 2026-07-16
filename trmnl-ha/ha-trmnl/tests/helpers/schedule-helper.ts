@@ -6,7 +6,6 @@
  */
 
 import fs from 'node:fs'
-import path from 'node:path'
 
 /** Schedule input for testing */
 interface TestScheduleInput {
@@ -96,26 +95,4 @@ export function cleanupScheduleFile(filePath: string): void {
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath)
   }
-}
-
-/**
- * Writes schedules to a test file
- */
-export function writeScheduleFile(filePath: string, schedules: TestSchedule[]): void {
-  const dir = path.dirname(filePath)
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true })
-  }
-  fs.writeFileSync(filePath, JSON.stringify(schedules, null, 2))
-}
-
-/**
- * Reads schedules from a test file
- */
-export function readScheduleFile(filePath: string): TestSchedule[] {
-  if (!fs.existsSync(filePath)) {
-    return []
-  }
-  const content = fs.readFileSync(filePath, 'utf-8')
-  return JSON.parse(content) as TestSchedule[]
 }

@@ -21,38 +21,17 @@ import {
   isRefreshable,
   login,
 } from '../../lib/scheduler/byos-auth.js'
+import { mockFetch, restoreFetch } from '../helpers/fetch-mock.js'
 import type { ByosAuthConfig, Schedule } from '../../types/domain.js'
 
-// ---------------------------------------------------------------------------
-// Fetch mock — scoped to this file, restored in afterAll
-// ---------------------------------------------------------------------------
-
-const realFetch = globalThis.fetch
-
-function mockFetch(
-  response: Partial<Response> & { json?: () => Promise<unknown> },
-) {
-  globalThis.fetch = mock(async () => ({
-    ok: true,
-    status: 200,
-    text: async () => '',
-    json: async () => ({}),
-    ...response,
-  })) as unknown as typeof fetch
-}
-
-afterAll(() => {
-  globalThis.fetch = realFetch
-})
+afterAll(restoreFetch)
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe('byos-auth', () => {
-  beforeEach(() => {
-    globalThis.fetch = realFetch
-  })
+  beforeEach(restoreFetch)
 
   // -------------------------------------------------------------------------
   // getBaseUrl

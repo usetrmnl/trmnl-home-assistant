@@ -9,24 +9,7 @@
 
 import { describe, it, expect } from 'bun:test'
 import { changedSnapshot } from '../../scheduler.js'
-import type { Schedule } from '../../types/domain.js'
-
-/** Minimal valid Schedule for testing */
-function buildSchedule(overrides: Partial<Schedule> = {}): Schedule {
-  return {
-    id: 'test-id-1',
-    name: 'Test Schedule',
-    enabled: true,
-    cron: '*/30 * * * *',
-    webhook_url: null,
-    ha_mode: true,
-    dashboard_path: '/lovelace/0',
-    viewport: { width: 800, height: 480 },
-    createdAt: '2026-06-12T00:00:00.000Z',
-    updatedAt: '2026-06-12T00:00:00.000Z',
-    ...overrides,
-  } as Schedule
-}
+import { buildSchedule } from '../helpers/schedule-fixtures.js'
 
 describe('changedSnapshot', () => {
   it('returns a snapshot on first load', () => {
@@ -49,7 +32,7 @@ describe('changedSnapshot', () => {
 
   it('returns a new snapshot when a field changes', () => {
     const first = changedSnapshot([buildSchedule()], '')!
-    const edited = [buildSchedule({ cron: '* * * * *' })]
+    const edited = [buildSchedule({ cron: '*/30 * * * *' })]
 
     expect(changedSnapshot(edited, first)).toBeTypeOf('string')
   })

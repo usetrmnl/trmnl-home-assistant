@@ -9,12 +9,9 @@
 
 import { describe, it, expect, afterAll, mock } from 'bun:test'
 import { uploadToWebhook } from '../../lib/scheduler/webhook-delivery.js'
+import { mockFetch, restoreFetch } from '../helpers/fetch-mock.js'
 
-const realFetch = globalThis.fetch
-
-afterAll(() => {
-  globalThis.fetch = realFetch
-})
+afterAll(restoreFetch)
 
 describe('uploadToWebhook — connection errors', () => {
   it('names the unreachable host and suggests the DNS fix', async () => {
@@ -34,9 +31,7 @@ describe('uploadToWebhook — connection errors', () => {
   })
 
   it('passes HTTP errors through untouched', async () => {
-    globalThis.fetch = mock(
-      async () => new Response('nope', { status: 500 }),
-    ) as unknown as typeof fetch
+    mockFetch({ ok: false, status: 500, text: async () => 'nope' })
 
     expect(
       uploadToWebhook({

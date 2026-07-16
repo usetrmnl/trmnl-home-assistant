@@ -12,62 +12,20 @@
  * @module tests/unit/schedule-executor
  */
 
-import { describe, it, expect, beforeEach, afterAll, mock } from 'bun:test'
+import { describe, it, expect, beforeEach, afterAll } from 'bun:test'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { ScheduleExecutor } from '../../lib/scheduler/schedule-executor.js'
-import type { Schedule } from '../../types/domain.js'
+import { captureFetch, restoreFetch } from '../helpers/fetch-mock.js'
+import { buildByosSchedule } from '../helpers/schedule-fixtures.js'
 
-const realFetch = globalThis.fetch
-
-afterAll(() => {
-  globalThis.fetch = realFetch
-})
-
-/** Captures webhook requests and replies 200 */
-function captureFetch(requests: { url: string; body: string }[]) {
-  globalThis.fetch = mock(async (url: unknown, init?: RequestInit) => {
-    // Payloads are JSON strings; anything else would be a test setup bug
-    requests.push({ url: String(url), body: init?.body as string })
-    return new Response('{}', { status: 200 })
-  }) as unknown as typeof fetch
-}
-
-function createByosSchedule(overrides: Partial<Schedule> = {}): Schedule {
-  return {
-    id: 'byos-1',
-    name: 'Terminus',
-    enabled: true,
-    cron: '* * * * *',
-    dashboard_path: '/lovelace/0',
-    viewport: { width: 800, height: 480 },
-    format: 'png',
-    webhook_url: 'https://byos.example.com/api/screens',
-    webhook_format: {
-      format: 'byos-hanami',
-      byosConfig: {
-        model_id: '1',
-        name: 'trmnl_screen',
-        label: 'TRMNL Screen',
-        addon_base_url: 'http://192.168.1.10:10000/',
-        delivery_mode: 'uri',
-        auth: {
-          enabled: true,
-          access_token: 'token',
-          refresh_token: 'refresh',
-          obtained_at: Date.now(),
-        },
-      },
-    },
-    ...overrides,
-  } as Schedule
-}
+afterAll(restoreFetch)
 
 describe('ScheduleExecutor — BYOS URI delivery', () => {
   let outputDir: string
   let executor: ScheduleExecutor
-  let requests: { url: string; body: string }[]
+  let requests: ReturnType<typeof captureFetch>
 
   beforeEach(() => {
     outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trmnl-executor-'))
@@ -75,14 +33,14 @@ describe('ScheduleExecutor — BYOS URI delivery', () => {
       async () => Buffer.from('fake-png'),
       outputDir,
     )
-    requests = []
-    captureFetch(requests)
+    requests = captureFetch()
   })
 
   it('sends a URI pointing at the saved capture, not a render endpoint', async () => {
-    const result = await executor.call(createByosSchedule())
+    const result = await executor.call(buildByosSchedule())
 
-    const payload = JSON.parse(requests[0]!.body) as {
+    // Payloads are JSON strings; anything else would be a test setup bug
+    const payload = JSON.parse(requests[0]!.init?.body as string) as {
       screen: { uri: string }
     }
     const savedFilename = path.basename(result.savedPath)
@@ -93,18 +51,18 @@ describe('ScheduleExecutor — BYOS URI delivery', () => {
   })
 
   it('saves the capture the URI points at', async () => {
-    const result = await executor.call(createByosSchedule())
+    const result = await executor.call(buildByosSchedule())
 
     expect(fs.readFileSync(result.savedPath, 'utf-8')).toBe('fake-png')
   })
 
   it('falls back to embedded data when delivery_mode is data', async () => {
-    const schedule = createByosSchedule()
+    const schedule = buildByosSchedule()
     schedule.webhook_format!.byosConfig!.delivery_mode = 'data'
 
     await executor.call(schedule)
 
-    const payload = JSON.parse(requests[0]!.body) as {
+    const payload = JSON.parse(requests[0]!.init?.body as string) as {
       screen: { uri?: string; data?: string }
     }
 
