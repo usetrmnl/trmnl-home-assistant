@@ -179,6 +179,23 @@ describe('Page Setup Strategies', () => {
         expect(result.themeChanged).toBe(true)
       })
 
+      it('returns themeChanged false on a fresh page with no theme requested', async () => {
+        // Regression: parser emits dark=false while a fresh page resets
+        // lastDarkMode to undefined — raw comparison flagged a change and
+        // cost every default-config capture a 500ms network-idle wait
+        const result = await strategy.setup(
+          mockPage as never,
+          defaultOptions({
+            dark: false,
+            lastDarkMode: undefined,
+            theme: undefined,
+            lastTheme: undefined,
+          }),
+        )
+
+        expect(result.themeChanged).toBe(false)
+      })
+
       it('returns themeChanged false when theme unchanged', async () => {
         const result = await strategy.setup(
           mockPage as never,

@@ -72,8 +72,11 @@ export class HAPageSetup implements PageSetupStrategy {
       waitTime += 1000
     }
 
-    // Update theme if changed
-    if (theme !== lastTheme || dark !== lastDarkMode) {
+    // Update theme if changed. Normalize dark to boolean: the parser emits
+    // `false` for absent ?dark while a fresh page resets lastDarkMode to
+    // undefined — comparing them raw made every capture "change" the theme
+    // and pay a 500ms network-idle wait for the default it already had.
+    if (theme !== lastTheme || (dark ?? false) !== (lastDarkMode ?? false)) {
       const themeCmd = new UpdateTheme(page)
       await themeCmd.call(theme || '', dark || false)
       themeChanged = true
