@@ -180,9 +180,8 @@ describe('Page Setup Strategies', () => {
       })
 
       it('returns themeChanged false on a fresh page with no theme requested', async () => {
-        // Regression: parser emits dark=false while a fresh page resets
-        // lastDarkMode to undefined — raw comparison flagged a change and
-        // cost every default-config capture a 500ms network-idle wait
+        // The parser emits dark=false for an absent ?dark; a fresh page has
+        // lastDarkMode undefined. These must not count as a theme change.
         const result = await strategy.setup(
           mockPage as never,
           defaultOptions({

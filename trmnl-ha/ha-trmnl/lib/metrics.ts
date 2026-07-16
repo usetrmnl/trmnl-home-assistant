@@ -3,9 +3,9 @@
  *
  * Each pipeline stage records durations into a bounded ring buffer;
  * summaries (count/mean/p50/p95/max/last) are exposed on /health so slow
- * installs can be diagnosed from real numbers instead of guesses (#57).
+ * installs can be diagnosed from their own numbers (#57).
  *
- * Deliberately tiny: no histograms, no exporters, no dependencies.
+ * Kept deliberately small: no histograms, no exporters, no dependencies.
  *
  * @module lib/metrics
  */
