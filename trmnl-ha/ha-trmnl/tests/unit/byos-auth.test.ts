@@ -302,7 +302,7 @@ describe('byos-auth', () => {
       expect(auth.obtained_at).toBeGreaterThan(Date.now() - 5000)
     })
 
-    it('returns null when refresh fails', async () => {
+    it('falls back to the stored access token when refresh fails', async () => {
       const auth: ByosAuthConfig = {
         enabled: true,
         access_token: 'old',
@@ -310,11 +310,27 @@ describe('byos-auth', () => {
         obtained_at: Date.now() - 30 * 60 * 1000,
       }
 
-      mockFetch({ ok: false, status: 401 })
+      mockFetch({ ok: false, status: 400 })
 
       const result = await getValidAccessToken('https://host.com/api', auth)
 
-      expect(result).toBeNull()
+      expect(result).toBe('old')
+    })
+
+    it('does not persist tokens when refresh fails', async () => {
+      const auth: ByosAuthConfig = {
+        enabled: true,
+        access_token: 'old',
+        refresh_token: 'refresh',
+        obtained_at: Date.now() - 30 * 60 * 1000,
+      }
+      const onTokenRefresh = mock(() => {})
+
+      mockFetch({ ok: false, status: 400 })
+
+      await getValidAccessToken('https://host.com/api', auth, onTokenRefresh)
+
+      expect(onTokenRefresh).not.toHaveBeenCalled()
     })
   })
 

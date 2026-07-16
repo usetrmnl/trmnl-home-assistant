@@ -32,11 +32,13 @@ export interface TokenResponse {
 const ACCESS_TOKEN_VALIDITY_MS = 10 * 60 * 1000
 
 /**
- * Access token hard expiry on the BYOS server (rodauth's
- * jwt_access_token_period, 1800s by default in Terminus).
+ * Access token hard expiry on the BYOS server when session expiration is
+ * enabled (rodauth's jwt_access_token_period, 1800s). Stock Terminus disables
+ * session expiration and issues ~100-year tokens, so this window only matters
+ * for hardened installs.
  *
- * NOTE: Stock Terminus rejects refresh requests once the access token has
- * expired, so past this window the only recovery is re-authentication.
+ * NOTE: Rodauth rejects refresh requests once the access token has expired,
+ * so past this window the only recovery is re-authentication.
  */
 const ACCESS_TOKEN_EXPIRY_MS = 30 * 60 * 1000
 
@@ -165,13 +167,14 @@ async function refreshToken(
 }
 
 /**
- * Gets a valid access token, refreshing if needed.
- * Returns null if tokens are missing/expired and need re-authentication.
+ * Gets a valid access token, refreshing if needed. A failed refresh falls
+ * back to the stored access token — on stock Terminus it stays valid, and a
+ * push with a genuinely expired token fails no worse than one with none.
  *
  * @param webhookUrl - Full webhook URL (base URL is extracted)
  * @param auth - Stored auth config with tokens
  * @param onTokenRefresh - Callback to save new tokens (called on refresh)
- * @returns Access token or null if re-auth needed
+ * @returns Access token, or null when no tokens are stored (re-auth needed)
  */
 export async function getValidAccessToken(
   webhookUrl: string,
@@ -206,8 +209,13 @@ export async function getValidAccessToken(
 
     return newTokens.access_token
   } catch (err) {
-    // Refresh failed - user needs to re-authenticate
-    log.error`BYOS auth: refresh failed, re-authentication required: ${(err as Error).message}`
-    return null
+    // Rodauth rotates refresh tokens on use, so a concurrent refresh (send
+    // path vs keepalive, each holding its own copy of the auth config) makes
+    // the loser's refresh token invalid → 400. The stored access token is
+    // still valid on the server (stock Terminus tokens live ~100 years, and
+    // even with session expiration enabled it outlives the refresh window),
+    // so use it rather than pushing unauthenticated. See issue #75.
+    log.warn`BYOS auth: refresh failed, falling back to stored access token: ${(err as Error).message}`
+    return auth.access_token
   }
 }
