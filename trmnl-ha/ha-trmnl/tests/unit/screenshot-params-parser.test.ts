@@ -107,6 +107,44 @@ describe('ScreenshotParamsParser', () => {
   // Processing Parameters - Optional screenshot processing params
   // ==========================================================================
 
+  describe('Page query forwarding', () => {
+    it('forwards unknown params to pagePath (e.g. ?kiosk for Kiosk Mode)', () => {
+      const url = new URL('http://localhost/lovelace/0?kiosk&viewport=800x480')
+
+      const result = parser.call(url)
+
+      expect(result?.pagePath).toBe('/lovelace/0?kiosk')
+    })
+
+    it('forwards unknown params with values', () => {
+      const url = new URL(
+        'http://localhost/lovelace/0?viewport=800x480&sidebar=hidden',
+      )
+
+      const result = parser.call(url)
+
+      expect(result?.pagePath).toBe('/lovelace/0?sidebar=hidden')
+    })
+
+    it('does not forward system params', () => {
+      const url = new URL(
+        'http://localhost/lovelace/0?viewport=800x480&format=bmp&dithering&dither_method=ordered&wait=2000',
+      )
+
+      const result = parser.call(url)
+
+      expect(result?.pagePath).toBe('/lovelace/0')
+    })
+
+    it('leaves pagePath untouched without unknown params', () => {
+      const url = createUrl('/lovelace/0', { viewport: '800x480' })
+
+      const result = parser.call(url)
+
+      expect(result?.pagePath).toBe('/lovelace/0')
+    })
+  })
+
   describe('Processing Parameters', () => {
     it('includes pagePath from URL pathname', () => {
       const url = createUrl('/lovelace/dashboard', { viewport: '800x600' })
@@ -657,7 +695,6 @@ describe('ScreenshotParamsParser', () => {
         palette: 'gray-16',
         black_level: '10',
         white_level: '90',
-        normalize: true,
       })
 
       const result = parser.call(url)

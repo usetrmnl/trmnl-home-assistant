@@ -210,7 +210,9 @@ export class FetchPreview {
    * Fetches preview image for a schedule
    */
   async call(path: string, params: URLSearchParams): Promise<Blob> {
-    const url = `.${path}?${params.toString()}`
+    // A dashboard path may carry its own query (e.g. /lovelace/0?kiosk)
+    const separator = path.includes('?') ? '&' : '?'
+    const url = `.${path}${separator}${params.toString()}`
     const response = await fetch(url)
 
     if (!response.ok) {

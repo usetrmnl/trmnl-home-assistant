@@ -17,6 +17,21 @@ afterEach(() => {
 
 describe('FetchPreview', () => {
   describe('#call', () => {
+    it('joins params with & when the path carries its own query', async () => {
+      let requestedUrl = ''
+      globalThis.fetch = (async (url: unknown) => {
+        requestedUrl = String(url)
+        return new Response(new Blob(['png']), { status: 200 })
+      }) as unknown as typeof fetch
+
+      await new FetchPreview().call(
+        '/lovelace/0?kiosk',
+        new URLSearchParams({ viewport: '800x480' }),
+      )
+
+      expect(requestedUrl).toBe('./lovelace/0?kiosk&viewport=800x480')
+    })
+
     it('rejects with response body text when request fails', async () => {
       stubFetch(
         new Response(
