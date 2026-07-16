@@ -159,6 +159,7 @@ bun run dev
 | `timezone` | string | (system) | Timezone for scheduled captures (e.g., `America/New_York`) |
 | `keep_browser_open` | bool | `false` | Keep browser alive between requests (faster, more memory) |
 | `timestamp_overlay` | bool | `false` | Stamp the capture time in the bottom-right corner of every screenshot. Can also be enabled per schedule ("Show Capture Time") or per request with the `timestamp` URL parameter. |
+| `timestamp_12h` | bool | `false` | Render the capture-time overlay in 12-hour format (`2026-07-16 2:30 PM`) instead of the 24-hour default (`TIMESTAMP_12H` environment variable in standalone). |
 | `navigation_timeout_ms` | int | `30000` | Maximum time in ms puppeteer will wait for a page navigation to complete before erroring. Matches puppeteer's default; bump to `60000`, `90000`, or `120000` if your Home Assistant dashboard takes longer than 30s to load on your hardware (e.g. Pi 4 with many custom Lovelace cards). Min `10000`, max `180000`. |
 
 > **Timezone Note:** Without a timezone set, scheduled captures run in UTC. Use an [IANA timezone name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) like `America/New_York`, `Europe/London`, or `Asia/Tokyo`. Invalid values silently fall back to UTC (check logs for warnings).
