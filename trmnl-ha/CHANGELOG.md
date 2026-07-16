@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Pipeline timing metrics: every capture stage (browser launch, navigation, readiness waits, screenshot, dithering, webhook upload) is timed, with rolling p50/p95 summaries exposed on `/health` — slow installs can now be diagnosed from data (#57)
+
+### Changed
+
+- The Home Assistant readiness check now logs a warning when it times out instead of a debug line — a capture that always eats the full 5s timeout was the invisible cost behind "very slow" reports (#57)
+
+### Fixed
+
+- Captures without a theme or dark-mode setting no longer pay a 500ms "theme changed" settle wait on every screenshot — a fresh page compared `false` against `undefined` and re-applied the default theme each time
+
 ## [0.9.1] - 2026-07-17
 
 ### Added
