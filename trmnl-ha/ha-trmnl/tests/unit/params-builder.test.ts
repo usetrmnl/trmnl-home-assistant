@@ -8,21 +8,7 @@
 
 import { describe, it, expect } from 'bun:test'
 import { buildParams, getDefaults } from '../../lib/scheduler/params-builder.js'
-import type { Schedule } from '../../types/domain.js'
-
-/** Creates minimal schedule for testing */
-function createSchedule(overrides: Partial<Schedule> = {}): Schedule {
-  return {
-    id: 'test-id',
-    name: 'Test Schedule',
-    enabled: true,
-    cron: '* * * * *',
-    dashboard_path: '/lovelace/0',
-    viewport: { width: 800, height: 480 },
-    format: 'png',
-    ...overrides,
-  } as Schedule
-}
+import { buildSchedule } from '../helpers/schedule-fixtures.js'
 
 describe('params-builder', () => {
   // ==========================================================================
@@ -31,7 +17,7 @@ describe('params-builder', () => {
 
   describe('buildParams', () => {
     it('converts schedule to screenshot params', () => {
-      const schedule = createSchedule()
+      const schedule = buildSchedule()
 
       const params = buildParams(schedule)
 
@@ -41,7 +27,7 @@ describe('params-builder', () => {
     })
 
     it('uses dashboard_path as pagePath', () => {
-      const schedule = createSchedule({ dashboard_path: '/lovelace/dashboard' })
+      const schedule = buildSchedule({ dashboard_path: '/lovelace/dashboard' })
 
       const params = buildParams(schedule)
 
@@ -49,7 +35,7 @@ describe('params-builder', () => {
     })
 
     it('defaults pagePath when dashboard_path empty', () => {
-      const schedule = createSchedule({ dashboard_path: '' })
+      const schedule = buildSchedule({ dashboard_path: '' })
 
       const params = buildParams(schedule)
 
@@ -63,7 +49,7 @@ describe('params-builder', () => {
 
   describe('Viewport', () => {
     it('passes viewport object directly', () => {
-      const schedule = createSchedule({
+      const schedule = buildSchedule({
         viewport: { width: 1920, height: 1080 },
       })
 
@@ -73,7 +59,7 @@ describe('params-builder', () => {
     })
 
     it('uses default viewport when undefined', () => {
-      const schedule = createSchedule({ viewport: undefined })
+      const schedule = buildSchedule({ viewport: undefined })
 
       const params = buildParams(schedule)
 
@@ -87,7 +73,7 @@ describe('params-builder', () => {
 
   describe('Format', () => {
     it('uses png format', () => {
-      const schedule = createSchedule({ format: 'png' })
+      const schedule = buildSchedule({ format: 'png' })
 
       const params = buildParams(schedule)
 
@@ -95,7 +81,7 @@ describe('params-builder', () => {
     })
 
     it('uses jpeg format', () => {
-      const schedule = createSchedule({ format: 'jpeg' })
+      const schedule = buildSchedule({ format: 'jpeg' })
 
       const params = buildParams(schedule)
 
@@ -103,7 +89,7 @@ describe('params-builder', () => {
     })
 
     it('uses bmp format', () => {
-      const schedule = createSchedule({ format: 'bmp' })
+      const schedule = buildSchedule({ format: 'bmp' })
 
       const params = buildParams(schedule)
 
@@ -111,7 +97,7 @@ describe('params-builder', () => {
     })
 
     it('defaults to png when undefined', () => {
-      const schedule = createSchedule({ format: undefined })
+      const schedule = buildSchedule({ format: undefined })
 
       const params = buildParams(schedule)
 
@@ -125,7 +111,7 @@ describe('params-builder', () => {
 
   describe('Crop', () => {
     it('includes crop when enabled', () => {
-      const schedule = createSchedule({
+      const schedule = buildSchedule({
         crop: { enabled: true, x: 10, y: 20, width: 400, height: 300 },
       })
 
@@ -141,7 +127,7 @@ describe('params-builder', () => {
     })
 
     it('returns null when crop disabled', () => {
-      const schedule = createSchedule({
+      const schedule = buildSchedule({
         crop: { enabled: false, x: 10, y: 20, width: 400, height: 300 },
       })
 
@@ -151,7 +137,7 @@ describe('params-builder', () => {
     })
 
     it('returns null when crop undefined', () => {
-      const schedule = createSchedule({ crop: undefined })
+      const schedule = buildSchedule({ crop: undefined })
 
       const params = buildParams(schedule)
 
@@ -165,7 +151,7 @@ describe('params-builder', () => {
 
   describe('Dithering', () => {
     it('includes dithering when enabled', () => {
-      const schedule = createSchedule({
+      const schedule = buildSchedule({
         dithering: {
           enabled: true,
           method: 'floyd-steinberg',
@@ -188,7 +174,7 @@ describe('params-builder', () => {
     })
 
     it('returns undefined when dithering disabled', () => {
-      const schedule = createSchedule({
+      const schedule = buildSchedule({
         dithering: {
           enabled: false,
           method: 'floyd-steinberg',
@@ -207,7 +193,7 @@ describe('params-builder', () => {
     })
 
     it('returns undefined when dithering undefined', () => {
-      const schedule = createSchedule({ dithering: undefined })
+      const schedule = buildSchedule({ dithering: undefined })
 
       const params = buildParams(schedule)
 
@@ -221,7 +207,7 @@ describe('params-builder', () => {
 
   describe('Optional Parameters', () => {
     it('includes extraWait from schedule.wait', () => {
-      const schedule = createSchedule({ wait: 2000 })
+      const schedule = buildSchedule({ wait: 2000 })
 
       const params = buildParams(schedule)
 
@@ -229,7 +215,7 @@ describe('params-builder', () => {
     })
 
     it('includes zoom', () => {
-      const schedule = createSchedule({ zoom: 0.8 })
+      const schedule = buildSchedule({ zoom: 0.8 })
 
       const params = buildParams(schedule)
 
@@ -237,7 +223,7 @@ describe('params-builder', () => {
     })
 
     it('defaults zoom to 1', () => {
-      const schedule = createSchedule({ zoom: undefined })
+      const schedule = buildSchedule({ zoom: undefined })
 
       const params = buildParams(schedule)
 
@@ -245,7 +231,7 @@ describe('params-builder', () => {
     })
 
     it('includes timestamp', () => {
-      const schedule = createSchedule({ timestamp: true })
+      const schedule = buildSchedule({ timestamp: true })
 
       const params = buildParams(schedule)
 
@@ -253,7 +239,7 @@ describe('params-builder', () => {
     })
 
     it('defaults timestamp to false', () => {
-      const schedule = createSchedule({})
+      const schedule = buildSchedule({})
 
       const params = buildParams(schedule)
 
@@ -261,7 +247,7 @@ describe('params-builder', () => {
     })
 
     it('includes invert', () => {
-      const schedule = createSchedule({ invert: true })
+      const schedule = buildSchedule({ invert: true })
 
       const params = buildParams(schedule)
 
@@ -269,7 +255,7 @@ describe('params-builder', () => {
     })
 
     it('defaults invert to false', () => {
-      const schedule = createSchedule({ invert: undefined })
+      const schedule = buildSchedule({ invert: undefined })
 
       const params = buildParams(schedule)
 
@@ -277,7 +263,7 @@ describe('params-builder', () => {
     })
 
     it('includes dark mode', () => {
-      const schedule = createSchedule({ dark: true })
+      const schedule = buildSchedule({ dark: true })
 
       const params = buildParams(schedule)
 
@@ -285,7 +271,7 @@ describe('params-builder', () => {
     })
 
     it('defaults dark to false', () => {
-      const schedule = createSchedule({ dark: undefined })
+      const schedule = buildSchedule({ dark: undefined })
 
       const params = buildParams(schedule)
 
@@ -293,7 +279,7 @@ describe('params-builder', () => {
     })
 
     it('includes rotation', () => {
-      const schedule = createSchedule({ rotate: 90 })
+      const schedule = buildSchedule({ rotate: 90 })
 
       const params = buildParams(schedule)
 
@@ -301,7 +287,7 @@ describe('params-builder', () => {
     })
 
     it('includes language', () => {
-      const schedule = createSchedule({ lang: 'es' })
+      const schedule = buildSchedule({ lang: 'es' })
 
       const params = buildParams(schedule)
 
@@ -309,7 +295,7 @@ describe('params-builder', () => {
     })
 
     it('includes theme', () => {
-      const schedule = createSchedule({ theme: 'dark' })
+      const schedule = buildSchedule({ theme: 'dark' })
 
       const params = buildParams(schedule)
 

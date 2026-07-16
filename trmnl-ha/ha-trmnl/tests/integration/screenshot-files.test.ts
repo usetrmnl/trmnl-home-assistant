@@ -12,54 +12,15 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { saveScreenshot } from '../../lib/scheduler/screenshot-saver.js'
 import { cleanupOldScreenshots } from '../../lib/scheduler/screenshot-cleanup.js'
+import { createPNGBuffer } from '../helpers/image-helper.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const TEST_OUTPUT_DIR = path.join(__dirname, '../test-screenshot-files')
 
-/** Creates test PNG buffer */
-function createTestBuffer(): Buffer {
-  // Minimal valid PNG (8x8 gray)
-  return Buffer.from([
-    0x89,
-    0x50,
-    0x4e,
-    0x47,
-    0x0d,
-    0x0a,
-    0x1a,
-    0x0a, // PNG signature
-    0x00,
-    0x00,
-    0x00,
-    0x0d,
-    0x49,
-    0x48,
-    0x44,
-    0x52, // IHDR chunk
-    0x00,
-    0x00,
-    0x00,
-    0x08,
-    0x00,
-    0x00,
-    0x00,
-    0x08, // 8x8
-    0x08,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x4b,
-    0x6d,
-    0x29,
-    0xde,
-  ])
-}
-
 /** Creates file with specific mtime for testing cleanup */
 function createFileWithAge(name: string, ageMs: number): void {
   const filePath = path.join(TEST_OUTPUT_DIR, name)
-  fs.writeFileSync(filePath, createTestBuffer())
+  fs.writeFileSync(filePath, createPNGBuffer())
   const mtime = new Date(Date.now() - ageMs)
   fs.utimesSync(filePath, mtime, mtime)
 }
@@ -89,7 +50,7 @@ describe('Screenshot File Operations', () => {
       const result = saveScreenshot({
         outputDir: TEST_OUTPUT_DIR,
         scheduleName: 'Test Schedule',
-        imageBuffer: createTestBuffer(),
+        imageBuffer: createPNGBuffer(),
         format: 'png',
       })
 
@@ -100,7 +61,7 @@ describe('Screenshot File Operations', () => {
       const result = saveScreenshot({
         outputDir: TEST_OUTPUT_DIR,
         scheduleName: 'Test',
-        imageBuffer: createTestBuffer(),
+        imageBuffer: createPNGBuffer(),
         format: 'png',
       })
 
@@ -111,7 +72,7 @@ describe('Screenshot File Operations', () => {
       const result = saveScreenshot({
         outputDir: TEST_OUTPUT_DIR,
         scheduleName: 'Test',
-        imageBuffer: createTestBuffer(),
+        imageBuffer: createPNGBuffer(),
         format: 'jpeg',
       })
 
@@ -122,7 +83,7 @@ describe('Screenshot File Operations', () => {
       const result = saveScreenshot({
         outputDir: TEST_OUTPUT_DIR,
         scheduleName: 'Test',
-        imageBuffer: createTestBuffer(),
+        imageBuffer: createPNGBuffer(),
         format: 'bmp',
       })
 
@@ -133,7 +94,7 @@ describe('Screenshot File Operations', () => {
       const result = saveScreenshot({
         outputDir: TEST_OUTPUT_DIR,
         scheduleName: 'My Test/Schedule!',
-        imageBuffer: createTestBuffer(),
+        imageBuffer: createPNGBuffer(),
         format: 'png',
       })
 
@@ -146,7 +107,7 @@ describe('Screenshot File Operations', () => {
       const result = saveScreenshot({
         outputDir: TEST_OUTPUT_DIR,
         scheduleName: 'Test',
-        imageBuffer: createTestBuffer(),
+        imageBuffer: createPNGBuffer(),
         format: 'png',
       })
 
@@ -155,7 +116,7 @@ describe('Screenshot File Operations', () => {
     })
 
     it('writes correct buffer content', () => {
-      const buffer = createTestBuffer()
+      const buffer = createPNGBuffer()
 
       const result = saveScreenshot({
         outputDir: TEST_OUTPUT_DIR,
@@ -172,7 +133,7 @@ describe('Screenshot File Operations', () => {
       const result = saveScreenshot({
         outputDir: TEST_OUTPUT_DIR,
         scheduleName: 'Test',
-        imageBuffer: createTestBuffer(),
+        imageBuffer: createPNGBuffer(),
         format: 'png',
       })
 
@@ -297,7 +258,7 @@ describe('Screenshot File Operations', () => {
         saveScreenshot({
           outputDir: TEST_OUTPUT_DIR,
           scheduleName: `Schedule ${i}`,
-          imageBuffer: createTestBuffer(),
+          imageBuffer: createPNGBuffer(),
           format: 'png',
         })
       }
