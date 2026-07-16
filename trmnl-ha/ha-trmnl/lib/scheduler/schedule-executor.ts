@@ -125,8 +125,14 @@ export class ScheduleExecutor {
     log.info`Saved: ${outputPath}`
 
     const schedules = await loadSchedules()
-    const maxFiles =
-      schedules.filter((s) => s.enabled).length * SCHEDULER_RETENTION_MULTIPLIER
+    // Floor at 1: "Send Now" runs disabled schedules too, and with zero
+    // enabled schedules maxFiles would be 0 — deleting the capture we just
+    // saved (and 404ing the BYOS URI fetch that points at it).
+    const enabledCount = Math.max(
+      schedules.filter((s) => s.enabled).length,
+      1,
+    )
+    const maxFiles = enabledCount * SCHEDULER_RETENTION_MULTIPLIER
     const { deletedCount } = cleanupOldScreenshots({
       outputDir: this.#outputDir,
       maxFiles,
