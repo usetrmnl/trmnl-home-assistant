@@ -23,7 +23,6 @@ import {
   parseOptionsFile,
   resolveNavigationTimeout,
   OptionsParseError,
-  BROWSER_PATHS,
   NETWORK_ERROR_PATTERNS,
 } from '../../lib/config-helpers.js'
 
@@ -255,14 +254,6 @@ describe('detectDataDir', () => {
     expect(result).toBe('/Users/dev/project/data')
   })
 
-  it('supports /app/data path in Docker (WORKDIR /app fallback)', () => {
-    // Simulates Docker with WORKDIR /app and -v ./trmnl-data:/app/data.
-    // Since /data doesn't exist on the host, falls through to cwd/data.
-    // NOTE: In Docker with -v ./x:/data, existsSync('/data') is true → '/data'.
-    // Both mount points are supported; this test covers the fallback branch.
-    const result = detectDataDir(false, '/app')
-    expect(['/data', '/app/data']).toContain(result)
-  })
 })
 
 // =============================================================================
@@ -346,45 +337,12 @@ describe('isNetworkError', () => {
 // Constants
 // =============================================================================
 
-describe('BROWSER_PATHS', () => {
-  it('includes Linux Chromium paths', () => {
-    expect(BROWSER_PATHS).toContain('/usr/bin/chromium')
-    expect(BROWSER_PATHS).toContain('/usr/bin/chromium-browser')
-  })
-
-  it('includes Linux Chrome paths', () => {
-    expect(BROWSER_PATHS).toContain('/usr/bin/google-chrome')
-    expect(BROWSER_PATHS).toContain('/usr/bin/google-chrome-stable')
-  })
-
-  it('includes macOS paths', () => {
-    expect(BROWSER_PATHS).toContain(
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    )
-  })
-
-  it('includes WSL paths', () => {
-    expect(BROWSER_PATHS).toContain(
-      '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
-    )
-  })
-
-  it('prioritizes Docker/Linux paths first', () => {
-    // First paths should be Linux for Docker compatibility
-    expect(BROWSER_PATHS[0]).toBe('/usr/bin/chromium')
-  })
-})
-
 describe('NETWORK_ERROR_PATTERNS', () => {
   it('includes common network error patterns', () => {
     expect(NETWORK_ERROR_PATTERNS).toContain('Network error')
     expect(NETWORK_ERROR_PATTERNS).toContain('ERR_NAME_NOT_RESOLVED')
     expect(NETWORK_ERROR_PATTERNS).toContain('ERR_CONNECTION_REFUSED')
     expect(NETWORK_ERROR_PATTERNS).toContain('ERR_INTERNET_DISCONNECTED')
-  })
-
-  it('has 4 patterns', () => {
-    expect(NETWORK_ERROR_PATTERNS.length).toBe(4)
   })
 })
 

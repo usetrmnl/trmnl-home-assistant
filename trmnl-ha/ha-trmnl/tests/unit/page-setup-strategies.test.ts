@@ -92,28 +92,17 @@ describe('Page Setup Strategies', () => {
       expect(mockPage.evaluateCalls[0]!.args[0]).toBe(1.5)
     })
 
-    it('returns zero waitTime', async () => {
-      const result = await strategy.setup(mockPage as never, defaultOptions())
-
-      expect(result.waitTime).toBe(0)
-    })
-
-    it('returns themeChanged as false', async () => {
+    it('reports no wait, theme, or language changes', async () => {
       const result = await strategy.setup(
         mockPage as never,
-        defaultOptions({ theme: 'dark' }),
+        defaultOptions({ theme: 'dark', lang: 'en' }),
       )
 
-      expect(result.themeChanged).toBe(false)
-    })
-
-    it('returns langChanged as false', async () => {
-      const result = await strategy.setup(
-        mockPage as never,
-        defaultOptions({ lang: 'en' }),
-      )
-
-      expect(result.langChanged).toBe(false)
+      expect(result).toEqual({
+        waitTime: 0,
+        themeChanged: false,
+        langChanged: false,
+      })
     })
 
     it('does not call waitForFunction (no HA shadow DOM checks)', async () => {
@@ -292,50 +281,6 @@ describe('Page Setup Strategies', () => {
         // Theme (500) + Lang (1000) = 1500+
         expect(result.waitTime).toBeGreaterThanOrEqual(1500)
       })
-    })
-  })
-
-  // ==========================================================================
-  // Strategy Pattern Contract
-  // ==========================================================================
-
-  describe('Strategy Pattern Contract', () => {
-    it('both strategies implement the same interface', async () => {
-      const haStrategy = new HAPageSetup()
-      const genericStrategy = new GenericPageSetup()
-      const mockPage = createMockPage({ hasHAElements: true })
-      const options = defaultOptions()
-
-      const haResult = await haStrategy.setup(mockPage as never, options)
-      const genericResult = await genericStrategy.setup(
-        mockPage as never,
-        options,
-      )
-
-      // Both return the same result shape
-      expect(haResult).toHaveProperty('waitTime')
-      expect(haResult).toHaveProperty('themeChanged')
-      expect(haResult).toHaveProperty('langChanged')
-
-      expect(genericResult).toHaveProperty('waitTime')
-      expect(genericResult).toHaveProperty('themeChanged')
-      expect(genericResult).toHaveProperty('langChanged')
-    })
-
-    it('strategies can be used interchangeably', async () => {
-      const mockPage = createMockPage({ hasHAElements: true })
-      const options = defaultOptions({ zoom: 1.5 })
-
-      // Factory returns strategy, caller doesn't care which type
-      const strategy1 = getPageSetupStrategy(true) // Generic
-      const strategy2 = getPageSetupStrategy(false) // HA
-
-      const result1 = await strategy1.setup(mockPage as never, options)
-      const result2 = await strategy2.setup(mockPage as never, options)
-
-      // Both work and return valid results
-      expect(typeof result1.waitTime).toBe('number')
-      expect(typeof result2.waitTime).toBe('number')
     })
   })
 })

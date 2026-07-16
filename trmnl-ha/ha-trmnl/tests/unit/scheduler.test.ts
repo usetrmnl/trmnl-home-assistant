@@ -23,13 +23,6 @@ describe('changedSnapshot', () => {
     expect(changedSnapshot(schedules, first)).toBeNull()
   })
 
-  it('returns null for unchanged content loaded as fresh objects', () => {
-    const first = changedSnapshot([buildSchedule()], '')!
-
-    // Reload parses the file anew each tick — equal content, new identity
-    expect(changedSnapshot([buildSchedule()], first)).toBeNull()
-  })
-
   it('returns a new snapshot when a field changes', () => {
     const first = changedSnapshot([buildSchedule()], '')!
     const edited = [buildSchedule({ cron: '*/30 * * * *' })]

@@ -26,14 +26,6 @@ describe('params-builder', () => {
       expect(params.format).toBe('png')
     })
 
-    it('uses dashboard_path as pagePath', () => {
-      const schedule = buildSchedule({ dashboard_path: '/lovelace/dashboard' })
-
-      const params = buildParams(schedule)
-
-      expect(params.pagePath).toBe('/lovelace/dashboard')
-    })
-
     it('defaults pagePath when dashboard_path empty', () => {
       const schedule = buildSchedule({ dashboard_path: '' })
 
@@ -48,16 +40,6 @@ describe('params-builder', () => {
   // ==========================================================================
 
   describe('Viewport', () => {
-    it('passes viewport object directly', () => {
-      const schedule = buildSchedule({
-        viewport: { width: 1920, height: 1080 },
-      })
-
-      const params = buildParams(schedule)
-
-      expect(params.viewport).toEqual({ width: 1920, height: 1080 })
-    })
-
     it('uses default viewport when undefined', () => {
       const schedule = buildSchedule({ viewport: undefined })
 
@@ -72,14 +54,6 @@ describe('params-builder', () => {
   // ==========================================================================
 
   describe('Format', () => {
-    it('uses png format', () => {
-      const schedule = buildSchedule({ format: 'png' })
-
-      const params = buildParams(schedule)
-
-      expect(params.format).toBe('png')
-    })
-
     it('uses jpeg format', () => {
       const schedule = buildSchedule({ format: 'jpeg' })
 

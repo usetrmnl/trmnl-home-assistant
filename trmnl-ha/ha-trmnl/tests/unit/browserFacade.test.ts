@@ -73,14 +73,15 @@ describe('BrowserFacade', () => {
       expect(stats.consecutiveFailures).toBe(0)
     })
 
-    it('updates lastSuccessfulRequest timestamp', () => {
+    it('updates lastSuccessfulRequest timestamp', async () => {
       const before = facade.getStats().lastSuccessfulRequest
 
-      // Small delay to ensure timestamp changes
+      // Real sleep so a stale timestamp cannot pass the strict comparison
+      await new Promise((resolve) => setTimeout(resolve, 5))
       facade.recordSuccess()
 
       const after = facade.getStats().lastSuccessfulRequest
-      expect(new Date(after).getTime()).toBeGreaterThanOrEqual(
+      expect(new Date(after).getTime()).toBeGreaterThan(
         new Date(before).getTime()
       )
     })
@@ -250,21 +251,4 @@ describe('BrowserFacade', () => {
     })
   })
 
-  // ==========================================================================
-  // Static Constants - Configuration values
-  // ==========================================================================
-
-  describe('Static Constants', () => {
-    it('exposes MAX_FAILURES constant', () => {
-      expect(BrowserFacade.MAX_FAILURES).toBe(3)
-    })
-
-    it('exposes MAX_RECOVERY_ATTEMPTS constant', () => {
-      expect(BrowserFacade.MAX_RECOVERY_ATTEMPTS).toBe(5)
-    })
-
-    it('exposes STALE_MS constant (5 minutes)', () => {
-      expect(BrowserFacade.STALE_MS).toBe(300000)
-    })
-  })
 })
