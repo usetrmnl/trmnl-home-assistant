@@ -27,7 +27,11 @@ import {
   getBaseUrl as defaultGetBaseUrl,
 } from './scheduler/byos-auth.js'
 import { loadPresets } from '../devices.js'
-import { PALETTE_OPTIONS } from '../const.js'
+import {
+  DATA_DIR,
+  PALETTE_OPTIONS,
+  SCHEDULER_OUTPUT_DIR_NAME,
+} from '../const.js'
 import type { BrowserFacade } from './browserFacade.js'
 import type {
   ScheduleInput,
@@ -56,6 +60,7 @@ const MIME_TYPES: Record<string, string> = {
   gif: 'image/gif',
   svg: 'image/svg+xml',
   ico: 'image/x-icon',
+  bmp: 'image/bmp',
 }
 
 /** Scheduler interface for manual execution */
@@ -80,6 +85,8 @@ export interface HttpRouterDeps {
     password: string,
   ) => Promise<TokenResponse>
   getBaseUrl: (webhookUrl: string) => string
+  /** Directory holding saved scheduler captures, served at /output/ */
+  outputDir: string
 }
 
 const defaultDeps: HttpRouterDeps = {
@@ -89,6 +96,7 @@ const defaultDeps: HttpRouterDeps = {
   deleteSchedule: defaultDeleteSchedule,
   byosLogin: defaultByosLogin,
   getBaseUrl: defaultGetBaseUrl,
+  outputDir: join(DATA_DIR, SCHEDULER_OUTPUT_DIR_NAME),
 }
 
 /**
@@ -192,7 +200,44 @@ export class HttpRouter {
       return this.#handleStaticFile(response, pathname)
     }
 
+    if (pathname.startsWith('/output/')) {
+      return this.#handleOutputFile(response, pathname)
+    }
+
     return false
+  }
+
+  /**
+   * Serves saved scheduler captures so BYOS servers fetch the exact bytes
+   * of a scheduled render instead of triggering a second full render (#74).
+   */
+  async #handleOutputFile(
+    response: ServerResponse,
+    pathname: string,
+  ): Promise<boolean> {
+    const filename = decodeURIComponent(pathname.slice('/output/'.length))
+
+    // Saved filenames are [A-Za-z0-9_] + timestamp + extension; anything
+    // else (path separators, empty) is a traversal attempt.
+    if (!/^[\w.-]+$/.test(filename)) {
+      response.statusCode = 404
+      response.end('Not Found')
+      return true
+    }
+
+    try {
+      const content = await readFile(join(this.#deps.outputDir, filename))
+      const ext = filename.split('.').pop() || ''
+      response.writeHead(200, {
+        'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+        'Content-Length': content.length,
+      })
+      response.end(content)
+    } catch {
+      response.statusCode = 404
+      response.end('Not Found')
+    }
+    return true
   }
 
   #handleHealth(response: ServerResponse): boolean {

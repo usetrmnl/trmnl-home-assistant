@@ -8,7 +8,10 @@
  * @module tests/unit/http-router
  */
 
-import { describe, it, expect, beforeEach, mock } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
 // ---------------------------------------------------------------------------
 // Mock functions — passed via constructor DI (no global mock.module needed)
@@ -1151,6 +1154,64 @@ describe('HttpRouter', () => {
       expect(mockResponse.headers['content-type']).toBe(
         'application/javascript',
       )
+    })
+  })
+
+  describe('GET /output/:filename — saved captures', () => {
+    let outputDir: string
+
+    beforeEach(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trmnl-output-'))
+      router = new HttpRouter(mockFacade, null, { ...mockDeps, outputDir })
+    })
+
+    afterEach(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true })
+    })
+
+    const routeTo = async (pathname: string) => {
+      await router.route(
+        mockRequest as unknown as IncomingMessage,
+        mockResponse as unknown as ServerResponse,
+        new URL(`http://localhost${pathname}`),
+      )
+    }
+
+    it('serves a saved capture with its image content type', async () => {
+      const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+      fs.writeFileSync(
+        path.join(outputDir, 'Terminus_2026-07-07T07-28-07-051Z.png'),
+        bytes,
+      )
+
+      await routeTo('/output/Terminus_2026-07-07T07-28-07-051Z.png')
+
+      expect(mockResponse.statusCode).toBe(200)
+      expect(mockResponse.headers['content-type']).toBe('image/png')
+      expect(Buffer.from(mockResponse.body)).toEqual(bytes)
+    })
+
+    it('serves bmp captures with image/bmp', async () => {
+      fs.writeFileSync(path.join(outputDir, 'Screen_1.bmp'), Buffer.from([1]))
+
+      await routeTo('/output/Screen_1.bmp')
+
+      expect(mockResponse.headers['content-type']).toBe('image/bmp')
+    })
+
+    it('returns 404 for a missing file', async () => {
+      await routeTo('/output/nope.png')
+
+      expect(mockResponse.statusCode).toBe(404)
+    })
+
+    it('rejects path traversal via encoded separators', async () => {
+      fs.writeFileSync(path.join(os.tmpdir(), 'trmnl-secret.txt'), 'secret')
+
+      await routeTo('/output/%2e%2e%2ftrmnl-secret.txt')
+
+      expect(mockResponse.statusCode).toBe(404)
+      expect(mockResponse.body).not.toContain('secret')
     })
   })
 })
