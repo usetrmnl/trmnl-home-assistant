@@ -21,7 +21,7 @@ import {
   isRefreshable,
   login,
 } from '../../lib/scheduler/byos-auth.js'
-import { mockFetch, restoreFetch } from '../helpers/fetch-mock.js'
+import { captureFetch, mockFetch, restoreFetch } from '../helpers/fetch-mock.js'
 import type { ByosAuthConfig, Schedule } from '../../types/domain.js'
 
 afterAll(restoreFetch)
@@ -208,6 +208,27 @@ describe('byos-auth', () => {
       const result = await getValidAccessToken('https://host.com/api', auth)
 
       expect(result).toBe('valid-token')
+    })
+
+    it('posts the refresh request to /api/jwt with the stored credentials', async () => {
+      const auth: ByosAuthConfig = {
+        enabled: true,
+        access_token: 'old-token',
+        refresh_token: 'my-refresh',
+        obtained_at: Date.now() - 30 * 60 * 1000, // Expired — forces refresh
+      }
+      const requests = captureFetch()
+
+      await getValidAccessToken('https://host.com/api', auth)
+
+      expect(requests[0]!.url).toBe('https://host.com/api/jwt')
+      expect(requests[0]!.init).toMatchObject({
+        method: 'POST',
+        headers: { Authorization: 'old-token' },
+      })
+      expect(JSON.parse(requests[0]!.init?.body as string)).toEqual({
+        refresh_token: 'my-refresh',
+      })
     })
 
     it('refreshes token when expired and returns new token', async () => {

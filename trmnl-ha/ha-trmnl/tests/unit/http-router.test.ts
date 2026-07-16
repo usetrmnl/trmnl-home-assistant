@@ -34,6 +34,8 @@ const mockUpdateSchedule = mock(
 )
 const mockDeleteSchedule = mock(async (_id: unknown) => true)
 
+const mockReplaceAllSchedules = mock(async (schedules: unknown[]) => schedules)
+
 const mockByosLogin = mock(async () => ({
   access_token: 'test-access',
   refresh_token: 'test-refresh',
@@ -52,6 +54,7 @@ const mockDeps = {
   createSchedule: mockCreateSchedule,
   updateSchedule: mockUpdateSchedule,
   deleteSchedule: mockDeleteSchedule,
+  replaceAllSchedules: mockReplaceAllSchedules,
   byosLogin: mockByosLogin,
   getBaseUrl: (url: string) => new URL(url).origin,
 } as unknown as HttpRouterDeps
@@ -170,6 +173,9 @@ describe('HttpRouter', () => {
         }) as Record<string, unknown> | null,
     )
     mockDeleteSchedule.mockImplementation(async (_id: unknown) => true)
+    mockReplaceAllSchedules.mockImplementation(
+      async (schedules: unknown[]) => schedules,
+    )
     mockByosLogin.mockImplementation(async () => ({
       access_token: 'test-access',
       refresh_token: 'test-refresh',
@@ -591,6 +597,76 @@ describe('HttpRouter', () => {
       expect(mockResponse.statusCode).toBe(200)
       expect(mockResponse.headers['content-type']).toBe('application/json')
       expect(Array.isArray(JSON.parse(mockResponse.body as string))).toBe(true)
+    })
+  })
+
+  // ==========================================================================
+  // Schedules Import - POST /api/schedules/import
+  // ==========================================================================
+
+  describe('POST /api/schedules/import', () => {
+    const importUrl = new URL('http://localhost/api/schedules/import')
+
+    it('replaces all schedules and returns the count', async () => {
+      const imported = [{ name: 'One' }, { name: 'Two' }]
+      mockRequest = createRequestWithBody('POST', JSON.stringify(imported))
+
+      await router.route(
+        mockRequest as unknown as IncomingMessage,
+        mockResponse as unknown as ServerResponse,
+        importUrl,
+      )
+
+      expect(mockResponse.statusCode).toBe(200)
+      expect(mockReplaceAllSchedules).toHaveBeenCalledWith(imported)
+      expect(JSON.parse(mockResponse.body as string)).toEqual({
+        success: true,
+        count: 2,
+      })
+    })
+
+    it('returns 405 for non-POST methods', async () => {
+      mockRequest = createRequest('GET')
+
+      await router.route(
+        mockRequest as unknown as IncomingMessage,
+        mockResponse as unknown as ServerResponse,
+        importUrl,
+      )
+
+      expect(mockResponse.statusCode).toBe(405)
+    })
+
+    it('returns 400 when the body is not a JSON array', async () => {
+      mockReplaceAllSchedules.mockClear()
+      mockRequest = createRequestWithBody('POST', JSON.stringify({ a: 1 }))
+
+      await router.route(
+        mockRequest as unknown as IncomingMessage,
+        mockResponse as unknown as ServerResponse,
+        importUrl,
+      )
+
+      expect(mockResponse.statusCode).toBe(400)
+      expect(mockReplaceAllSchedules).not.toHaveBeenCalled()
+    })
+
+    it('returns 400 when the store rejects the import', async () => {
+      mockReplaceAllSchedules.mockImplementation(async () => {
+        throw new Error('Invalid schedule: missing name')
+      })
+      mockRequest = createRequestWithBody('POST', JSON.stringify([{}]))
+
+      await router.route(
+        mockRequest as unknown as IncomingMessage,
+        mockResponse as unknown as ServerResponse,
+        importUrl,
+      )
+
+      expect(mockResponse.statusCode).toBe(400)
+      expect(JSON.parse(mockResponse.body as string)).toEqual({
+        error: 'Invalid schedule: missing name',
+      })
     })
   })
 

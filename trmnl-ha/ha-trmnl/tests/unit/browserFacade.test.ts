@@ -6,7 +6,7 @@
  * @module tests/unit/browserFacade
  */
 
-import { describe, it, expect, beforeEach } from 'bun:test'
+import { describe, it, expect, beforeEach, setSystemTime } from 'bun:test'
 import {
   BrowserFacade,
   type BrowserInstance,
@@ -148,6 +148,18 @@ describe('BrowserFacade', () => {
 
       expect(result).toEqual({ healthy: true })
     })
+
+    it('returns unhealthy when stale with recorded failures', () => {
+      facade.recordFailure()
+
+      // #lastSuccess isn't injectable — age it by faking the clock instead
+      setSystemTime(new Date(Date.now() + BrowserFacade.STALE_MS + 1000))
+      const result = facade.checkHealth()
+      setSystemTime()
+
+      expect(result.healthy).toBe(false)
+      expect(result.reason).toContain('No success in')
+    })
   })
 
   // ==========================================================================
@@ -155,6 +167,25 @@ describe('BrowserFacade', () => {
   // ==========================================================================
 
   describe('recover', () => {
+    it('does not start a second recovery while one is in flight', async () => {
+      let initCalls = 0
+      const slowBrowser: BrowserInstance = {
+        cleanup: async () => {},
+        // Slow enough that the second recover() sees the first in flight
+        triggerInit: async () => {
+          initCalls++
+          await new Promise((r) => setTimeout(r, 50))
+        },
+        isConnected: () => true,
+      }
+      const slowFacade = new BrowserFacade(slowBrowser, FAST_BACKOFF)
+
+      await Promise.all([slowFacade.recover(), slowFacade.recover()])
+
+      expect(initCalls).toBe(1)
+      expect(slowFacade.getStats().totalRecoveries).toBe(1)
+    })
+
     it('calls browser cleanup and triggerInit', async () => {
       await facade.recover()
 

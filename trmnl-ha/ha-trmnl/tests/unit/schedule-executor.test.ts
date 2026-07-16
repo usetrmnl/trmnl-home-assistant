@@ -12,15 +12,40 @@
  * @module tests/unit/schedule-executor
  */
 
-import { describe, it, expect, beforeEach, afterAll } from 'bun:test'
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  afterAll,
+  mock,
+  spyOn,
+} from 'bun:test'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { ScheduleExecutor } from '../../lib/scheduler/schedule-executor.js'
-import { captureFetch, restoreFetch } from '../helpers/fetch-mock.js'
-import { buildByosSchedule } from '../helpers/schedule-fixtures.js'
+import * as sleepModule from '../../lib/sleep.js'
+import {
+  captureFetch,
+  mockFetch,
+  restoreFetch,
+} from '../helpers/fetch-mock.js'
+import {
+  buildSchedule,
+  buildByosSchedule,
+} from '../helpers/schedule-fixtures.js'
 
 afterAll(restoreFetch)
+
+/** Executor writing into a fresh temp dir */
+function createExecutor(
+  screenshotFn: () => Promise<Buffer>,
+): ScheduleExecutor {
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trmnl-executor-'))
+  return new ScheduleExecutor(screenshotFn, outputDir)
+}
 
 describe('ScheduleExecutor — BYOS URI delivery', () => {
   let outputDir: string
@@ -68,5 +93,85 @@ describe('ScheduleExecutor — BYOS URI delivery', () => {
 
     expect(payload.screen.uri).toBeUndefined()
     expect(payload.screen.data).toBeDefined()
+  })
+})
+
+describe('ScheduleExecutor — network retry', () => {
+  let sleepSpy: { mockRestore: () => void }
+
+  beforeEach(() => {
+    // Skip the real 5s SCHEDULER_RETRY_DELAY_MS between attempts
+    sleepSpy = spyOn(sleepModule, 'sleep').mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    sleepSpy.mockRestore()
+  })
+
+  it('retries after a network error and succeeds', async () => {
+    let attempts = 0
+    const executor = createExecutor(async () => {
+      attempts++
+      if (attempts === 1) throw new Error('net::ERR_CONNECTION_REFUSED')
+      return Buffer.from('fake-png')
+    })
+
+    const result = await executor.call(buildSchedule())
+
+    expect(result.success).toBe(true)
+    expect(attempts).toBe(2)
+  })
+
+  it('throws once retries are exhausted', async () => {
+    let attempts = 0
+    const executor = createExecutor(async () => {
+      attempts++
+      throw new Error('net::ERR_CONNECTION_REFUSED')
+    })
+
+    await expect(executor.call(buildSchedule())).rejects.toThrow(
+      /ERR_CONNECTION_REFUSED/,
+    )
+    expect(attempts).toBe(3)
+  })
+})
+
+describe('ScheduleExecutor — webhook failure reporting', () => {
+  const webhookSchedule = () =>
+    buildSchedule({ webhook_url: 'https://byos.example.com/api/screens' })
+
+  it('reports statusCode and retryAfterMs from a WebhookHttpError', async () => {
+    mockFetch({
+      ok: false,
+      status: 429,
+      statusText: 'Too Many Requests',
+      headers: new Headers({ 'Retry-After': '60' }),
+    })
+    const executor = createExecutor(async () => Buffer.from('fake-png'))
+
+    const result = await executor.call(webhookSchedule())
+
+    expect(result.webhook).toMatchObject({
+      attempted: true,
+      success: false,
+      statusCode: 429,
+      retryAfterMs: 60000,
+    })
+  })
+
+  it('scrapes the status from a plain error message', async () => {
+    globalThis.fetch = mock(async () => {
+      throw new Error('HTTP 503: upstream hiccup')
+    }) as unknown as typeof fetch
+    const executor = createExecutor(async () => Buffer.from('fake-png'))
+
+    const result = await executor.call(webhookSchedule())
+
+    expect(result.webhook).toMatchObject({
+      attempted: true,
+      success: false,
+      statusCode: 503,
+    })
+    expect(result.webhook!.retryAfterMs).toBeUndefined()
   })
 })

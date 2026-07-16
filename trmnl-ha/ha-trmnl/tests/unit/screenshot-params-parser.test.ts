@@ -579,6 +579,76 @@ describe('ScreenshotParamsParser', () => {
       expect(result!.dithering!.whiteLevel).toBe(100)
     })
 
+    it('sets levelsEnabled with parsed levels when the flag is present', () => {
+      const url = createUrl('/lovelace/0', {
+        viewport: '800x600',
+        dithering: true,
+        levels_enabled: true,
+        black_level: '10',
+        white_level: '90',
+      })
+
+      const result = parser.call(url)
+
+      expect(result!.dithering).toMatchObject({
+        levelsEnabled: true,
+        blackLevel: 10,
+        whiteLevel: 90,
+      })
+    })
+
+    it('parses a valid bit depth', () => {
+      const url = createUrl('/lovelace/0', {
+        viewport: '800x600',
+        dithering: true,
+        bit_depth: '4',
+      })
+
+      const result = parser.call(url)
+
+      expect(result!.dithering!.bitDepth).toBe(4)
+    })
+
+    it('drops invalid bit depths', () => {
+      const forBitDepth = (bit_depth: string) =>
+        parser.call(
+          createUrl('/lovelace/0', {
+            viewport: '800x600',
+            dithering: true,
+            bit_depth,
+          }),
+        )!.dithering!.bitDepth
+
+      expect(forBitDepth('3')).toBeUndefined()
+      expect(forBitDepth('abc')).toBeUndefined()
+    })
+
+    it('parses an in-range compression level', () => {
+      const url = createUrl('/lovelace/0', {
+        viewport: '800x600',
+        dithering: true,
+        compression_level: '6',
+      })
+
+      const result = parser.call(url)
+
+      expect(result!.dithering!.compressionLevel).toBe(6)
+    })
+
+    it('drops out-of-range compression levels', () => {
+      const forCompression = (compression_level: string) =>
+        parser.call(
+          createUrl('/lovelace/0', {
+            viewport: '800x600',
+            dithering: true,
+            compression_level,
+          }),
+        )!.dithering!.compressionLevel
+
+      expect(forCompression('0')).toBeUndefined()
+      expect(forCompression('10')).toBeUndefined()
+    })
+
     it('defaults normalize to true when no_normalize is absent', () => {
       const url = createUrl('/lovelace/0', {
         viewport: '800x600',
