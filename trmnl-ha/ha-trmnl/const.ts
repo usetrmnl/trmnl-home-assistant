@@ -132,6 +132,10 @@ const options: Options = {
     process.env['TIMESTAMP_OVERLAY'] !== undefined
       ? process.env['TIMESTAMP_OVERLAY'] === 'true'
       : fileOptions.timestamp_overlay,
+  timestamp_12h:
+    process.env['TIMESTAMP_12H'] !== undefined
+      ? process.env['TIMESTAMP_12H'] === 'true'
+      : fileOptions.timestamp_12h,
   debug_logging:
     process.env['DEBUG_LOGGING'] !== undefined
       ? process.env['DEBUG_LOGGING'] === 'true'
@@ -292,6 +296,13 @@ export const keepBrowserOpen: boolean = options.keep_browser_open ?? false
  * TIMESTAMP_OVERLAY environment variable.
  */
 export const TIMESTAMP_OVERLAY: boolean = options.timestamp_overlay ?? false
+
+/**
+ * Render the timestamp overlay in 12-hour format (e.g. "2026-07-16 2:30 PM")
+ * instead of the 24-hour default. Set via the timestamp_12h add-on option or
+ * the TIMESTAMP_12H environment variable.
+ */
+export const TIMESTAMP_12H: boolean = options.timestamp_12h ?? false
 
 /**
  * Enable debug logging (from HA add-on configuration)

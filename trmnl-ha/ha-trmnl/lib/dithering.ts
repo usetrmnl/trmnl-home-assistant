@@ -16,6 +16,7 @@ const gm = gmLib.subClass({ imageMagick: true })
 import {
   COLOR_PALETTES,
   GRAYSCALE_PALETTES,
+  TIMESTAMP_12H,
   VALID_ROTATIONS,
 } from '../const.js'
 import { FloydSteinbergStrategy } from './dithering/floyd-steinberg-strategy.js'
@@ -352,12 +353,20 @@ export async function processImage(
   return buffer
 }
 
-/** Formats capture time as "YYYY-MM-DD HH:MM" in the configured timezone */
-function formatTimestamp(date: Date): string {
-  return date.toLocaleString('sv-SE', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  })
+/**
+ * Formats capture time as "YYYY-MM-DD HH:MM" (24h default) or
+ * "YYYY-MM-DD H:MM AM/PM" (timestamp_12h option) in the configured timezone.
+ * Exported for tests; production callers use the configured default.
+ */
+export function formatTimestamp(
+  date: Date,
+  hour12: boolean = TIMESTAMP_12H,
+): string {
+  const datePart = date.toLocaleDateString('sv-SE')
+  const timePart = hour12
+    ? date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    : date.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })
+  return `${datePart} ${timePart}`
 }
 
 /**
