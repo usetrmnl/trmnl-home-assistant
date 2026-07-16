@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Orphaned Chromium/crashpad processes are now reaped: the container runs under `tini` as PID 1, so periodic browser restarts no longer accumulate zombie processes (#72)
+
 ## [0.9.0] - 2026-06-24
 
 ### Added

@@ -7,7 +7,7 @@ image: ghcr.io/usetrmnl/trmnl-ha-{arch}
 # NOTE: Uncomment after setting up Codenotary signing in CI
 # codenotary: dev@usetrmnl.com
 homeassistant_api: true
-init: false
+init: false # Image ships its own init (tini) to reap orphaned Chromium children (#72)
 apparmor: false # TODO: Enable after apparmor is tested. Disabling for now to resolve "audit backlog limit exceeded" warnings
 watchdog: "http://[HOST]:10000/health"
 arch:

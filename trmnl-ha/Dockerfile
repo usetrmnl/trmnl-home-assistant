@@ -53,6 +53,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     # Minimal utilities for health checks and runtime
     curl \
     ca-certificates \
+    # Init process to reap orphaned Chromium children (zombie processes)
+    tini \
     # font support for emoji
     fonts-noto-color-emoji \
     # CJK font support for international dashboards
@@ -124,6 +126,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:10000/health || exit 1
 
-# Use entrypoint for setup
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# Use entrypoint for setup, wrapped in tini so PID 1 reaps orphaned
+# Chromium/crashpad children (Bun as PID 1 never wait()s them — see #72)
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 CMD ["bun", "run", "main.js"]
