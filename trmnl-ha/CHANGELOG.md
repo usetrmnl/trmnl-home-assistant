@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Orphaned Chromium/crashpad processes are now reaped: the container runs under `tini` as PID 1, so periodic browser restarts no longer accumulate zombie processes (#72)
 
+### Changed
+
+- Webhook connection failures now name the unreachable host and point at the usual culprit — local hostnames that don't resolve inside the add-on container (#71)
+
 ## [0.9.0] - 2026-06-24
 
 ### Added
