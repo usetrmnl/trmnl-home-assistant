@@ -7,14 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+### Added
 
-- Orphaned Chromium/crashpad processes are now reaped: the container runs under `tini` as PID 1, so periodic browser restarts no longer accumulate zombie processes (#72)
+- `timestamp_12h` add-on option (`TIMESTAMP_12H` environment variable in standalone) to render the capture-time overlay in 12-hour AM/PM format instead of the 24-hour default (#68)
 
 ### Changed
 
 - Webhook connection failures now name the unreachable host and point at the usual culprit — local hostnames that don't resolve inside the add-on container (#71)
 - The preview's over-50KB warning is now spelled out next to the file size instead of hiding in a hover tooltip — oversized images can crash-loop TRMNL devices (#70)
+
+### Fixed
+
+- Orphaned Chromium/crashpad processes are now reaped: the container runs under `tini` as PID 1, so periodic browser restarts no longer accumulate zombie processes (#72)
+- A failed BYOS token refresh no longer discards the stored access token, which turned a refresh 400 (Terminus rotates refresh tokens on use) into an unauthenticated push and a 401 on nearly every scheduled cycle. The push now falls back to the stored token, which stock Terminus keeps valid (#75)
+- BYOS URI delivery no longer renders every dashboard twice: the URI sent to the BYOS server now points at the capture saved by that run (served at `/output/`), instead of a live screenshot endpoint that triggered a second full Chromium render when fetched (#74)
+- Dashboard paths with query params like Kiosk Mode's `?kiosk` no longer fail with HTTP 400: previews join system params with `&` instead of a second `?`, and unknown query params on screenshot requests are forwarded to the Home Assistant page URL instead of being dropped (#44)
+- WebSocket-driven cards (weather forecasts, render templates) intermittently rendered empty when the HA frontend lost its `subscribeMessage` registration race and discarded the subscription data. Navigation now watches for the orphaned-subscription console warning and soft-retries by re-mounting the panel on the live page, preserving the warm WebSocket connection that wins the race — thanks @michael-fritzsch (#55)
+- "Send Now" on a disabled schedule no longer deletes the capture it just saved when no other schedules are enabled — the retention limit previously computed to zero files
 
 ## [0.9.0] - 2026-06-24
 
