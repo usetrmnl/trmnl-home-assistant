@@ -220,11 +220,23 @@ export async function uploadToWebhook(
     }
   }
 
-  const response = await fetch(webhookUrl, {
-    method: 'POST',
-    headers,
-    body: fetchBody,
-  })
+  let response: Response
+  try {
+    response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers,
+      body: fetchBody,
+    })
+  } catch (err) {
+    // Bun's raw connect errors ("Unable to connect...") don't say which host
+    // failed or why. Most reports trace to hostnames that don't resolve from
+    // inside the add-on container (#71), so name the host and the likely fix.
+    const { hostname } = new URL(webhookUrl)
+    throw new Error(
+      `Could not reach ${hostname}: ${(err as Error).message}. ` +
+        `If ${hostname} is a local hostname, it may not resolve inside the add-on container — try the server's IP address instead.`,
+    )
+  }
 
   const responseText = await response.text()
 
