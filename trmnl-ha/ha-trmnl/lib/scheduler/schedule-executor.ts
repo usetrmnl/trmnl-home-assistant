@@ -13,8 +13,6 @@ import {
   WebhookHttpError,
   buildParams,
 } from './services.js'
-import { resolveScreenshotTarget } from '../../html/shared/screenshot-target.js'
-import { buildScreenshotParams } from '../../html/shared/build-screenshot-params.js'
 import { sleep } from '../sleep.js'
 import {
   SCHEDULER_MAX_RETRIES,
@@ -98,7 +96,7 @@ export class ScheduleExecutor {
   async #executeOnce(schedule: Schedule): Promise<ExecutionResult> {
     const params = buildParams(schedule)
     const imageBuffer = await this.#screenshotFn(params)
-    const savedPath = await this.#saveAndCleanup(
+    const { savedPath, filename } = await this.#saveAndCleanup(
       schedule,
       imageBuffer,
       params.format,
@@ -107,6 +105,7 @@ export class ScheduleExecutor {
       schedule,
       imageBuffer,
       params.format,
+      filename,
     )
     return { success: true, savedPath, webhook }
   }
@@ -116,8 +115,8 @@ export class ScheduleExecutor {
     schedule: Schedule,
     imageBuffer: Buffer,
     format: string,
-  ): Promise<string> {
-    const { outputPath } = saveScreenshot({
+  ): Promise<{ savedPath: string; filename: string }> {
+    const { outputPath, filename } = saveScreenshot({
       outputDir: this.#outputDir,
       scheduleName: schedule.name,
       imageBuffer,
@@ -136,28 +135,24 @@ export class ScheduleExecutor {
 
     if (deletedCount > 0)
       log.debug`Cleanup: Deleted ${deletedCount} old file(s)`
-    return outputPath
+    return { savedPath: outputPath, filename }
   }
 
-  /** Builds the screenshot endpoint URL for BYOS URI mode. Returns undefined when URI mode is not applicable. */
-  #buildScreenshotUrl(schedule: Schedule): string | undefined {
+  /**
+   * Builds the URL for BYOS URI mode, pointing at the capture that was just
+   * saved. The BYOS server used to be sent a live screenshot-endpoint URL,
+   * so its fetch triggered a second full render per update (#74).
+   * Returns undefined when URI mode is not applicable.
+   */
+  #buildScreenshotUrl(
+    schedule: Schedule,
+    filename: string,
+  ): string | undefined {
     const byos = schedule.webhook_format?.byosConfig
     if (!byos?.addon_base_url) return undefined
     if (byos.delivery_mode === 'data') return undefined
 
-    const target = resolveScreenshotTarget(schedule)
-    const params = buildScreenshotParams(schedule)
-
-    // NOTE: In generic mode the router serves the UI at `/` unless `url` is
-    // present in the query. Thread target_url through so Terminus's fetch
-    // hits the screenshot handler instead of the UI HTML.
-    if (!target.isHAMode && target.fullUrl) {
-      params.append('url', target.fullUrl)
-    }
-
-    const path = target.path.replace(/^\//, '')
-
-    return `${byos.addon_base_url.replace(/\/+$/, '')}/${path}?${params.toString()}`
+    return `${byos.addon_base_url.replace(/\/+$/, '')}/output/${encodeURIComponent(filename)}`
   }
 
   /** Uploads to webhook if configured, returns result for UI feedback */
@@ -165,11 +160,12 @@ export class ScheduleExecutor {
     schedule: Schedule,
     imageBuffer: Buffer,
     format: string,
+    filename: string,
   ): Promise<WebhookResult | undefined> {
     if (!schedule.webhook_url) return undefined
 
     const webhookUrl = schedule.webhook_url
-    const screenshotUrl = this.#buildScreenshotUrl(schedule)
+    const screenshotUrl = this.#buildScreenshotUrl(schedule, filename)
 
     try {
       const result = await uploadToWebhook({
