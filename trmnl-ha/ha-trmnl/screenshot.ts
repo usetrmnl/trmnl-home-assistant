@@ -50,6 +50,7 @@ import type {
   DitheringConfig,
 } from './types/domain.js'
 import { screenshotLogger, browserLogger } from './lib/logger.js'
+import { recordTiming, timed } from './lib/metrics.js'
 
 const log = screenshotLogger()
 const browserLog = browserLogger()
@@ -287,12 +288,14 @@ export class Browser {
         // - Self-signed certificates
         // - Internal domains with custom CAs
         // - Let's Encrypt certs when CA store is incomplete in Docker
-        const browser = await this.#deps.launchBrowser({
-          headless: 'shell',
-          executablePath: this.#deps.chromiumExecutable,
-          args: PUPPETEER_ARGS,
-          acceptInsecureCerts: true,
-        })
+        const browser = await timed('browser.launch', () =>
+          this.#deps.launchBrowser({
+            headless: 'shell',
+            executablePath: this.#deps.chromiumExecutable,
+            args: PUPPETEER_ARGS,
+            acceptInsecureCerts: true,
+          }),
+        )
 
         // Monitor browser process death
         browser.on('disconnected', () => {
@@ -309,7 +312,7 @@ export class Browser {
 
     // Create fresh page
     try {
-      const page = await this.#browser.newPage()
+      const page = await timed('browser.newPage', () => this.#browser!.newPage())
       this.#setupPageLogging(page)
       this.#page = page
       return this.#page
@@ -449,10 +452,12 @@ export class Browser {
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         const orphaned = await this.#runNavigationAttempt(params, attempt === 1)
         if (!orphaned) {
+          recordTiming('nav.total', Date.now() - start)
           return { time: Date.now() - start }
         }
         if (attempt === MAX_ATTEMPTS) {
           log.warn`HA WS subscription race persisted after ${MAX_ATTEMPTS} attempts; some card data may be missing from this screenshot`
+          recordTiming('nav.total', Date.now() - start)
           return { time: Date.now() - start }
         }
         log.info`HA WS subscription race detected on attempt ${attempt}; soft-retrying via in-page router transition`
@@ -531,11 +536,13 @@ export class Browser {
           authStorage,
           this.#homeAssistantUrl,
         )
-        await navigateCmd.call(pagePath, targetUrl)
+        await timed('nav.goto', () => navigateCmd.call(pagePath, targetUrl))
       } else {
         // Warm retry: re-mount the panel via SPA pushState on the live page.
         // WS connection, JS heap, and auth all carry over from attempt 1.
-        await this.#softReroute(page, pagePath, targetUrl)
+        await timed('nav.softReroute', () =>
+          this.#softReroute(page, pagePath, targetUrl),
+        )
       }
 
       // Check if we landed on HA login/auth page (indicates invalid token)
@@ -551,15 +558,17 @@ export class Browser {
       // Apply page setup strategy (HA vs Generic have different requirements)
       const isGenericUrl = !!targetUrl
       const setupStrategy = getPageSetupStrategy(isGenericUrl)
-      const setupResult = await setupStrategy.setup(page, {
-        zoom,
-        theme,
-        lang,
-        dark,
-        lastTheme: this.#lastRequestedTheme,
-        lastLang: this.#lastRequestedLang,
-        lastDarkMode: this.#lastRequestedDarkMode,
-      })
+      const setupResult = await timed('nav.setup', () =>
+        setupStrategy.setup(page, {
+          zoom,
+          theme,
+          lang,
+          dark,
+          lastTheme: this.#lastRequestedTheme,
+          lastLang: this.#lastRequestedLang,
+          lastDarkMode: this.#lastRequestedDarkMode,
+        }),
+      )
 
       if (setupResult.langChanged) this.#lastRequestedLang = lang
       if (setupResult.themeChanged) {
@@ -578,7 +587,9 @@ export class Browser {
         if (setupResult.themeChanged || setupResult.langChanged) {
           log.debug`Waiting for network idle after page setup changes`
           try {
-            await page.waitForNetworkIdle({ idleTime: 500, concurrency: 2 })
+            await timed('nav.waitNetworkIdle', () =>
+              page.waitForNetworkIdle({ idleTime: 500, concurrency: 2 }),
+            )
           } catch (_err) {
             log.debug`Network idle wait timed out after page setup`
           }
@@ -587,24 +598,26 @@ export class Browser {
         // Stage 2: Wait for HA entity data to load (HA pages only)
         if (!isGenericUrl) {
           const hassReadyCmd = new WaitForHassReady(page)
-          await hassReadyCmd.call()
+          await timed('nav.waitHassReady', () => hassReadyCmd.call())
         }
 
         // Stage 3: Wait for loading indicators to clear
         const loadingCmd = new WaitForLoadingComplete(page, 15000)
-        const loadingWait = await loadingCmd.call()
+        const loadingWait = await timed('nav.waitLoading', () =>
+          loadingCmd.call(),
+        )
         log.debug`Loading indicators cleared after ${loadingWait}ms`
 
         // Stage 4: Dismiss notification toasts (HA pages only)
         if (!isGenericUrl) {
           const dismissCmd = new DismissToasts(page)
-          const count = await dismissCmd.call()
+          const count = await timed('nav.dismissToasts', () => dismissCmd.call())
           if (count > 0) log.debug`Dismissed ${count} notification toast(s)`
         }
 
         // Stage 5: Wait for rendering pipeline to flush
         const paintCmd = new WaitForPaintStability(page)
-        await paintCmd.call()
+        await timed('nav.waitPaint', () => paintCmd.call())
       }
 
       return orphanDetected
@@ -696,29 +709,34 @@ export class Browser {
       const page = await this.#getPage()
 
       // Capture screenshot (use crop clip if specified, otherwise full viewport)
-      const screenshotData = await page.screenshot({
-        type: 'png',
-        ...(crop && crop.width > 0 && crop.height > 0 && {
-          clip: {
-            x: crop.x,
-            y: crop.y,
-            width: crop.width,
-            height: crop.height,
-          },
+      const screenshotData = await timed('capture.screenshot', () =>
+        page.screenshot({
+          type: 'png',
+          ...(crop && crop.width > 0 && crop.height > 0 && {
+            clip: {
+              x: crop.x,
+              y: crop.y,
+              width: crop.width,
+              height: crop.height,
+            },
+          }),
         }),
-      })
+      )
 
       // Process image with dithering and format conversion
       const startProcess = Date.now()
-      const image = await this.#deps.processImage(Buffer.from(screenshotData), {
-        format,
-        rotate,
-        invert,
-        dithering,
-        timestamp: timestamp || TIMESTAMP_OVERLAY,
-      })
+      const image = await timed('capture.process', () =>
+        this.#deps.processImage(Buffer.from(screenshotData), {
+          format,
+          rotate,
+          invert,
+          dithering,
+          timestamp: timestamp || TIMESTAMP_OVERLAY,
+        }),
+      )
       log.debug`Image processing took ${Date.now() - startProcess}ms`
 
+      recordTiming('capture.total', Date.now() - start)
       return { image, time: Date.now() - start }
     } catch (err) {
       if (

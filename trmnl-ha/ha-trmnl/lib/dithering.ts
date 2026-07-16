@@ -20,6 +20,7 @@ import {
   VALID_ROTATIONS,
 } from '../const.js'
 import { FloydSteinbergStrategy } from './dithering/floyd-steinberg-strategy.js'
+import { timed } from './metrics.js'
 import { OrderedStrategy } from './dithering/ordered-strategy.js'
 import { ThresholdStrategy } from './dithering/threshold-strategy.js'
 import type {
@@ -327,27 +328,33 @@ export async function processImage(
   // Annotate before dithering so the text survives 1-bit palettes and
   // format conversion like any other page content
   if (timestamp) {
-    buffer = await annotateTimestamp(buffer)
+    buffer = await timed('dither.annotate', () => annotateTimestamp(buffer))
   }
 
   // Apply dithering if enabled (includes format conversion in single pipeline)
   if (dithering?.enabled) {
-    buffer = await applyDithering(buffer, {
-      ...dithering,
-      invert: invert || false,
-      rotate: rotate || 0,
-      format,
-    })
+    buffer = await timed('dither.apply', () =>
+      applyDithering(buffer, {
+        ...dithering,
+        invert: invert || false,
+        rotate: rotate || 0,
+        format,
+      }),
+    )
   } else if (rotate || invert) {
     // Rotate and/or invert without dithering
-    buffer = await applySimpleProcessing(buffer, { rotate, invert })
+    buffer = await timed('dither.simple', () =>
+      applySimpleProcessing(buffer, { rotate, invert }),
+    )
     // Convert format if needed
     if (format !== 'png') {
-      buffer = await convertToFormat(buffer, format)
+      buffer = await timed('dither.convert', () =>
+        convertToFormat(buffer, format),
+      )
     }
   } else if (format !== 'png') {
     // Just format conversion, no processing
-    buffer = await convertToFormat(buffer, format)
+    buffer = await timed('dither.convert', () => convertToFormat(buffer, format))
   }
 
   return buffer

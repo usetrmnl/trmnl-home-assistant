@@ -41,6 +41,7 @@ import { HttpRouter } from './lib/http-router.js'
 import { ScreenshotParamsParser } from './lib/screenshot-params-parser.js'
 import type { ScreenshotParams, ImageFormat } from './types/domain.js'
 import { initializeLogging, appLogger, browserLogger } from './lib/logger.js'
+import { recordTiming } from './lib/metrics.js'
 
 // Initialize logging before anything else
 await initializeLogging()
@@ -236,6 +237,7 @@ class RequestHandler {
       if (!image) return
 
       const elapsed = Date.now() - start.getTime()
+      recordTiming('request.total', elapsed)
       log.info`Screenshot complete: ${image.length} bytes in ${elapsed}ms`
 
       // Warn if screenshot is suspiciously small (likely blank/login page)
