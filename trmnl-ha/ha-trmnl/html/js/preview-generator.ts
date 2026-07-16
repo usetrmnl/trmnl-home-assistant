@@ -111,11 +111,15 @@ export class PreviewGenerator {
       loadTime.textContent = `${Math.round(loadTimeMs)}ms`
     }
 
-    // Display file size with warning if over 50KB
+    // Display file size with warning if over 50KB. The warning is spelled
+    // out inline — a tooltip-only hint was missed and led to devices
+    // crash-looping on oversized images (#70).
     if (fileSize) {
       const sizeKB = (sizeBytes / 1024).toFixed(1)
       const isOverLimit = sizeBytes > 50 * 1024
-      fileSize.textContent = `${sizeKB} KB`
+      fileSize.textContent = isOverLimit
+        ? `${sizeKB} KB — ⚠ exceeds the TRMNL 50KB limit; the device may fail to display it. Reduce dashboard complexity, bit depth, or viewport size.`
+        : `${sizeKB} KB`
       fileSize.className = isOverLimit ? 'text-red-500 font-bold' : 'text-muted'
       fileSize.title = isOverLimit
         ? 'Warning: Image exceeds TRMNL 50KB limit'

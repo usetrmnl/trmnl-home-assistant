@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Webhook connection failures now name the unreachable host and point at the usual culprit — local hostnames that don't resolve inside the add-on container (#71)
+- The preview's over-50KB warning is now spelled out next to the file size instead of hiding in a hover tooltip — oversized images can crash-loop TRMNL devices (#70)
 
 ## [0.9.0] - 2026-06-24
 
