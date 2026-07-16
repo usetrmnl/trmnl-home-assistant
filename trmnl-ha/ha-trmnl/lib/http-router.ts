@@ -20,7 +20,7 @@ import {
   createSchedule as defaultCreateSchedule,
   updateSchedule as defaultUpdateSchedule,
   deleteSchedule as defaultDeleteSchedule,
-  replaceAllSchedules,
+  replaceAllSchedules as defaultReplaceAllSchedules,
 } from './scheduleStore.js'
 import {
   login as defaultByosLogin,
@@ -80,6 +80,7 @@ export interface HttpRouterDeps {
     updates: ScheduleUpdate,
   ) => Promise<Schedule | null>
   deleteSchedule: (id: string) => Promise<boolean>
+  replaceAllSchedules: (schedules: Partial<Schedule>[]) => Promise<Schedule[]>
   byosLogin: (
     baseUrl: string,
     login: string,
@@ -95,6 +96,7 @@ const defaultDeps: HttpRouterDeps = {
   createSchedule: defaultCreateSchedule,
   updateSchedule: defaultUpdateSchedule,
   deleteSchedule: defaultDeleteSchedule,
+  replaceAllSchedules: defaultReplaceAllSchedules,
   byosLogin: defaultByosLogin,
   getBaseUrl: defaultGetBaseUrl,
   outputDir: join(DATA_DIR, SCHEDULER_OUTPUT_DIR_NAME),
@@ -402,7 +404,9 @@ export class HttpRouter {
         return true
       }
 
-      const schedules = await replaceAllSchedules(parsed as Partial<Schedule>[])
+      const schedules = await this.#deps.replaceAllSchedules(
+        parsed as Partial<Schedule>[],
+      )
       response.writeHead(200)
       response.end(toJson({ success: true, count: schedules.length }))
     } catch (err) {
