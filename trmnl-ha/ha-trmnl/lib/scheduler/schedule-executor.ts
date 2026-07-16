@@ -29,6 +29,7 @@ import type {
   WebhookResult,
 } from '../../types/domain.js'
 import { schedulerLogger } from '../logger.js'
+import { timed } from '../metrics.js'
 
 const log = schedulerLogger()
 
@@ -174,13 +175,14 @@ export class ScheduleExecutor {
     const screenshotUrl = this.#buildScreenshotUrl(schedule, filename)
 
     try {
-      const result = await uploadToWebhook({
-        webhookUrl,
-        webhookHeaders: schedule.webhook_headers,
-        imageBuffer,
-        format: format as 'png' | 'jpeg' | 'bmp',
-        webhookFormat: schedule.webhook_format,
-        screenshotUrl,
+      const result = await timed('webhook.upload', () =>
+        uploadToWebhook({
+          webhookUrl,
+          webhookHeaders: schedule.webhook_headers,
+          imageBuffer,
+          format: format as 'png' | 'jpeg' | 'bmp',
+          webhookFormat: schedule.webhook_format,
+          screenshotUrl,
         onTokenRefresh: (newTokens) => {
           const updates = buildRefreshedAuthUpdate(schedule, newTokens)
           if (!updates) return
@@ -189,7 +191,8 @@ export class ScheduleExecutor {
             log.error`Failed to persist refreshed BYOS tokens: ${(err as Error).message}`
           })
         },
-      })
+        }),
+      )
 
       log.info`Schedule "${schedule.name}" webhook success: ${result.status} ${result.statusText}`
 

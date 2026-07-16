@@ -42,6 +42,7 @@ import type { Schedule } from '../types/domain.js'
 import type { TokenResponse } from './scheduler/byos-auth.js'
 import { toJson } from './json.js'
 import { httpLogger } from './logger.js'
+import { metricsSummary } from './metrics.js'
 
 const log = httpLogger()
 
@@ -254,6 +255,7 @@ export class HttpRouter {
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
         browser: { ...health, ...stats },
+        timings: metricsSummary(),
       }),
     )
 
