@@ -160,6 +160,12 @@
 
       // Mock hass.connection for theme persistence interception (HA 2026.2+)
       haEl.hass = {
+        connected: true,
+        states: { 'sun.sun': { state: 'above_horizon' } },
+        config: { state: 'RUNNING' },
+        entities: {},
+        devices: {},
+        areas: {},
         connection: {
           sendMessage: function(msg) {
             console.log(`[Mock] WS sendMessage: ${JSON.stringify(msg)}`);
