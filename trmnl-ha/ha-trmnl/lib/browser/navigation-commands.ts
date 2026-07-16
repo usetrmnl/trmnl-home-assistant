@@ -411,8 +411,8 @@ export class WaitForHassReady {
         { timeout: this.#timeout, polling: 100 },
       )
     } catch (_err) {
-      // Warn (not debug): a capture that always eats this full timeout is the
-      // top cause of "very slow" reports, and was previously invisible (#57)
+      // A readiness check that never passes adds this full timeout to every
+      // screenshot, so the timeout must stay visible above debug level (#57)
       log.warn`Home Assistant readiness check timed out after ${this.#timeout}ms — hass state never fully populated; capture continues but adds ${this.#timeout}ms to every screenshot`
     }
   }

@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The Home Assistant readiness check now logs a warning when it times out instead of a debug line — a capture that always eats the full 5s timeout was the invisible cost behind "very slow" reports (#57)
+- The Home Assistant readiness check now logs a warning when it times out instead of a debug line — a capture that always spends the full 5s timeout is the usual cause of slow-capture reports (#57)
 
 ### Fixed
 

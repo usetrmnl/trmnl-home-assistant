@@ -174,8 +174,8 @@
       }
 
       // Mock hass.connection for theme persistence interception (HA 2026.2+)
-      // plus the readiness shape WaitForHassReady polls for — without it,
-      // every mock capture silently burned the full 5s readiness timeout.
+      // plus the readiness shape WaitForHassReady polls for, so captures
+      // proceed as soon as the check passes instead of waiting out its timeout
       haEl.hass = {
         connected: true,
         states: { 'sun.sun': { state: 'above_horizon' } },

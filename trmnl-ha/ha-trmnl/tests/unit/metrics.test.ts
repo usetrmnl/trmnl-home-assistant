@@ -63,4 +63,24 @@ describe('metrics', () => {
   it('returns an empty object when nothing is recorded', () => {
     expect(metricsSummary()).toEqual({})
   })
+
+  it('keeps stages independent', () => {
+    recordTiming('stage.fast', 5)
+    recordTiming('stage.slow', 5000)
+
+    const summary = metricsSummary()
+
+    expect(summary['stage.fast']!.maxMs).toBe(5)
+    expect(summary['stage.slow']!.maxMs).toBe(5000)
+  })
+
+  it('summarizes a single sample without percentile errors', () => {
+    recordTiming('stage.once', 42)
+
+    const summary = metricsSummary()['stage.once']!
+
+    expect(summary.p50Ms).toBe(42)
+    expect(summary.p95Ms).toBe(42)
+    expect(summary.meanMs).toBe(42)
+  })
 })

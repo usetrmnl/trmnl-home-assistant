@@ -44,6 +44,7 @@ const mockByosLogin = mock(async () => ({
 // ---------------------------------------------------------------------------
 
 import { HttpRouter, type HttpRouterDeps } from '../../lib/http-router.js'
+import { recordTiming } from '../../lib/metrics.js'
 
 /** Shared mock deps injected into HttpRouter — avoids global mock.module() */
 const mockDeps = {
@@ -224,6 +225,24 @@ describe('HttpRouter', () => {
       )
 
       expect(mockResponse.statusCode).toBe(200)
+    })
+
+    it('includes pipeline timing summaries', async () => {
+      // Unique stage name: the metrics store is shared across the test
+      // process, so shared stages like nav.total carry other files' samples
+      recordTiming('test.health-probe', 1200)
+      const url = new URL('http://localhost/health')
+
+      await router.route(
+        mockRequest as unknown as IncomingMessage,
+        mockResponse as unknown as ServerResponse,
+        url,
+      )
+
+      const body = JSON.parse(String(mockResponse.body)) as {
+        timings: Record<string, { p50Ms: number }>
+      }
+      expect(body.timings['test.health-probe']?.p50Ms).toBe(1200)
     })
 
     it('returns 503 when browser is degraded', async () => {
