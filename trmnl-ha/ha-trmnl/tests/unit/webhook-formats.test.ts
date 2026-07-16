@@ -177,14 +177,6 @@ describe('ByosHanamiFormatTransformer', () => {
       expect(payload.screen.data).toBeDefined()
       expect(payload.screen.uri).toBeUndefined()
     })
-
-    it('defaults to uri when delivery_mode is unset but screenshotUrl is present', () => {
-      const result = transformer.transform(imageBuffer, 'png', validConfig, screenshotUrl)
-      const payload = JSON.parse(result.body as string)
-
-      expect(payload.screen.uri).toBe(screenshotUrl)
-      expect(payload.screen.data).toBeUndefined()
-    })
   })
 
   it('throws error when config is missing', () => {

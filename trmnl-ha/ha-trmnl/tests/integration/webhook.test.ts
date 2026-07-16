@@ -330,109 +330,77 @@ describe('Webhook Integration', () => {
   // ==========================================================================
 
   describe('Response Handling', () => {
-    it('handles 200 OK responses successfully', async () => {
+    it('reports success with the response status on 200 OK', async () => {
       webhookServer.setResponseStatus(200)
-      const schedule = asSchedule(
-        createWebhookSchedule('http://localhost:10002/ok'),
-      )
+      webhookServer.setResponseBody('A'.repeat(500))
 
-      // Test passes if no error is thrown
-      await uploadToWebhook(schedule, createPNGBuffer(), 'png')
+      const result = await webhookDelivery({
+        webhookUrl: 'http://localhost:10002/ok',
+        imageBuffer: createPNGBuffer(),
+        format: 'png',
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.status).toBe(200)
     })
 
-    it('handles 201 Created responses successfully', async () => {
-      webhookServer.setResponseStatus(201)
-      const schedule = asSchedule(
-        createWebhookSchedule('http://localhost:10002/created'),
-      )
-
-      // Test passes if no error is thrown
-      await uploadToWebhook(schedule, createPNGBuffer(), 'png')
-    })
-
-    it('handles 204 No Content responses with empty body', async () => {
+    it('reports success on 204 No Content with an empty body', async () => {
       webhookServer.setResponseStatus(204)
       webhookServer.setResponseBody('')
-      const schedule = asSchedule(
-        createWebhookSchedule('http://localhost:10002/no-content'),
-      )
 
-      // Test passes if no error is thrown
-      await uploadToWebhook(schedule, createPNGBuffer(), 'png')
-    })
+      const result = await webhookDelivery({
+        webhookUrl: 'http://localhost:10002/no-content',
+        imageBuffer: createPNGBuffer(),
+        format: 'png',
+      })
 
-    it('handles large response bodies without errors', async () => {
-      webhookServer.setResponseStatus(200)
-      webhookServer.setResponseBody('A'.repeat(500)) // 500 chars
-      const schedule = asSchedule(
-        createWebhookSchedule('http://localhost:10002/large-body'),
-      )
-
-      // Test passes if no error is thrown
-      await uploadToWebhook(schedule, createPNGBuffer(), 'png')
+      expect(result.success).toBe(true)
+      expect(result.status).toBe(204)
     })
   })
 
   // ==========================================================================
-  // Error Handling - Should never throw, always log
+  // Error Handling - uploadToWebhook throws; callers decide what to swallow
   // ==========================================================================
 
   describe('Error Handling', () => {
-    it('logs but does not throw on 400 client errors', async () => {
+    const upload = (webhookUrl: string) =>
+      webhookDelivery({
+        webhookUrl,
+        imageBuffer: createPNGBuffer(),
+        format: 'png',
+      })
+
+    it('throws HTTP 400 on client errors', async () => {
       webhookServer.setResponseStatus(400)
       webhookServer.setResponseBody('Bad Request')
-      const schedule = asSchedule(
-        createWebhookSchedule('http://localhost:10002/bad-request'),
-      )
 
-      // Test passes if no error is thrown (errors are logged only)
-      await uploadToWebhook(schedule, createPNGBuffer(), 'png')
+      await expect(upload('http://localhost:10002/bad-request')).rejects.toThrow(
+        /HTTP 400/,
+      )
     })
 
-    it('logs but does not throw on 404 not found', async () => {
+    it('throws HTTP 404 on not found', async () => {
       webhookServer.setResponseStatus(404)
-      const schedule = asSchedule(
-        createWebhookSchedule('http://localhost:10002/not-found'),
-      )
 
-      // Test passes if no error is thrown (errors are logged only)
-      await uploadToWebhook(schedule, createPNGBuffer(), 'png')
+      await expect(upload('http://localhost:10002/not-found')).rejects.toThrow(
+        /HTTP 404/,
+      )
     })
 
-    it('logs but does not throw on 500 server errors', async () => {
+    it('throws HTTP 500 on server errors', async () => {
       webhookServer.setResponseStatus(500)
       webhookServer.setResponseBody('Internal Server Error')
-      const schedule = asSchedule(
-        createWebhookSchedule('http://localhost:10002/error'),
-      )
 
-      // Test passes if no error is thrown (errors are logged only)
-      await uploadToWebhook(schedule, createPNGBuffer(), 'png')
+      await expect(upload('http://localhost:10002/error')).rejects.toThrow(
+        /HTTP 500/,
+      )
     })
 
-    it('logs but does not throw on connection refused', async () => {
-      const schedule = asSchedule(
-        createWebhookSchedule('http://localhost:19999/refused'),
+    it('names the unreachable host when the connection is refused', async () => {
+      await expect(upload('http://127.0.0.1:1/refused')).rejects.toThrow(
+        /Could not reach 127\.0\.0\.1/,
       )
-
-      // Test passes if no error is thrown (errors are logged only)
-      await uploadToWebhook(schedule, createPNGBuffer(), 'png')
-    })
-
-    it('logs but does not throw on DNS resolution failures', async () => {
-      const schedule = asSchedule(
-        createWebhookSchedule('http://nonexistent.invalid.domain/test'),
-      )
-
-      // Test passes if no error is thrown (errors are logged only)
-      await uploadToWebhook(schedule, createPNGBuffer(), 'png')
-    })
-
-    it('logs but does not throw on invalid URL schemes', async () => {
-      const schedule = asSchedule(createWebhookSchedule('not-a-valid-url'))
-
-      // Test passes if no error is thrown (errors are logged only)
-      await uploadToWebhook(schedule, createPNGBuffer(), 'png')
     })
   })
 

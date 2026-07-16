@@ -194,35 +194,4 @@ describe('Custom Error Classes', () => {
     })
   })
 
-  // ==========================================================================
-  // Error Handling in Try/Catch
-  // ==========================================================================
-
-  describe('Error Catching', () => {
-    it('can be caught as Error', () => {
-      let caught: Error | null = null
-
-      try {
-        throw new CannotOpenPageError(404, '/test')
-      } catch (e) {
-        caught = e as Error
-      }
-
-      expect(caught).toBeInstanceOf(Error)
-      expect(caught?.name).toBe('CannotOpenPageError')
-    })
-
-    it('can be identified by name', () => {
-      const error = new BrowserCrashError(new Error('Crashed'))
-
-      expect(error.name).toBe('BrowserCrashError')
-    })
-
-    it('can be identified by instanceof', () => {
-      const error = new PageCorruptedError('Corrupted')
-
-      expect(error instanceof PageCorruptedError).toBe(true)
-      expect(error instanceof BrowserCrashError).toBe(false)
-    })
-  })
 })

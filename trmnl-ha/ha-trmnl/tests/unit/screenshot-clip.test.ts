@@ -429,6 +429,12 @@ describe('Browser', () => {
         expect(pageCreatedCount).toBe(1)
         // goto called exactly once (only attempt 1 does a hard navigation).
         expect(currentMockPage.goto).toHaveBeenCalledTimes(1)
+        // 'console' subscribed once by #setupPageLogging plus once per
+        // attempt — exactly MAX_ATTEMPTS (5) attempts ran, then we stopped.
+        const consoleSubscriptions = currentMockPage.on.mock.calls.filter(
+          (call) => call[0] === 'console',
+        ).length
+        expect(consoleSubscriptions).toBe(6)
         expect(typeof result.time).toBe('number')
       })
 
@@ -561,7 +567,7 @@ describe('Browser', () => {
       expect(currentMockPage.screenshot).toHaveBeenCalledWith({ type: 'png' })
     })
 
-    it('uses origin clip when crop covers full viewport', async () => {
+    it('passes a full-viewport crop through as the clip', async () => {
       await browser.screenshotPage({
         viewport: DEFAULT_VIEWPORT,
         crop: { x: 0, y: 0, width: 800, height: 480 },

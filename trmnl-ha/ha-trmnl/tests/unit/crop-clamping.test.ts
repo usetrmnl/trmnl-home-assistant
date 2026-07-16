@@ -109,26 +109,6 @@ describe('clampCropToViewport', () => {
   })
 
   // -------------------------------------------------------------------------
-  // Minimum dimension enforcement
-  // -------------------------------------------------------------------------
-
-  it('enforces minimum 50px width', () => {
-    const result = clampCropToViewport(
-      { x: 0, y: 0, width: 10, height: 300 },
-      viewport,
-    )
-    expect(result.width).toBe(50)
-  })
-
-  it('enforces minimum 50px height', () => {
-    const result = clampCropToViewport(
-      { x: 0, y: 0, width: 400, height: 20 },
-      viewport,
-    )
-    expect(result.height).toBe(50)
-  })
-
-  // -------------------------------------------------------------------------
   // Combined: drag full-size overlay to new position
   // -------------------------------------------------------------------------
 
@@ -181,26 +161,10 @@ describe('clampCropToViewport', () => {
   })
 
   // -------------------------------------------------------------------------
-  // Negative and zero dimensions
+  // Minimum dimension enforcement (covers both Math.max branches)
   // -------------------------------------------------------------------------
 
-  it('enforces minimum 50px when width is negative', () => {
-    const result = clampCropToViewport(
-      { x: 100, y: 100, width: -10, height: 200 },
-      viewport,
-    )
-    expect(result.width).toBe(50)
-  })
-
-  it('enforces minimum 50px when height is negative', () => {
-    const result = clampCropToViewport(
-      { x: 100, y: 100, width: 200, height: -5 },
-      viewport,
-    )
-    expect(result.height).toBe(50)
-  })
-
-  it('enforces minimum dimensions when both are zero', () => {
+  it('enforces minimum 50px dimensions when both are zero', () => {
     const result = clampCropToViewport(
       { x: 0, y: 0, width: 0, height: 0 },
       viewport,

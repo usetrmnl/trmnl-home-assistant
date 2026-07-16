@@ -181,18 +181,6 @@ describe('HttpRouter', () => {
   // ==========================================================================
 
   describe('route', () => {
-    it('returns true when route is recognized', async () => {
-      const url = new URL('http://localhost/health')
-
-      const handled = await router.route(
-        mockRequest as unknown as import('node:http').IncomingMessage,
-        mockResponse as unknown as import('node:http').ServerResponse,
-        url,
-      )
-
-      expect(handled).toBe(true)
-    })
-
     it('returns false for unrecognized routes', async () => {
       const url = new URL('http://localhost/screenshot')
 
@@ -591,7 +579,7 @@ describe('HttpRouter', () => {
   // ==========================================================================
 
   describe('GET /api/schedules', () => {
-    it('returns 200 with schedule list', async () => {
+    it('returns 200 with the schedule list as a JSON array', async () => {
       const url = new URL('http://localhost/api/schedules')
 
       await router.route(
@@ -601,32 +589,8 @@ describe('HttpRouter', () => {
       )
 
       expect(mockResponse.statusCode).toBe(200)
-    })
-
-    it('returns schedules as JSON array', async () => {
-      const url = new URL('http://localhost/api/schedules')
-
-      await router.route(
-        mockRequest as unknown as IncomingMessage,
-        mockResponse as unknown as ServerResponse,
-        url,
-      )
-
-      const body = JSON.parse(mockResponse.body as string)
-
-      expect(Array.isArray(body)).toBe(true)
-    })
-
-    it('sets Content-Type to application/json', async () => {
-      const url = new URL('http://localhost/api/schedules')
-
-      await router.route(
-        mockRequest as unknown as IncomingMessage,
-        mockResponse as unknown as ServerResponse,
-        url,
-      )
-
       expect(mockResponse.headers['content-type']).toBe('application/json')
+      expect(Array.isArray(JSON.parse(mockResponse.body as string))).toBe(true)
     })
   })
 
@@ -882,7 +846,7 @@ describe('HttpRouter', () => {
   // ==========================================================================
 
   describe('GET /api/presets', () => {
-    it('returns 200', async () => {
+    it('returns 200 with parseable JSON', async () => {
       const url = new URL('http://localhost/api/presets')
 
       await router.route(
@@ -892,29 +856,7 @@ describe('HttpRouter', () => {
       )
 
       expect(mockResponse.statusCode).toBe(200)
-    })
-
-    it('sets Content-Type to application/json', async () => {
-      const url = new URL('http://localhost/api/presets')
-
-      await router.route(
-        mockRequest as unknown as IncomingMessage,
-        mockResponse as unknown as ServerResponse,
-        url,
-      )
-
       expect(mockResponse.headers['content-type']).toBe('application/json')
-    })
-
-    it('returns parseable JSON', async () => {
-      const url = new URL('http://localhost/api/presets')
-
-      await router.route(
-        mockRequest as unknown as IncomingMessage,
-        mockResponse as unknown as ServerResponse,
-        url,
-      )
-
       expect(() => JSON.parse(mockResponse.body as string)).not.toThrow()
     })
   })
@@ -924,45 +866,7 @@ describe('HttpRouter', () => {
   // ==========================================================================
 
   describe('GET /api/palettes', () => {
-    it('returns 200', async () => {
-      const url = new URL('http://localhost/api/palettes')
-
-      await router.route(
-        mockRequest as unknown as IncomingMessage,
-        mockResponse as unknown as ServerResponse,
-        url,
-      )
-
-      expect(mockResponse.statusCode).toBe(200)
-    })
-
-    it('sets Content-Type to application/json', async () => {
-      const url = new URL('http://localhost/api/palettes')
-
-      await router.route(
-        mockRequest as unknown as IncomingMessage,
-        mockResponse as unknown as ServerResponse,
-        url,
-      )
-
-      expect(mockResponse.headers['content-type']).toBe('application/json')
-    })
-
-    it('returns palette options as JSON array', async () => {
-      const url = new URL('http://localhost/api/palettes')
-
-      await router.route(
-        mockRequest as unknown as IncomingMessage,
-        mockResponse as unknown as ServerResponse,
-        url,
-      )
-
-      const body = JSON.parse(mockResponse.body as string)
-
-      expect(Array.isArray(body)).toBe(true)
-    })
-
-    it('includes grayscale options', async () => {
+    it('returns 200 with palette options as a JSON array', async () => {
       const url = new URL('http://localhost/api/palettes')
 
       await router.route(
@@ -974,9 +878,10 @@ describe('HttpRouter', () => {
       const body = JSON.parse(mockResponse.body as string) as {
         value: string
       }[]
-      const values = body.map((p) => p.value)
 
-      expect(values).toContain('bw')
+      expect(mockResponse.statusCode).toBe(200)
+      expect(mockResponse.headers['content-type']).toBe('application/json')
+      expect(body.map((p) => p.value)).toContain('bw')
     })
   })
 

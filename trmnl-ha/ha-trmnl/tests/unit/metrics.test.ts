@@ -31,13 +31,15 @@ describe('metrics', () => {
     expect(summary.lastMs).toBe(100)
   })
 
-  it('bounds memory by keeping a rolling window but counting all samples', () => {
-    for (let i = 0; i < 500; i++) recordTiming('stage.b', 10)
+  it('slides the sample window while counting all samples', () => {
+    // 500 samples, window of 200: only the last 200 (all 30s) remain
+    for (let i = 0; i < 200; i++) recordTiming('stage.b', 10)
+    for (let i = 0; i < 300; i++) recordTiming('stage.b', 30)
 
     const summary = metricsSummary()['stage.b']!
 
     expect(summary.count).toBe(500)
-    expect(summary.meanMs).toBe(10)
+    expect(summary.meanMs).toBe(30)
   })
 
   it('times async work and records the duration', async () => {

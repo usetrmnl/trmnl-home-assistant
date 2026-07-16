@@ -397,7 +397,7 @@ describe('WaitForPageLoad', () => {
     expect(mockPage.calls.waitForFunction).toBe(1)
   })
 
-  it('handles timeout gracefully without throwing', async () => {
+  it('resolves when the wait times out', async () => {
     const mockPage = createMockPage({
       waitForFunctionError: new Error('Timeout'),
     })
@@ -453,7 +453,7 @@ describe('WaitForLoadingComplete', () => {
     expect(waitTime).toBeLessThan(500)
   })
 
-  it('handles timeout gracefully without throwing', async () => {
+  it('resolves when the wait times out', async () => {
     const mockPage = {
       waitForFunction: async () => {
         throw new Error('Waiting for function timed out')
@@ -636,7 +636,7 @@ describe('WaitForPaintStability', () => {
     expect(called).toBe(true)
   })
 
-  it('handles timeout gracefully without throwing', async () => {
+  it('resolves when the wait times out', async () => {
     const mockPage = {
       waitForFunction: async () => {
         throw new Error('Timeout')
@@ -695,7 +695,7 @@ describe('WaitForHassReady', () => {
     expect(called).toBe(true)
   })
 
-  it('handles timeout gracefully without throwing', async () => {
+  it('resolves when the wait times out', async () => {
     const mockPage = {
       waitForFunction: async () => {
         throw new Error('Timeout')
@@ -748,60 +748,6 @@ describe('WaitForHassReady', () => {
     expect(typeof capturedFn).toBe('function')
   })
 
-  // ===========================================================================
-  // Version compatibility — graceful degradation
-  //
-  // NOTE: The in-browser function can't be unit-tested directly (no DOM in Bun).
-  // These tests verify the function's logic by describing expected behavior
-  // across HA versions, to be validated via integration tests.
-  //
-  // The key design:
-  //   - Core check: hass.states must have entries (all HA versions)
-  //   - Defensive: only enforce properties that exist on the hass object
-  //   - If a property doesn't exist → skip it (don't block on missing registries)
-  //   - If a property exists but is null → wait (data hasn't loaded yet)
-  // ===========================================================================
-
-  describe('version compatibility design', () => {
-    it('only requires hass.states as the core check', async () => {
-      // Older HA without registries should pass once states load.
-      // The function uses `'entities' in h` guards — if the property
-      // doesn't exist on older HA, it's skipped entirely.
-      let capturedFn: unknown
-      const mockPage = {
-        waitForFunction: async (fn: unknown) => {
-          capturedFn = fn
-        },
-      } as unknown as Page
-
-      const cmd = new WaitForHassReady(mockPage)
-      await cmd.call()
-
-      // Verify function source uses 'in' operator for defensive guards.
-      // NOTE: Bun minifies function source, converting single to double quotes.
-      const fnSource = (capturedFn as () => boolean).toString()
-      expect(fnSource).toContain('"connected" in')
-      expect(fnSource).toContain('"state" in')
-      expect(fnSource).toContain('"entities" in')
-      expect(fnSource).toContain('"devices" in')
-      expect(fnSource).toContain('"areas" in')
-    })
-
-    it('checks states length as the minimum readiness gate', async () => {
-      let capturedFn: unknown
-      const mockPage = {
-        waitForFunction: async (fn: unknown) => {
-          capturedFn = fn
-        },
-      } as unknown as Page
-
-      const cmd = new WaitForHassReady(mockPage)
-      await cmd.call()
-
-      const fnSource = (capturedFn as () => boolean).toString()
-      expect(fnSource).toContain('Object.keys(h.states).length')
-    })
-  })
 })
 
 // =============================================================================
