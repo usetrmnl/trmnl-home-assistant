@@ -19,6 +19,41 @@ import type {
   CompressionLevel,
 } from '../types/domain.js'
 
+/**
+ * Query params consumed by the screenshot pipeline. Anything else is
+ * forwarded to the target page URL so dashboard extras like Kiosk Mode's
+ * `?kiosk` reach Home Assistant instead of being dropped (#44).
+ */
+const SYSTEM_PARAMS = new Set([
+  'viewport',
+  'url',
+  'wait',
+  'zoom',
+  'crop_x',
+  'crop_y',
+  'crop_width',
+  'crop_height',
+  'invert',
+  'timestamp',
+  'format',
+  'rotate',
+  'lang',
+  'theme',
+  'dark',
+  'next',
+  'dithering',
+  'dither_method',
+  'palette',
+  'no_gamma',
+  'levels_enabled',
+  'black_level',
+  'white_level',
+  'no_normalize',
+  'saturation_boost',
+  'bit_depth',
+  'compression_level',
+])
+
 /** Parsed screenshot parameters */
 export interface ParsedScreenshotParams {
   pagePath: string
@@ -57,12 +92,30 @@ export class ScreenshotParamsParser {
     const targetUrl = requestUrl.searchParams.get('url') || undefined
 
     return {
-      pagePath: requestUrl.pathname,
+      pagePath: this.#buildPagePath(requestUrl),
       targetUrl,
       viewport,
       ...this.#parseProcessing(requestUrl),
       ...this.#parseDithering(requestUrl),
     }
+  }
+
+  /**
+   * Appends non-system query params to the page path so they reach the
+   * target page. Bare flags (`?kiosk`) keep their bare form — some
+   * dashboard plugins distinguish `?kiosk` from `?kiosk=`.
+   */
+  #buildPagePath(url: URL): string {
+    const forwarded = [...url.searchParams]
+      .filter(([key]) => !SYSTEM_PARAMS.has(key))
+      .map(([key, value]) =>
+        value === ''
+          ? encodeURIComponent(key)
+          : `${encodeURIComponent(key)}=${encodeURIComponent(value)}`,
+      )
+      .join('&')
+
+    return forwarded ? `${url.pathname}?${forwarded}` : url.pathname
   }
 
   /**
