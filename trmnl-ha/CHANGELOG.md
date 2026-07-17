@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Node runtime fallback for CPUs that Bun's baseline build cannot run on: the image ships Node alongside Bun and the entrypoint falls back to it automatically when Bun fails to start (#24). Set the `RUNTIME` environment variable to `node` or `bun` to force a choice.
+- The AppArmor profile is fixed and enabled: it now grants the paths the current image needs and runs in enforce mode, blocking access to `/config`, `/ssl`, and execution from `/data` (#27)
+
 ## [0.9.2] - 2026-07-17
 
 ### Added
