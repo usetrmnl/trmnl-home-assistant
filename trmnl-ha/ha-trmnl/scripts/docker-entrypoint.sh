@@ -17,4 +17,18 @@ fi
 # Local app directories (logs stay app-local, not persisted)
 mkdir -p logs
 
-exec "$@"
+# Pick a runtime. Bun's baseline build still needs CPU instructions that
+# pre-2013 x86 chips lack and crashes on startup there (#24); fall back to
+# Node via tsx when Bun can't run. RUNTIME=node|bun forces a choice.
+# Invoke tsx via `node --import` so Node reads the loader as a module. Exec-ing
+# node_modules/.bin/tsx instead would resolve its shebang and demand execute
+# permission on tsx's script, which the AppArmor profile does not grant.
+if [ "$RUNTIME" = "node" ]; then
+  echo "Starting under Node (RUNTIME=node)"
+  exec node --import tsx main.ts
+elif [ "$RUNTIME" != "bun" ] && ! bun --version >/dev/null 2>&1; then
+  echo "Bun failed to start (unsupported CPU?); falling back to Node"
+  exec node --import tsx main.ts
+fi
+
+exec bun run main.ts

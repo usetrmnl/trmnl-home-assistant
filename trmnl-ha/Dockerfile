@@ -99,8 +99,16 @@ RUN chmod +x /usr/local/bin/convert && \
 # NOTE: /usr/local/bin is already in PATH, no additional ENV needed
 COPY --from=builder /usr/local/bin/bun /usr/local/bin/bun
 
-# Verify Bun is available
-RUN bun --version
+# Node is the fallback runtime for CPUs too old for Bun's baseline build
+# (#24). Debian's node is too old to resolve the app's .js import specifiers,
+# so install Node 20 LTS from NodeSource.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs
+
+# Verify both runtimes are available
+RUN bun --version && node --version
 
 WORKDIR /app
 
