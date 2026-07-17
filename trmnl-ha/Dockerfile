@@ -135,6 +135,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:10000/health || exit 1
 
 # Use entrypoint for setup, wrapped in tini so PID 1 reaps orphaned
-# Chromium/crashpad children (Bun as PID 1 never wait()s them — see #72)
+# Chromium/crashpad children (Bun as PID 1 never wait()s them — see #72).
+# No CMD: the entrypoint picks the runtime (Bun, or Node on old CPUs) when
+# launched with no arguments, and runs any explicit command as-is.
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
-CMD ["bun", "run", "main.js"]
