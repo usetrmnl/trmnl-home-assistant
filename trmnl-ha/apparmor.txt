@@ -1,11 +1,14 @@
 #include <tunables/global>
 
-# NOTE: Remove 'complain' flag after testing to enforce restrictions
-# To check for issues after deploying, SSH into HA, then:
-# journalctl _TRANSPORT="audit" | grep 'apparmor="ALLOWED"' | grep trmnl-ha
-profile trmnl-ha flags=(attach_disconnected,mediate_deleted,complain) {
+# To audit denials after deploying, SSH into HA, then:
+# journalctl _TRANSPORT="audit" | grep 'apparmor="DENIED"' | grep trmnl-ha
+profile trmnl-ha flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
   #include <abstractions/nameservice>
+
+  # Container working directory and filesystem root
+  / r,
+  /app/ r,
 
   # =============================================================================
   # CAPABILITIES (minimal set for container operation)
@@ -40,11 +43,17 @@ profile trmnl-ha flags=(attach_disconnected,mediate_deleted,complain) {
   /lib64/** rm,
   /usr/lib/** rm,
 
+  # Binaries and libraries the image installs under /usr/local: the Bun
+  # runtime, the ImageMagick 7 binary, and the convert wrapper all live here
+  /usr/local/bin/** rix,
+  /usr/local/lib/** rm,
+
   # =============================================================================
   # BUN RUNTIME
   # =============================================================================
 
-  /root/.bun/** rix,
+  /root/.bun/ rw,
+  /root/.bun/** rwkix,
 
   # =============================================================================
   # APPLICATION (/app)
@@ -87,17 +96,23 @@ profile trmnl-ha flags=(attach_disconnected,mediate_deleted,complain) {
   # CHROMIUM BROWSER
   # =============================================================================
 
-  # Chromium binaries
+  # Chromium binaries and launch wrapper config. The helper executables
+  # (chrome-sandbox, chrome_crashpad_handler) need exec, so the tree is rix.
   /usr/bin/chromium rix,
   /usr/lib/chromium/ r,
-  /usr/lib/chromium/** rm,
-  /usr/lib/chromium/chromium rix,
-  /usr/lib/chromium/chrome-sandbox rix,
+  /usr/lib/chromium/** rmix,
+  /etc/chromium.d/ r,
+  /etc/chromium.d/** r,
+  /etc/chromium/ r,
+  /etc/chromium/** r,
 
-  # Chromium needs to read /proc for sandboxing
+  # Chromium needs to read /proc for sandboxing, and to tune its own
+  # processes (out-of-memory score, reference clearing)
   @{PROC}/ r,
   @{PROC}/** r,
   @{PROC}/sys/kernel/random/uuid r,
+  owner @{PROC}/*/oom_score_adj rw,
+  owner @{PROC}/*/clear_refs w,
 
   # Device access
   /dev/null rw,
@@ -117,11 +132,18 @@ profile trmnl-ha flags=(attach_disconnected,mediate_deleted,complain) {
   owner /root/.pki/ rw,
   owner /root/.pki/** rwk,
 
-  # Fonts for rendering
+  # Fonts for rendering. fontconfig enumerates the font directories, so the
+  # directory entries are read on top of their contents, and it takes file
+  # locks on its cache.
+  /usr/share/fonts/ r,
   /usr/share/fonts/** r,
+  /usr/local/share/fonts/ r,
+  /usr/local/share/fonts/** r,
+  /usr/share/fontconfig/ r,
+  /usr/share/fontconfig/** r,
   /etc/fonts/** r,
   /var/cache/fontconfig/ r,
-  /var/cache/fontconfig/** rw,
+  /var/cache/fontconfig/** rwkl,
 
   # =============================================================================
   # IMAGEMAGICK
@@ -132,8 +154,12 @@ profile trmnl-ha flags=(attach_disconnected,mediate_deleted,complain) {
   /usr/bin/mogrify rix,
   /usr/lib/*/ImageMagick*/ r,
   /usr/lib/*/ImageMagick*/** rm,
+  /usr/local/lib/ImageMagick*/ r,
+  /usr/local/lib/ImageMagick*/** rm,
   /etc/ImageMagick*/ r,
   /etc/ImageMagick*/** r,
+  /usr/local/etc/ImageMagick*/ r,
+  /usr/local/etc/ImageMagick*/** r,
   /usr/share/ImageMagick*/ r,
   /usr/share/ImageMagick*/** r,
 
@@ -169,6 +195,11 @@ profile trmnl-ha flags=(attach_disconnected,mediate_deleted,complain) {
   /etc/machine-id r,
   /etc/ld.so.cache r,
   /etc/ld.so.preload r,
+
+  # Chromium probes these on startup; it falls back cleanly when absent, but
+  # reading them keeps the audit log quiet
+  /etc/pulse/** r,
+  /usr/share/glib-2.0/** r,
 
   # =============================================================================
   # EXPLICIT DENIALS (defense in depth)
