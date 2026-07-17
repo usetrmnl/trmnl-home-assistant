@@ -405,6 +405,15 @@ Set VM CPU type to `host` (not `kvm64`) for Chromium sandbox compatibility.
 2. Check dashboard path is correct
 3. Increase `wait` for complex dashboards
 
+### Blank UI or Schedules Stop Firing
+
+Symptoms: the add-on page loads blank, scheduled captures stop, and the log repeats `[NODE-CRON] missed execution ... Possible blocking IO or high CPU`.
+
+1. Update to 0.8.2 or later — the scheduler used to stop and recreate every cron job on each reload tick, which could kill scheduling entirely. That rework plus further scheduler fixes shipped in 0.8.2–0.9.2.
+2. Restart the add-on. Schedules and settings survive restarts.
+3. If it persists, copy your schedules from the UI (they also live in `/data/schedules.json`), reinstall the add-on, and re-import them.
+4. Still stuck? Open an issue with the add-on log and the `timings` block from `GET /health`.
+
 ### HA Connection Issues
 
 **Most common cause:** Using `homeassistant.local:8123` instead of the IP address.
