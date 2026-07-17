@@ -42,14 +42,12 @@ import { ScreenshotParamsParser } from './lib/screenshot-params-parser.js'
 import type { ScreenshotParams, ImageFormat } from './types/domain.js'
 import { initializeLogging, appLogger, browserLogger } from './lib/logger.js'
 import { recordTiming } from './lib/metrics.js'
+import { RequestQueue } from './lib/request-queue.js'
 
 // Initialize logging before anything else
 await initializeLogging()
 const log = appLogger()
 const browserLog = browserLogger()
-
-/** Pending request resolver function */
-type PendingResolver = () => void
 
 /**
  * Central request handler coordinating all HTTP requests and browser operations.
@@ -59,8 +57,7 @@ class RequestHandler {
   #router: HttpRouter
   #facade: BrowserFacade
   #paramsParser: ScreenshotParamsParser
-  #busy: boolean = false
-  #pending: PendingResolver[] = []
+  #queue = new RequestQueue()
   #requestCount: number = 0
   #nextRequests: ReturnType<typeof setTimeout>[] = []
   #navigationTime: number = 0
@@ -75,7 +72,7 @@ class RequestHandler {
   }
 
   get busy(): boolean {
-    return this.#busy
+    return this.#queue.busy
   }
 
   get router(): HttpRouter {
@@ -90,7 +87,7 @@ class RequestHandler {
    * Checks if browser should be cleaned up due to inactivity.
    */
   #runBrowserCleanupCheck = async (): Promise<void> => {
-    if (this.#busy) return
+    if (this.#queue.busy) return
 
     const idleTime = Date.now() - this.#lastAccess.getTime()
 
@@ -217,8 +214,9 @@ class RequestHandler {
     const requestId = this.#requestCount
     const start = new Date()
 
-    await this.#waitForQueue(requestId, start)
-    this.#busy = true
+    if (this.#queue.busy) log.debug`[${requestId}] Busy, waiting in queue`
+    await this.#queue.acquire()
+    log.debug`[${requestId}] Wait time: ${Date.now() - start.getTime()}ms`
 
     try {
       const params = this.#paramsParser.call(requestUrl)
@@ -249,23 +247,9 @@ class RequestHandler {
       this.#sendImage(response, image, params.format)
       if (params.next) this.#scheduleNextRequest(requestId, params, start)
     } finally {
-      this.#releaseQueue()
+      this.#queue.release()
+      this.#markBrowserAccessed()
     }
-  }
-
-  /** Waits in queue if handler is busy */
-  async #waitForQueue(requestId: number, start: Date): Promise<void> {
-    if (!this.#busy) return
-    log.debug`[${requestId}] Busy, waiting in queue`
-    await new Promise<void>((resolve) => this.#pending.push(resolve))
-    log.debug`[${requestId}] Wait time: ${Date.now() - start.getTime()}ms`
-  }
-
-  /** Releases queue lock and processes next request */
-  #releaseQueue(): void {
-    this.#busy = false
-    this.#pending.shift()?.()
-    this.#markBrowserAccessed()
   }
 
   /** Navigates to page with automatic recovery on failure */
@@ -420,13 +404,12 @@ class RequestHandler {
     requestId: number,
     params: ScreenshotParams
   ): Promise<void> {
-    if (this.#busy) {
+    if (!this.#queue.tryAcquire()) {
       log.debug`Busy, skipping next request`
       return
     }
 
     const nextRequestId = `${requestId}-next`
-    this.#busy = true
     log.debug`[${nextRequestId}] Preparing next request`
 
     try {
@@ -438,9 +421,7 @@ class RequestHandler {
     } catch (err) {
       log.error`[${nextRequestId}] Error preparing next request: ${err}`
     } finally {
-      this.#busy = false
-      const resolve = this.#pending.shift()
-      if (resolve) resolve()
+      this.#queue.release()
       this.#markBrowserAccessed()
     }
   }
@@ -449,10 +430,7 @@ class RequestHandler {
    * Public API for scheduler to take screenshots.
    */
   async takeScreenshot(params: ScreenshotParams): Promise<Buffer> {
-    if (this.#busy) {
-      await new Promise<void>((resolve) => this.#pending.push(resolve))
-    }
-    this.#busy = true
+    await this.#queue.acquire()
 
     try {
       await this.#ensureBrowserHealthy()
@@ -479,9 +457,7 @@ class RequestHandler {
       }
       throw err
     } finally {
-      this.#busy = false
-      const resolve = this.#pending.shift()
-      if (resolve) resolve()
+      this.#queue.release()
       this.#markBrowserAccessed()
     }
   }
