@@ -43,6 +43,7 @@ import type { TokenResponse } from './scheduler/byos-auth.js'
 import { toJson } from './json.js'
 import { httpLogger } from './logger.js'
 import { metricsSummary } from './metrics.js'
+import { transpileTypeScript } from './transpile-ts.js'
 
 const log = httpLogger()
 
@@ -498,9 +499,7 @@ export class HttpRouter {
         const tsPath = filePath.replace(/\.js$/, '.ts')
         try {
           const tsContent = await readFile(tsPath, 'utf-8')
-          // Transpile TypeScript to JavaScript using Bun
-          const transpiler = new Bun.Transpiler({ loader: 'ts' })
-          content = transpiler.transformSync(tsContent)
+          content = await transpileTypeScript(tsContent)
           contentType = 'application/javascript'
         } catch {
           // Fall back to .js file if .ts doesn't exist
