@@ -155,13 +155,36 @@ jobs:
           cache-to: ${{ github.event_name == 'push' && format('type=registry,ref={0}/{1}:{2},mode=max', env.REGISTRY, env.CACHE_REPO, matrix.tag) || format('type=gha,mode=max,scope=build-{0}', matrix.tag) }}
           provenance: false
 
-      - name: Verify Bun installation in image
-        run: docker run --rm trmnl-ha:test-${{ matrix.tag }} bun --version
-
-      - name: Test image can start
+      - name: Verify both runtimes are in the image
         run: |
-          docker run -d --name test-container trmnl-ha:test-${{ matrix.tag }}
-          sleep 5
-          docker logs test-container
-          docker stop test-container
-          docker rm test-container
+          docker run --rm trmnl-ha:test-${{ matrix.tag }} bun --version
+          docker run --rm trmnl-ha:test-${{ matrix.tag }} node --version
+
+      # Boots the image and waits for /health. Runs once per runtime: the
+      # default (Bun) path and the Node fallback (RUNTIME=node), so the Node
+      # path cannot silently break. A dummy HA URL is fine — /health reports
+      # browser state and does not require HA to be reachable.
+      - name: Smoke test both runtimes
+        run: |
+          set -e
+          smoke() {
+            local name=$1 expect_log=$2
+            shift 2
+            docker run -d --name "$name" -p 10000:10000 \
+              -e HOME_ASSISTANT_URL=http://127.0.0.1:1 -e ACCESS_TOKEN=dummy \
+              "$@" trmnl-ha:test-${{ matrix.tag }} >/dev/null
+            for i in $(seq 1 45); do
+              curl -sf http://localhost:10000/health >/dev/null 2>&1 && break
+              sleep 2
+            done
+            curl -sf http://localhost:10000/health >/dev/null \
+              || { echo "::error::$name did not become healthy"; docker logs "$name"; exit 1; }
+            docker logs "$name" 2>&1 | grep -q "$expect_log" \
+              || { echo "::error::$name log missing: $expect_log"; docker logs "$name"; exit 1; }
+            curl -sf http://localhost:10000/js/app.js >/dev/null \
+              || { echo "::error::$name failed to serve transpiled frontend"; exit 1; }
+            echo "$name OK"
+            docker rm -f "$name" >/dev/null
+          }
+          smoke bun-runtime "Starting TRMNL HA"
+          smoke node-runtime "Starting under Node" -e RUNTIME=node
