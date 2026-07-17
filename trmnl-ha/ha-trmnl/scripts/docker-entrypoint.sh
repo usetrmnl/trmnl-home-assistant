@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+# Run an explicit command as-is (e.g. `docker run <image> bun --version`)
+# without the app setup below; only the default no-argument launch continues.
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
+
 echo "Starting TRMNL HA..."
 
 # Ensure data subdirectories exist for persistence.
