@@ -238,6 +238,36 @@ curl "http://localhost:10000/?url=https://grafana.local/dashboard&viewport=800x4
 curl "http://localhost:10000/?url=https://images.unsplash.com/photo-example&viewport=800x480&dithering&palette=bw" -o dithered.png
 ```
 
+### On-Demand Capture from Automations
+
+To trigger a capture from a Home Assistant automation, define a `rest_command`
+that posts to a schedule's send endpoint, then call it as an action. This needs
+no extra integration — the `rest_command` is a first-class HA action.
+
+Add to `configuration.yaml`:
+
+```yaml
+rest_command:
+  trmnl_capture:
+    url: "http://local-trmnl-ha:10000/api/schedules/{{ schedule_id }}/send"
+    method: POST
+```
+
+The host is the add-on's hostname on the Supervisor network: `local-trmnl-ha`
+for a locally built add-on, or the store add-on's slug with underscores
+replaced by dashes. Then in an automation:
+
+```yaml
+actions:
+  - action: rest_command.trmnl_capture
+    data:
+      schedule_id: "your_schedule_id"  # from the add-on's schedule list
+```
+
+Create a disabled schedule in the add-on UI to capture only on demand — it
+never runs on its own cron, but the action captures and delivers it whenever
+called.
+
 ### Pull vs Push
 
 | Architecture | Description | Use Case |
