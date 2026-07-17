@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Captures without a theme or dark-mode setting no longer pay a 500ms "theme changed" settle wait on every screenshot — a fresh page compared `false` against `undefined` and re-applied the default theme each time
+- A malformed webhook URL now surfaces the connection error naming the URL, instead of failing with a bare TypeError while composing that message
 
 ## [0.9.1] - 2026-07-17
 

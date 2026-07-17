@@ -173,148 +173,202 @@ export interface WebhookDeliveryResult {
 export async function uploadToWebhook(
   options: WebhookDeliveryOptions,
 ): Promise<WebhookDeliveryResult> {
-  const {
-    webhookUrl,
-    webhookHeaders = {},
-    imageBuffer,
-    format,
-    webhookFormat,
-    screenshotUrl,
-    onTokenRefresh,
-  } = options
+  return new DeliverWebhook(options).call()
+}
 
-  // Get transformer and build payload
-  const transformer = getTransformer(webhookFormat)
-  const byosConfig =
-    webhookFormat?.format === 'byos-hanami'
+/**
+ * One webhook delivery: builds the payload, sends it, and on failure
+ * recovers via BYOS PATCH or throws a WebhookHttpError with details.
+ */
+class DeliverWebhook {
+  #options: WebhookDeliveryOptions
+
+  constructor(options: WebhookDeliveryOptions) {
+    this.#options = options
+  }
+
+  async call(): Promise<WebhookDeliveryResult> {
+    const { body, contentType } = this.#buildPayload()
+    const headers = await this.#buildHeaders(contentType)
+    const response = await this.#send(body, headers)
+    const responseText = await response.text()
+
+    if (response.ok) return this.#successResult(response, responseText)
+    return this.#recoverOrThrow(response, responseText, body, headers)
+  }
+
+  get #byosConfig() {
+    const { webhookFormat } = this.#options
+    return webhookFormat?.format === 'byos-hanami'
       ? webhookFormat.byosConfig
       : undefined
-  const { body, contentType } = transformer.transform(
-    imageBuffer,
-    format,
-    byosConfig,
-    screenshotUrl,
-  )
-
-  log.info`Sending webhook: ${webhookUrl} (${contentType}, ${imageBuffer.length} bytes, format: ${webhookFormat?.format ?? 'raw'})`
-
-  // Convert body to appropriate type for fetch API
-  // String for JSON payloads, Uint8Array for binary (Buffer isn't directly supported)
-  const fetchBody: BodyInit =
-    typeof body === 'string' ? body : new Uint8Array(body)
-
-  // Build headers with optional BYOS JWT auth
-  const headers: Record<string, string> = {
-    ...webhookHeaders,
-    'Content-Type': contentType,
   }
 
-  // Handle BYOS JWT authentication
-  if (byosConfig?.auth?.enabled && byosConfig.auth.access_token) {
-    const accessToken = await getValidAccessToken(webhookUrl, byosConfig.auth, onTokenRefresh)
-    if (accessToken) {
-      headers['Authorization'] = accessToken
-      log.debug`BYOS auth: using JWT token`
-    } else {
-      log.warn`BYOS auth: no valid token, request may fail`
+  #buildPayload(): { body: BodyInit; contentType: string } {
+    const { imageBuffer, format, webhookFormat, screenshotUrl, webhookUrl } =
+      this.#options
+    const { body, contentType } = getTransformer(webhookFormat).transform(
+      imageBuffer,
+      format,
+      this.#byosConfig,
+      screenshotUrl,
+    )
+
+    log.info`Sending webhook: ${webhookUrl} (${contentType}, ${imageBuffer.length} bytes, format: ${webhookFormat?.format ?? 'raw'})`
+
+    // String for JSON payloads, Uint8Array for binary (fetch rejects Buffer)
+    return {
+      body: typeof body === 'string' ? body : new Uint8Array(body),
+      contentType,
     }
   }
 
-  let response: Response
-  try {
-    response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers,
-      body: fetchBody,
-    })
-  } catch (err) {
-    // Bun's raw connect errors ("Unable to connect...") don't say which host
-    // failed or why. Most reports trace to hostnames that don't resolve from
-    // inside the add-on container (#71), so name the host and the likely fix.
-    const { hostname } = new URL(webhookUrl)
-    throw new Error(
-      `Could not reach ${hostname}: ${(err as Error).message}. ` +
-        `If ${hostname} is a local hostname, it may not resolve inside the add-on container — try the server's IP address instead.`,
-    )
+  async #buildHeaders(contentType: string): Promise<Record<string, string>> {
+    const headers: Record<string, string> = {
+      ...this.#options.webhookHeaders,
+      'Content-Type': contentType,
+    }
+
+    const auth = this.#byosConfig?.auth
+    if (auth?.enabled && auth.access_token) {
+      const accessToken = await getValidAccessToken(
+        this.#options.webhookUrl,
+        auth,
+        this.#options.onTokenRefresh,
+      )
+      if (accessToken) {
+        headers['Authorization'] = accessToken
+        log.debug`BYOS auth: using JWT token`
+      } else {
+        log.warn`BYOS auth: no valid token, request may fail`
+      }
+    }
+
+    return headers
   }
 
-  const responseText = await response.text()
+  async #send(
+    body: BodyInit,
+    headers: Record<string, string>,
+  ): Promise<Response> {
+    try {
+      return await fetch(this.#options.webhookUrl, {
+        method: 'POST',
+        headers,
+        body,
+      })
+    } catch (err) {
+      // Bun's raw connect errors ("Unable to connect...") don't say which
+      // host failed or why. Most reports trace to hostnames that don't
+      // resolve from inside the add-on container (#71), so name the host
+      // and the likely fix.
+      const host = this.#hostname()
+      throw new Error(
+        `Could not reach ${host}: ${(err as Error).message}. ` +
+          `If ${host} is a local hostname, it may not resolve inside the add-on container — try the server's IP address instead.`,
+      )
+    }
+  }
 
-  if (!response.ok) {
+  /** The webhook host for error messages; a malformed URL is shown raw. */
+  #hostname(): string {
+    try {
+      return new URL(this.#options.webhookUrl).hostname
+    } catch {
+      return this.#options.webhookUrl
+    }
+  }
+
+  /**
+   * On 422 with BYOS auth the screen usually already exists: find it and
+   * update via PATCH instead of delete + recreate. Anything unrecovered
+   * throws a WebhookHttpError.
+   */
+  async #recoverOrThrow(
+    response: Response,
+    responseText: string,
+    body: BodyInit,
+    headers: Record<string, string>,
+  ): Promise<WebhookDeliveryResult> {
     log.error`Webhook failed: ${response.status} ${response.statusText}`
 
-    // Handle 422 (Unprocessable Entity) - likely screen already exists in BYOS
-    // Find existing screen and update via PATCH instead of delete + recreate
-    if (response.status === 422 && byosConfig && headers['Authorization']) {
-      log.info`Got 422, attempting to find and update existing screen via PATCH...`
-      const screenId = await findExistingByosScreen(
-        webhookUrl,
-        byosConfig.model_id,
-        byosConfig.name,
-        headers['Authorization'],
-      )
-      if (screenId !== null) {
-        const patchResponse = await patchByosScreen(
-          webhookUrl,
-          screenId,
-          fetchBody,
-          headers['Authorization'],
-        )
-        if (patchResponse.ok) {
-          log.info`PATCH successful: ${patchResponse.status} ${patchResponse.statusText}`
-          return {
-            success: true,
-            status: patchResponse.status,
-            statusText: patchResponse.statusText,
-          }
-        }
-        log.error`PATCH failed: ${patchResponse.status} ${patchResponse.statusText}`
-      }
-    }
-
-    // Extract error message from response body for better UI feedback
-    let errorDetail = ''
-    if (responseText) {
-      const truncated = responseText.substring(
-        0,
-        SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH,
-      )
-      log.error`Response body: ${truncated}`
-
-      // Try to parse JSON error response (e.g., {"error": "Image bit depth..."})
-      try {
-        const parsed = JSON.parse(responseText) as {
-          error?: string
-          message?: string
-        }
-        if (parsed.error) {
-          errorDetail = ` - ${parsed.error}`
-        } else if (parsed.message) {
-          errorDetail = ` - ${parsed.message}`
-        }
-      } catch {
-        // Not JSON, use raw text if short enough
-        if (responseText.length <= 100) {
-          errorDetail = ` - ${responseText}`
-        }
-      }
+    const authToken = headers['Authorization']
+    if (response.status === 422 && this.#byosConfig && authToken) {
+      const patched = await this.#patchExistingScreen(body, authToken)
+      if (patched) return patched
     }
 
     throw new WebhookHttpError(
-      `HTTP ${response.status}: ${response.statusText}${errorDetail}`,
+      `HTTP ${response.status}: ${response.statusText}${this.#errorDetail(responseText)}`,
       response.status,
       parseRetryAfterMs(response.headers.get('Retry-After')),
     )
   }
 
-  log.info`Webhook success: ${response.status} ${response.statusText}`
-  if (responseText) {
-    log.debug`Response body: ${responseText.substring(0, SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH)}`
+  async #patchExistingScreen(
+    body: BodyInit,
+    authToken: string,
+  ): Promise<WebhookDeliveryResult | null> {
+    const { webhookUrl } = this.#options
+    const byos = this.#byosConfig!
+
+    log.info`Got 422, attempting to find and update existing screen via PATCH...`
+    const screenId = await findExistingByosScreen(
+      webhookUrl,
+      byos.model_id,
+      byos.name,
+      authToken,
+    )
+    if (screenId === null) return null
+
+    const patchResponse = await patchByosScreen(
+      webhookUrl,
+      screenId,
+      body,
+      authToken,
+    )
+    if (!patchResponse.ok) {
+      log.error`PATCH failed: ${patchResponse.status} ${patchResponse.statusText}`
+      return null
+    }
+
+    log.info`PATCH successful: ${patchResponse.status} ${patchResponse.statusText}`
+    return this.#result(patchResponse)
   }
 
-  return {
-    success: true,
-    status: response.status,
-    statusText: response.statusText,
+  /** Extracts a human-readable detail from an error response body. */
+  #errorDetail(responseText: string): string {
+    if (!responseText) return ''
+
+    log.error`Response body: ${responseText.substring(0, SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH)}`
+
+    try {
+      const parsed = JSON.parse(responseText) as {
+        error?: string
+        message?: string
+      }
+      if (parsed.error) return ` - ${parsed.error}`
+      if (parsed.message) return ` - ${parsed.message}`
+      return ''
+    } catch {
+      // Not JSON; short bodies are safe to show raw
+      return responseText.length <= 100 ? ` - ${responseText}` : ''
+    }
+  }
+
+  #successResult(response: Response, responseText: string): WebhookDeliveryResult {
+    log.info`Webhook success: ${response.status} ${response.statusText}`
+    if (responseText) {
+      log.debug`Response body: ${responseText.substring(0, SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH)}`
+    }
+    return this.#result(response)
+  }
+
+  #result(response: Response): WebhookDeliveryResult {
+    return {
+      success: true,
+      status: response.status,
+      statusText: response.statusText,
+    }
   }
 }
