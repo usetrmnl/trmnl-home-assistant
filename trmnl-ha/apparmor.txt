@@ -65,6 +65,8 @@ profile trmnl-ha flags=(attach_disconnected,mediate_deleted) {
   /app/*.ts r,
   /app/node_modules/** rm,
   /app/node_modules/.bin/** rix,
+  # esbuild ships a native binary tsx spawns on the Node fallback path (#24)
+  /app/node_modules/@esbuild/*/bin/* rix,
 
   # Logs and output directories (read/write/create)
   /app/logs/ rw,
