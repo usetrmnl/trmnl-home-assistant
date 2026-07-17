@@ -8,7 +8,7 @@ image: ghcr.io/usetrmnl/trmnl-ha-{arch}
 # codenotary: dev@usetrmnl.com
 homeassistant_api: true
 init: false # Image ships its own init (tini) to reap orphaned Chromium children (#72)
-apparmor: false # TODO: Enable after apparmor is tested. Disabling for now to resolve "audit backlog limit exceeded" warnings
+apparmor: true
 watchdog: "http://[HOST]:10000/health"
 arch:
   - aarch64
