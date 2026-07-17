@@ -47,6 +47,14 @@ describe('uploadToWebhook — connection errors', () => {
 
     expect(upload()).rejects.toThrow(/HTTP 500/)
   })
+
+  it('keeps the connection error message for a malformed webhook URL', async () => {
+    globalThis.fetch = mock(async () => {
+      throw new Error('Invalid URL')
+    }) as unknown as typeof fetch
+
+    expect(upload('not a url')).rejects.toThrow(/Could not reach not a url/)
+  })
 })
 
 describe('uploadToWebhook — HTTP error details', () => {
