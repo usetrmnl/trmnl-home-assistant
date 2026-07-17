@@ -81,8 +81,12 @@ export class NavigateToPage {
 
     let response
     try {
+      // 'load' is enough here: the wait pipeline that follows (hass
+      // readiness, loading indicators, paint stability) detects actual
+      // readiness, and a network-idle wait would add a fixed 500ms idle
+      // window on top of it.
       response = await this.#page.goto(pageUrl, {
-        waitUntil: 'networkidle2',
+        waitUntil: 'load',
         timeout: NAVIGATION_TIMEOUT,
       })
     } catch (err) {

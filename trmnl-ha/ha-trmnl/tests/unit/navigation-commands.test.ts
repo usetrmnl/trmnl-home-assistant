@@ -270,8 +270,21 @@ describe('NavigateToPage', () => {
         waitUntil?: string
         timeout?: number
       }
-      expect(opts.waitUntil).toBe('networkidle2')
       expect(opts.timeout).toBe(NAVIGATION_TIMEOUT)
+    })
+
+    it('waits only for the load event, not network idle', async () => {
+      const mockPage = createMockPage()
+      const nav = new NavigateToPage(
+        mockPage,
+        STUB_AUTH,
+        'http://homeassistant:8123',
+      )
+
+      await nav.call('/lovelace/0')
+
+      const opts = mockPage.calls.gotoOptions[0] as { waitUntil?: string }
+      expect(opts.waitUntil).toBe('load')
     })
   })
 
