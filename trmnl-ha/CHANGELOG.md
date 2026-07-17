@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.2] - 2026-07-17
 
 ### Added
 
@@ -13,18 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Navigation waits for the page load event instead of network idle, cutting ~400ms from every capture. Readiness is detected by the checks that follow (hass state, loading indicators, paint stability), which the network-idle window duplicated
 - The Home Assistant readiness check now logs a warning when it times out instead of a debug line — a capture that always spends the full 5s timeout is the usual cause of slow-capture reports (#57)
+- Webhook delivery and browser request serialization were restructured for maintainability, and the test suite was consolidated with coverage added for previously untested retry and error paths
 
 ### Fixed
 
 - Captures without a theme or dark-mode setting no longer pay a 500ms "theme changed" settle wait on every screenshot — a fresh page compared `false` against `undefined` and re-applied the default theme each time
 - A malformed webhook URL now surfaces the connection error naming the URL, instead of failing with a bare TypeError while composing that message
-
-## [Unreleased]
-
-### Changed
-
-- Navigation waits for the page load event instead of network idle, cutting ~400ms from every capture. Readiness is detected by the checks that follow (hass state, loading indicators, paint stability), which the network-idle window duplicated
 
 ## [0.9.1] - 2026-07-17
 
@@ -341,4 +337,5 @@ Based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main
 [0.8.2]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.8.1...v0.8.2
 [0.9.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.8.2...v0.9.0
 [0.9.1]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.9.0...v0.9.1
+[0.9.2]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.9.1...v0.9.2
 [0.2.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.1.0...v0.2.0
