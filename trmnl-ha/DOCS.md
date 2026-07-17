@@ -111,6 +111,7 @@ Both options work — the app auto-detects which path is available. If you're al
 | `KEEP_BROWSER_OPEN` | No | Keep browser alive between requests (default: `false`) |
 | `TZ` | No | Timezone for scheduled captures (e.g., `America/New_York`) |
 | `DEBUG_LOGGING` | No | Enable verbose logging (default: `false`) |
+| `RUNTIME` | No | Force the runtime: `bun` or `node`. Default auto-detects and falls back to Node when Bun cannot start (older CPUs) |
 
 Access the Web UI at `http://localhost:10000/`
 
