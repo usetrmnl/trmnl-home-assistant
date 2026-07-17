@@ -68,7 +68,7 @@ describe('RequestQueue', () => {
     expect(queue.tryAcquire()).toBe(true)
   })
 
-  it('hands off to a waiter before any newcomer can barge in', async () => {
+  it('hands the queue to a waiter before a new caller can take it', async () => {
     await queue.acquire()
     const waiter = queue.acquire()
 

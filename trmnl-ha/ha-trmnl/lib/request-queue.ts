@@ -4,7 +4,7 @@
  * The browser can run one operation at a time; callers acquire before
  * navigating or capturing and release when done. Waiters are woken in
  * arrival order, and release hands the queue directly to the next waiter
- * so a caller arriving in the same tick cannot barge in ahead of it.
+ * so a caller arriving in the same tick cannot take it ahead of them.
  *
  * @module lib/request-queue
  */

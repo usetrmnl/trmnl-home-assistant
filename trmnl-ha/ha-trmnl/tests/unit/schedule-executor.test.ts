@@ -161,7 +161,7 @@ describe('ScheduleExecutor — webhook failure reporting', () => {
 
   it('scrapes the status from a plain error message', async () => {
     globalThis.fetch = mock(async () => {
-      throw new Error('HTTP 503: upstream hiccup')
+      throw new Error('HTTP 503: service unavailable')
     }) as unknown as typeof fetch
     const executor = createExecutor(async () => Buffer.from('fake-png'))
 
