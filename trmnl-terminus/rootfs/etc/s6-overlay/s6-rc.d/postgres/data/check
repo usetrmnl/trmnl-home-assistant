@@ -1,0 +1,2 @@
+#!/bin/bash
+exec /usr/lib/postgresql/18/bin/pg_isready -h localhost -U postgres -q

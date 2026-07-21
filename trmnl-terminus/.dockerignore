@@ -1,0 +1,46 @@
+# Dev files - don't include in image so mounted config takes precedence
+options-dev.json
+options-dev.json.example
+
+# Git
+.git
+.gitignore
+.gitattributes
+.github
+
+# Editor and IDE
+*.swp
+*.swo
+.DS_Store
+.vscode
+.idea
+*.sublime-*
+
+# Docs and documentation
+*.md
+CHANGELOG*
+LICENSE
+CONTRIBUTING*
+
+# Logs and temp files
+logs/
+*.log
+tmp/
+temp/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Environment and local config
+.env
+.env.local
+.env.*.local
+
+# OS files
+Thumbs.db
+desktop.ini
+
+# Claude
+.claude/

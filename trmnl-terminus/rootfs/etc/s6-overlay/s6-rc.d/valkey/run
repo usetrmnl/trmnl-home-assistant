@@ -1,0 +1,16 @@
+#!/command/with-contenv bash
+# shellcheck shell=bash
+set -e
+
+VALKEY_DATA="/data/valkey"
+VALKEY_CONF="/etc/terminus/valkey.conf"
+VALKEY_SOCK="/var/run/valkey/valkey.sock"
+
+mkdir -p "$VALKEY_DATA" "$(dirname "$VALKEY_SOCK")"
+
+exec s6-notifyoncheck -d -n 30 -s 500 -w 1000 \
+    valkey-server "$VALKEY_CONF" \
+        --dir "$VALKEY_DATA" \
+        --unixsocket "$VALKEY_SOCK" \
+        --unixsocketperm 777 \
+        --daemonize no

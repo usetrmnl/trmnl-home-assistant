@@ -1,0 +1,32 @@
+---
+name: Terminus Server (BYOS)
+version: "0.1.0"
+slug: trmnl-terminus
+description: >-
+  Starts a Terminus Server that enables local management of TRMNL devices (BYOS)
+url: https://github.com/usetrmnl/trmnl-home-assistant
+# NOTE: Uncomment after setting up Codenotary signing in CI
+# codenotary: dev@usetrmnl.com
+homeassistant_api: true
+arch:
+  - aarch64
+  - amd64
+init: false
+startup: application
+timeout: 90
+stage: stable
+ports:
+  2300/tcp: 2300
+ports_description:
+  2300/tcp: Terminus Web Interface and API (direct access)
+webui: http://[HOST]:[PORT:2300]
+watchdog: http://[HOST]:[PORT:2300]/up
+backup_exclude:
+  - "*/logs/*"
+  - "*/tmp/*"
+schema:
+  ha_ip: str
+
+# Sidebar integration
+panel_icon: "mdi:monitor"
+panel_title: "TRMNL Terminus"

@@ -1,0 +1,7 @@
+---
+configuration:
+  ha_ip:
+    name: Home Assistant IP
+    description: >-
+      IP address of your Home Assistant instance
+      (e.g. 192.168.1.50).
