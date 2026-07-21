@@ -1,0 +1,11 @@
+#!/command/with-contenv bash
+# shellcheck shell=bash
+set -e
+
+source /usr/local/bin/terminus-env.sh
+export APP_SETUP=true
+cd /app
+
+echo "[terminus] Starting Terminus on port ${HANAMI_PORT}..."
+exec s6-setuidgid app scripts/docker/entrypoint \
+    bash -c "trap 'kill 0' TERM INT; bundle exec puma --config ./config/puma.rb & bundle exec sidekiq -r ./config/sidekiq.rb & wait"

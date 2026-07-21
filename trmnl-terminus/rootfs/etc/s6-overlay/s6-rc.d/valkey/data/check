@@ -1,0 +1,7 @@
+#!/bin/bash
+VALKEY_SOCK="/var/run/valkey/valkey.sock"
+if [ -S "$VALKEY_SOCK" ]; then
+    valkey-cli -s "$VALKEY_SOCK" ping 2>/dev/null | grep -q PONG
+else
+    exit 1
+fi

@@ -1,0 +1,36 @@
+#!/command/with-contenv bash
+# shellcheck shell=bash
+set -e
+
+PGDATA="/data/postgres"
+PGCONF="/etc/terminus/postgresql.conf"
+PG_BIN="/usr/lib/postgresql/18/bin"
+
+if [ ! -f "$PGDATA/PG_VERSION" ]; then
+    echo "[postgres] Initializing database..."
+    mkdir -p "$PGDATA"
+    chown postgres:postgres "$PGDATA"
+    s6-setuidgid postgres "$PG_BIN/initdb" \
+        --pgdata="$PGDATA" --auth=trust --encoding=UTF8 --locale=C
+
+    cp "$PGCONF" "$PGDATA/postgresql.conf"
+
+    cat > "$PGDATA/pg_hba.conf" << 'EOF'
+local   all   all                 trust
+host    all   all   127.0.0.1/32  trust
+host    all   all   ::1/128       trust
+EOF
+    chown postgres:postgres "$PGDATA/pg_hba.conf" "$PGDATA/postgresql.conf"
+
+    echo "[postgres] Creating terminus database..."
+    s6-setuidgid postgres "$PG_BIN/pg_ctl" -D "$PGDATA" -w start
+    s6-setuidgid postgres "$PG_BIN/psql" -c "CREATE DATABASE terminus"
+    s6-setuidgid postgres "$PG_BIN/pg_ctl" -D "$PGDATA" -w stop
+    echo "[postgres] Database initialized"
+fi
+
+chown -R postgres:postgres "$PGDATA"
+
+exec s6-notifyoncheck -d -n 60 -s 1000 -w 2000 \
+    s6-setuidgid postgres \
+    "$PG_BIN/postgres" -D "$PGDATA"
