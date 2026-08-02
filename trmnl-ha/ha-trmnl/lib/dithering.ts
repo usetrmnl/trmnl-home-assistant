@@ -594,8 +594,7 @@ export async function applyDithering(
 
   // Log output size
   const sizeKB = (buffer.length / 1024).toFixed(1)
-  const status = buffer.length > 50 * 1024 ? '⚠️ OVER 50KB' : '✓'
-  log.info`Output: ${buffer.length} bytes (${sizeKB}KB) ${status} [depth:${
+  log.info`Output: ${buffer.length} bytes (${sizeKB}KB) [depth:${
     bitDepth ?? 'auto'
   }, compression:${compressionLevel}]`
 
