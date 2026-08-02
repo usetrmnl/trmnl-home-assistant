@@ -115,8 +115,12 @@ jobs:
 
           branch="terminus-bump/${LATEST}"
 
-          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
-            echo "$branch already exists upstream - a pull request is already open"
+          # Test for the pull request, not the branch: a run that pushed and then
+          # failed to open one leaves the branch behind, and keying off the branch
+          # would skip every retry and never reopen it.
+          open_pr=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$open_pr" ]; then
+            echo "pull request #${open_pr} is already open for ${branch}"
             exit 0
           fi
 
@@ -124,7 +128,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
           git commit -am "Updated Terminus to ${LATEST}"
-          git push origin "$branch"
+          # Replaces any branch a previous failed run left behind.
+          git push --force origin "$branch"
 
           {
             printf 'Upstream tagged `%s`; the add-on pinned `%s`.\n\n' "$LATEST" "$CURRENT"
