@@ -4,12 +4,23 @@
 
 Automates the version bump process across all project files.
 
-### What it does
+`--addon` is required. The repo ships two add-ons off one tag stream, and
+releasing the wrong one is silent, so there is no default.
+
+### trmnl-ha
+
+Versioned in this repo and tagged `v<version>`.
 
 1. Bumps version in `package.json`, `config.yaml`, and `CHANGELOG.md`
 2. Creates a git commit with the changes
 3. Tags the commit with the new version
 4. Optionally pushes to remote
+
+### trmnl-terminus
+
+Its version mirrors the bundled Terminus release and is written by the
+`terminus-upstream-bump` workflow, so it takes no bump type. The script only
+publishes whatever `config.yaml` already says, tagged `terminus-v<version>`.
 
 ### Usage
 
@@ -24,9 +35,12 @@ npm run release:major     # 0.0.1 -> 1.0.0
 npm run release:dry       # See what would change
 
 # Direct script usage
-bun scripts/release.js patch
-bun scripts/release.js minor --dry-run
-bun scripts/release.js major --push
+bun scripts/release.js --addon=trmnl-ha patch
+bun scripts/release.js --addon=trmnl-ha minor --dry-run
+bun scripts/release.js --addon=trmnl-ha major --push
+
+# Publish the Terminus add-on at its current version
+bun scripts/release.js --addon=trmnl-terminus --push
 ```
 
 ### Options
