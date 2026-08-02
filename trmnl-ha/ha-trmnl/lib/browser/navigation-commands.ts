@@ -325,13 +325,11 @@ export class WaitForLoadingComplete {
   async #warnIfInternalsMissing(): Promise<void> {
     if (warnedAboutInternals) return
 
-    let present = true
     try {
-      present = await this.#page.evaluate(readinessInternalsPresent)
+      if (await this.#page.evaluate(readinessInternalsPresent)) return
     } catch (_err) {
       return // Page closed or navigated away.
     }
-    if (present) return
 
     warnedAboutInternals = true
     log.warn`This version of Home Assistant no longer reports when a dashboard has finished drawing, so screenshots may be captured before cards have filled in. Please report this along with your Home Assistant version.`
