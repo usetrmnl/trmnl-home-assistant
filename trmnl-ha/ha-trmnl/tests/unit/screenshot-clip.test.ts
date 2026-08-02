@@ -18,6 +18,7 @@
 
 import { mock, describe, it, expect, beforeEach } from 'bun:test'
 import type { BrowserDeps } from '../../screenshot.js'
+import { readinessInternalsPresent } from '../../lib/browser/navigation-commands.js'
 
 // Safety: const.ts needs these env vars at module load time (no options-dev.json in CI)
 process.env['HOME_ASSISTANT_URL'] = 'http://localhost:8123'
@@ -85,8 +86,12 @@ function createMockPage(): MockPage {
     evaluateOnNewDocument: mock(async () => ({ identifier: 'mock-id' })),
     goto: mock(async () => ({ ok: () => true, status: () => 200 })),
     removeScriptToEvaluateOnNewDocument: mock(async () => {}),
-    // Wait commands + page setup strategies
-    evaluate: mock(async () => 0),
+    // Wait commands + page setup strategies. The readiness check asks whether
+    // Home Assistant still exposes the fields it depends on, and must be told
+    // yes; every other caller here reads a count.
+    evaluate: mock(async (fn: unknown) =>
+      fn === readinessInternalsPresent ? true : 0,
+    ),
     waitForFunction: mock(async () => {}),
     fireConsole: (text: string, type: string = 'warn') => {
       const msg = { type: () => type, text: () => text }

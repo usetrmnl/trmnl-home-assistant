@@ -457,6 +457,25 @@ describe('WaitForPageLoad', () => {
 // =============================================================================
 
 describe('WaitForLoadingComplete', () => {
+  // The warning latches for the life of the process, so this has to run
+  // before anything else in the suite drives a page whose evaluate() reports
+  // the internals as missing.
+  it('checks the Home Assistant internals once and not again', async () => {
+    let checks = 0
+    const missingInternals = {
+      waitForFunction: async () => {},
+      evaluate: async () => {
+        checks++
+        return false
+      },
+    } as unknown as Page
+
+    await new WaitForLoadingComplete(missingInternals, 10).call()
+    await new WaitForLoadingComplete(missingInternals, 10).call()
+
+    expect(checks).toBe(1)
+  })
+
   it('returns wait time when resolved immediately', async () => {
     const mockPage = {
       waitForFunction: async () => {},
