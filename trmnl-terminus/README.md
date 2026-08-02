@@ -16,7 +16,7 @@ This is a Home Assistant add-on that runs a [TRMNL Terminus Server](https://gith
 
 2. Install the **Terminus Server (BYOS)** add-on
 
-3. Add your Home Assistance instance's information to the add-on's configuration
+3. Add your Home Assistant instance's information to the add-on's configuration
 
 4. Start the add-on and open the Web UI
 
