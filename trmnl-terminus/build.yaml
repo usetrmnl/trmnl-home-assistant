@@ -1,4 +1,4 @@
 ---
 build_from:
-  aarch64: ghcr.io/usetrmnl/terminus:0.66.0
-  amd64: ghcr.io/usetrmnl/terminus:0.66.0
+  aarch64: ghcr.io/usetrmnl/terminus:0.67.0
+  amd64: ghcr.io/usetrmnl/terminus:0.67.0
