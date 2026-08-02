@@ -13,6 +13,7 @@ import {
   WaitForLoadingComplete,
   DismissToasts,
   WaitForPaintStability,
+  WaitForWebSocketIdle,
   WaitForHassReady,
   UpdateLanguage,
   UpdateTheme,
@@ -275,7 +276,7 @@ describe('NavigateToPage', () => {
       expect(opts.timeout).toBe(NAVIGATION_TIMEOUT)
     })
 
-    it('waits only for the load event, not network idle', async () => {
+    it('waits for the network to settle so card resources finish loading', async () => {
       const mockPage = createMockPage()
       const nav = new NavigateToPage(
         mockPage,
@@ -286,7 +287,7 @@ describe('NavigateToPage', () => {
       await nav.call('/lovelace/0')
 
       const opts = mockPage.calls.gotoOptions[0] as { waitUntil?: string }
-      expect(opts.waitUntil).toBe('load')
+      expect(opts.waitUntil).toBe('networkidle2')
     })
   })
 
@@ -707,6 +708,88 @@ describe('WaitForPaintStability', () => {
     await cmd.call()
 
     expect(typeof capturedFn).toBe('function')
+  })
+})
+
+// =============================================================================
+// WaitForWebSocketIdle
+// =============================================================================
+
+/** A CDP session whose websocket frame events a test can drive. */
+function createWebSocketMockPage(options: { cdpUnavailable?: boolean } = {}): {
+  page: Page
+  emitFrame: () => void
+  wasDetached: () => boolean
+} {
+  const handlers: (() => void)[] = []
+  let detached = false
+
+  const page = {
+    createCDPSession: async () => {
+      if (options.cdpUnavailable) throw new Error('CDP unavailable')
+      return {
+        send: async () => {},
+        on: (_event: string, handler: () => void) => handlers.push(handler),
+        detach: async () => {
+          detached = true
+        },
+      }
+    },
+  } as unknown as Page
+
+  return {
+    page,
+    emitFrame: () => handlers.forEach((handler) => handler()),
+    wasDetached: () => detached,
+  }
+}
+
+describe('WaitForWebSocketIdle', () => {
+  it('resolves once no frame has arrived for the quiet window', async () => {
+    const { page } = createWebSocketMockPage()
+    const start = Date.now()
+
+    await new WaitForWebSocketIdle(page, 150, 2000).call()
+
+    expect(Date.now() - start).toBeGreaterThanOrEqual(150)
+  })
+
+  it('waits while frames keep arriving, then resolves after they stop', async () => {
+    const { page, emitFrame } = createWebSocketMockPage()
+    const interval = setInterval(emitFrame, 50)
+    setTimeout(() => clearInterval(interval), 250)
+    const start = Date.now()
+
+    await new WaitForWebSocketIdle(page, 150, 2000).call()
+
+    expect(Date.now() - start).toBeGreaterThanOrEqual(400)
+  })
+
+  it('stops at the timeout when frames never stop', async () => {
+    const { page, emitFrame } = createWebSocketMockPage()
+    const interval = setInterval(emitFrame, 40)
+    const start = Date.now()
+
+    await new WaitForWebSocketIdle(page, 300, 250).call()
+
+    clearInterval(interval)
+    const elapsed = Date.now() - start
+    expect(elapsed).toBeGreaterThanOrEqual(250)
+    expect(elapsed).toBeLessThan(700)
+  })
+
+  it('detaches the CDP session when done', async () => {
+    const { page, wasDetached } = createWebSocketMockPage()
+
+    await new WaitForWebSocketIdle(page, 100, 2000).call()
+
+    expect(wasDetached()).toBe(true)
+  })
+
+  it('does not throw when a CDP session cannot be created', async () => {
+    const { page } = createWebSocketMockPage({ cdpUnavailable: true })
+
+    await new WaitForWebSocketIdle(page, 100, 2000).call()
   })
 })
 
