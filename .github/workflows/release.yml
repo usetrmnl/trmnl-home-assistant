@@ -142,6 +142,13 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.TERMINUS_IMAGE_NAME }}-${{ matrix.arch }}:${{ steps.version.outputs.version }}
             ${{ env.REGISTRY }}/${{ env.TERMINUS_IMAGE_NAME }}-${{ matrix.arch }}:latest
+          # Without these the base image's labels survive, and GitHub attaches the
+          # package to usetrmnl/terminus rather than to this repository.
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.title=trmnl-terminus
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
           build-args: |
             BUILD_FROM=${{ steps.base.outputs.image }}
           cache-from: |
@@ -149,3 +156,4 @@ jobs:
             type=gha,scope=terminus-${{ matrix.cache_tag }}
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.TERMINUS_CACHE_REPO }}:${{ matrix.cache_tag }},mode=max
           provenance: false
+
