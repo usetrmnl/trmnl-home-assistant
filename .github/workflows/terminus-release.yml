@@ -1,0 +1,94 @@
+name: Terminus release
+
+# Publishes the release a merged version bump needs. The Supervisor pulls
+# image:version from config.yaml, so merging a bump ships nothing on its own -
+# release.yml only builds once a terminus-v* release exists.
+#
+# Requires a RELEASE_PAT secret (repo scope). GitHub does not trigger workflows
+# from GITHUB_TOKEN-authored events, so a release created with the default token
+# would never start release.yml, and the bump would land having shipped nothing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - trmnl-terminus/config.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish the add-on release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve the version
+        id: version
+        run: |
+          set -euo pipefail
+          version=$(grep '^version:' trmnl-terminus/config.yaml | awk '{print $2}' | tr -d '"')
+          if [ -z "$version" ]; then
+            echo "::error::No version found in trmnl-terminus/config.yaml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "config.yaml pins $version"
+
+      # config.yaml changes for reasons other than a bump; those must not retag.
+      - name: Skip when the release already exists
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "terminus-v${VERSION}" >/dev/null 2>&1; then
+            echo "terminus-v${VERSION} is already published; nothing to do"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Failing loudly beats publishing a release that silently builds nothing.
+      - name: Require the release token
+        if: steps.existing.outputs.exists == 'false'
+        env:
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+        run: |
+          if [ -z "${RELEASE_PAT:-}" ]; then
+            echo "::error::RELEASE_PAT is unset or empty. A release created with GITHUB_TOKEN will not trigger release.yml, so no images would be built."
+            exit 1
+          fi
+          echo "RELEASE_PAT in use - release.yml will run"
+
+      - name: Publish the release
+        if: steps.existing.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          title="$(grep '^name:' trmnl-terminus/config.yaml | cut -d: -f2- | sed 's/^ *//;s/"//g') ${VERSION}"
+
+          # Lift this version's CHANGELOG section; the bump workflow wrote it.
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' trmnl-terminus/CHANGELOG.md > /tmp/notes.md
+
+          if [ ! -s /tmp/notes.md ]; then
+            printf 'Bundles Terminus %s; the add-on version mirrors the bundled server release.\n' "$VERSION" > /tmp/notes.md
+          fi
+
+          gh release create "terminus-v${VERSION}" \
+            --target main \
+            --title "$title" \
+            --notes-file /tmp/notes.md
+
+          echo "Published terminus-v${VERSION} - release.yml will build and push the images"
