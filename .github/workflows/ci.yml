@@ -9,6 +9,7 @@ on:
 env:
   REGISTRY: ghcr.io
   CACHE_REPO: ${{ github.repository_owner }}/trmnl-ha-cache
+  TERMINUS_CACHE_REPO: ${{ github.repository_owner }}/trmnl-terminus-cache
 
 jobs:
   lint:
@@ -188,3 +189,82 @@ jobs:
           }
           smoke bun-runtime "Starting TRMNL HA"
           smoke node-runtime "Starting under Node" -e RUNTIME=node
+
+  build-terminus:
+    name: Build Terminus Add-on (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            tag: amd64
+            arch: amd64
+          - platform: linux/arm64
+            tag: arm64
+            arch: aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The Supervisor supplies BUILD_FROM from build.yaml; plain buildx does not.
+      - name: Resolve Terminus base image
+        id: base
+        working-directory: trmnl-terminus
+        run: echo "image=$(grep "^  ${{ matrix.arch }}:" build.yaml | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Build add-on image
+        uses: docker/build-push-action@v5
+        with:
+          context: trmnl-terminus
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: true
+          tags: trmnl-terminus:test-${{ matrix.tag }}
+          build-args: |
+            BUILD_FROM=${{ steps.base.outputs.image }}
+          cache-from: |
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.TERMINUS_CACHE_REPO }}:${{ matrix.tag }}
+            type=gha,scope=terminus-${{ matrix.tag }}
+          cache-to: ${{ github.event_name == 'push' && format('type=registry,ref={0}/{1}:{2},mode=max', env.REGISTRY, env.TERMINUS_CACHE_REPO, matrix.tag) || format('type=gha,mode=max,scope=terminus-{0}', matrix.tag) }}
+          provenance: false
+
+      # amd64 only - QEMU makes arm64 boot tests too slow here.
+      - name: Smoke test add-on boot
+        if: matrix.tag == 'amd64'
+        run: |
+          set -e
+          echo '{"ha_ip":"127.0.0.1"}' > /tmp/options.json
+
+          docker run -d --name terminus-smoke -p 2300:2300 \
+            -v /tmp/options.json:/data/options.json \
+            trmnl-terminus:test-amd64 >/dev/null
+
+          # -L: /up redirects to /login, matching the Supervisor's own watchdog check.
+          for _ in $(seq 1 90); do
+            curl -fsL http://localhost:2300/up >/dev/null 2>&1 && break
+            sleep 2
+          done
+
+          curl -fsL http://localhost:2300/up >/dev/null || {
+            echo "::error::Terminus add-on did not become healthy"
+            docker logs terminus-smoke
+            exit 1
+          }
+          echo "Terminus add-on healthy"
+          docker rm -f terminus-smoke >/dev/null
