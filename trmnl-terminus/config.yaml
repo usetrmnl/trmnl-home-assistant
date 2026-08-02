@@ -20,6 +20,8 @@ ports_description:
   2300/tcp: Terminus Web Interface and API (direct access)
 webui: http://[HOST]:[PORT:2300]
 watchdog: http://[HOST]:[PORT:2300]/up
+# Stop the add-on first: a hot copy of a running Postgres data dir restores torn
+backup: cold
 backup_exclude:
   - "*/logs/*"
   - "*/tmp/*"
