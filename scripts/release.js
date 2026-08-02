@@ -15,11 +15,37 @@ const __dirname = dirname(__filename)
 const ROOT_DIR = join(__dirname, '..')
 const GITHUB_REPO = 'usetrmnl/trmnl-home-assistant'
 
-// File paths
-const PATHS = {
-  packageJson: join(ROOT_DIR, 'trmnl-ha/ha-trmnl/package.json'),
-  configYaml: join(ROOT_DIR, 'trmnl-ha/config.yaml'),
-  changelog: join(ROOT_DIR, 'trmnl-ha/CHANGELOG.md'),
+// The repo ships two add-ons off one tag stream, so which one is being released
+// has to be stated rather than assumed.
+const ADDONS = {
+  'trmnl-ha': {
+    dir: 'trmnl-ha',
+    packageJson: 'trmnl-ha/ha-trmnl/package.json',
+    tagPrefix: 'v',
+    bumpable: true,
+  },
+  'trmnl-terminus': {
+    dir: 'trmnl-terminus',
+    packageJson: null,
+    tagPrefix: 'terminus-v',
+    // Its version mirrors the bundled Terminus release, so it is never bumped
+    // here - the upstream bump workflow sets it and this only publishes it.
+    bumpable: false,
+  },
+}
+
+let ADDON
+let PATHS
+let TAG_PREFIX
+
+function selectAddon(slug) {
+  ADDON = ADDONS[slug]
+  TAG_PREFIX = ADDON.tagPrefix
+  PATHS = {
+    packageJson: ADDON.packageJson ? join(ROOT_DIR, ADDON.packageJson) : null,
+    configYaml: join(ROOT_DIR, ADDON.dir, 'config.yaml'),
+    changelog: join(ROOT_DIR, ADDON.dir, 'CHANGELOG.md'),
+  }
 }
 
 /**
@@ -41,17 +67,24 @@ function bumpVersion(version, type) {
 }
 
 /**
- * Get current version from package.json
+ * Get current version from package.json, or config.yaml for add-ons without one
  */
 function getCurrentVersion() {
-  const pkg = JSON.parse(readFileSync(PATHS.packageJson, 'utf8'))
-  return pkg.version
+  if (PATHS.packageJson) {
+    return JSON.parse(readFileSync(PATHS.packageJson, 'utf8')).version
+  }
+  const match = readFileSync(PATHS.configYaml, 'utf8').match(
+    /^version: "(.*)"$/m
+  )
+  if (!match) throw new Error(`No version found in ${PATHS.configYaml}`)
+  return match[1]
 }
 
 /**
  * Update package.json version
  */
 function updatePackageJson(newVersion) {
+  if (!PATHS.packageJson) return
   const pkg = JSON.parse(readFileSync(PATHS.packageJson, 'utf8'))
   pkg.version = newVersion
   writeFileSync(PATHS.packageJson, JSON.stringify(pkg, null, 2) + '\n')
@@ -74,11 +107,15 @@ function updateConfigYaml(newVersion) {
 function getCommitsSinceLastTag() {
   let lastTag
   try {
-    // Use git tag with sort to get most recent tag reliably
-    lastTag = execSync('git tag -l --sort=-creatordate | head -1', {
-      encoding: 'utf8',
-      shell: true,
-    }).trim()
+    // Scoped to this add-on's prefix: the other add-on's tags interleave in this
+    // repo, and an unfiltered lookup builds the changelog from the wrong range.
+    lastTag = execSync(
+      `git tag -l '${TAG_PREFIX}*' --sort=-creatordate | head -1`,
+      {
+        encoding: 'utf8',
+        shell: true,
+      }
+    ).trim()
   } catch {
     // No tags yet
     lastTag = ''
@@ -211,7 +248,7 @@ function updateChangelog(newVersion, previousVersion, entries) {
   const rest = content.slice(headerEnd)
 
   // Update comparison links at the bottom
-  const newLink = `[${newVersion}]: https://github.com/${GITHUB_REPO}/compare/v${previousVersion}...v${newVersion}`
+  const newLink = `[${newVersion}]: https://github.com/${GITHUB_REPO}/compare/${TAG_PREFIX}${previousVersion}...${TAG_PREFIX}${newVersion}`
 
   // Find where links section starts (after ---)
   const linksStart = rest.lastIndexOf('\n[')
@@ -242,11 +279,19 @@ function getCurrentBranch() {
  * Create git commit and tag
  */
 function gitCommitAndTag(version, dryRun = false) {
-  const commands = [
-    `git add ${PATHS.packageJson} ${PATHS.configYaml} ${PATHS.changelog}`,
-    `git commit -m "Release ${version}"`,
-    `git tag -a v${version} -m "Release ${version}"`,
-  ]
+  const tag = `${TAG_PREFIX}${version}`
+  const staged = [PATHS.packageJson, PATHS.configYaml, PATHS.changelog]
+    .filter(Boolean)
+    .join(' ')
+
+  // Nothing to bump for a mirrored version, so the release is the tag alone.
+  const commands = ADDON.bumpable
+    ? [
+        `git add ${staged}`,
+        `git commit -m "Release ${version}"`,
+        `git tag -a ${tag} -m "Release ${version}"`,
+      ]
+    : [`git tag -a ${tag} -m "Release ${version}"`]
 
   if (dryRun) {
     console.log('\n🔍 Dry run - would execute:')
@@ -263,7 +308,7 @@ function gitCommitAndTag(version, dryRun = false) {
     }
   })
 
-  console.log(`✅ Created git commit and tag v${version}`)
+  console.log(`✅ Created git tag ${TAG_PREFIX}${version}`)
 }
 
 /**
@@ -272,11 +317,17 @@ function gitCommitAndTag(version, dryRun = false) {
 function release(bumpType, options = {}) {
   const { dryRun = false, push = false } = options
 
-  console.log(`\n🚀 Starting release process (${bumpType})\n`)
+  console.log(
+    `\n🚀 Starting release process (${ADDON.dir}${
+      bumpType ? `, ${bumpType}` : ''
+    })\n`
+  )
 
   // Get current and new version
   const currentVersion = getCurrentVersion()
-  const newVersion = bumpVersion(currentVersion, bumpType)
+  const newVersion = ADDON.bumpable
+    ? bumpVersion(currentVersion, bumpType)
+    : currentVersion
 
   console.log(`📦 Current version: ${currentVersion}`)
   console.log(`📦 New version: ${newVersion}\n`)
@@ -348,10 +399,14 @@ function release(bumpType, options = {}) {
     process.exit(1)
   }
 
-  // Update all files
-  updatePackageJson(newVersion)
-  updateConfigYaml(newVersion)
-  updateChangelog(newVersion, currentVersion, entries)
+  // A mirrored version is already written by the upstream bump workflow.
+  if (ADDON.bumpable) {
+    updatePackageJson(newVersion)
+    updateConfigYaml(newVersion)
+    updateChangelog(newVersion, currentVersion, entries)
+  } else {
+    console.log(`📦 Publishing ${ADDON.dir} at its current version\n`)
+  }
 
   // Git commit and tag
   gitCommitAndTag(newVersion)
@@ -359,7 +414,9 @@ function release(bumpType, options = {}) {
   if (push) {
     console.log('\n📤 Pushing to remote...')
     // Push commit and ONLY the new tag (not all tags)
-    execSync(`git push && git push origin v${newVersion}`, { stdio: 'inherit' })
+    execSync(`git push && git push origin ${TAG_PREFIX}${newVersion}`, {
+      stdio: 'inherit',
+    })
     console.log('✅ Pushed commit and tag to remote')
 
     // Create GitHub release with changelog notes (using pre-captured entries)
@@ -368,7 +425,7 @@ function release(bumpType, options = {}) {
 
     try {
       execSync(
-        `gh release create v${newVersion} --title "v${newVersion}" -R ${GITHUB_REPO} --notes "${releaseNotes.replace(
+        `gh release create ${TAG_PREFIX}${newVersion} --title "${TAG_PREFIX}${newVersion}" -R ${GITHUB_REPO} --notes "${releaseNotes.replace(
           /"/g,
           '\\"'
         )}"`,
@@ -384,13 +441,13 @@ function release(bumpType, options = {}) {
         '⚠️  Failed to create GitHub release. Create manually with:'
       )
       console.log(
-        `   gh release create v${newVersion} --title "v${newVersion}" -R ${GITHUB_REPO}`
+        `   gh release create ${TAG_PREFIX}${newVersion} --title "${TAG_PREFIX}${newVersion}" -R ${GITHUB_REPO}`
       )
     }
   } else {
-    console.log(`\n💡 To push: git push && git push origin v${newVersion}`)
+    console.log(`\n💡 To push: git push && git push origin ${TAG_PREFIX}${newVersion}`)
     console.log(
-      `💡 Then create release: gh release create v${newVersion} -R ${GITHUB_REPO}`
+      `💡 Then create release: gh release create ${TAG_PREFIX}${newVersion} -R ${GITHUB_REPO}`
     )
   }
 
@@ -399,17 +456,24 @@ function release(bumpType, options = {}) {
 
 // Parse CLI arguments
 const args = process.argv.slice(2)
-const bumpType = args[0]
+const addonArg = args.find((a) => a.startsWith('--addon='))?.split('=')[1]
+const bumpType = args.find((a) => ['patch', 'minor', 'major'].includes(a))
 const flags = {
   dryRun: args.includes('--dry-run') || args.includes('-d'),
   push: args.includes('--push') || args.includes('-p'),
 }
 
-if (!bumpType || !['patch', 'minor', 'major'].includes(bumpType)) {
-  console.error(`
-Usage: bun scripts/release.js [patch|minor|major] [options]
+const usage = `
+Usage: bun scripts/release.js --addon=<name> [patch|minor|major] [options]
 
-Bump types:
+Add-ons:
+  trmnl-ha         versioned here; takes a bump type, tags v<version>
+  trmnl-terminus   version mirrors the bundled Terminus and is set by the
+                   upstream bump workflow, so it takes no bump type and
+                   publishes whatever config.yaml already says as
+                   terminus-v<version>
+
+Bump types (trmnl-ha only):
   patch   0.0.1 -> 0.0.2 (bug fixes)
   minor   0.0.1 -> 0.1.0 (new features, backwards compatible)
   major   0.0.1 -> 1.0.0 (breaking changes)
@@ -419,10 +483,31 @@ Options:
   --push, -p       Push commit and tags to remote after release
 
 Examples:
-  bun scripts/release.js patch
-  bun scripts/release.js minor --dry-run
-  bun scripts/release.js major --push
-`)
+  bun scripts/release.js --addon=trmnl-ha patch
+  bun scripts/release.js --addon=trmnl-ha minor --dry-run
+  bun scripts/release.js --addon=trmnl-terminus --push
+`
+
+// Required rather than defaulted: releasing the wrong add-on is silent, and
+// both live in one repo off one tag stream.
+if (!addonArg || !ADDONS[addonArg]) {
+  console.error(
+    `\n❌ Pass --addon=<${Object.keys(ADDONS).join('|')}>\n${usage}`
+  )
+  process.exit(1)
+}
+
+selectAddon(addonArg)
+
+if (ADDON.bumpable && !bumpType) {
+  console.error(`\n❌ ${addonArg} needs a bump type\n${usage}`)
+  process.exit(1)
+}
+
+if (!ADDON.bumpable && bumpType) {
+  console.error(
+    `\n❌ ${addonArg} takes no bump type - its version mirrors the bundled Terminus release\n${usage}`
+  )
   process.exit(1)
 }
 
