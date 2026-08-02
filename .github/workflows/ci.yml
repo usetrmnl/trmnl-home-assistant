@@ -209,6 +209,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Rejects a non-compiling profile before it reaches a real install.
+      - name: Load AppArmor profile
+        id: apparmor
+        if: matrix.tag == 'amd64'
+        run: |
+          set -e
+          command -v apparmor_parser >/dev/null 2>&1 || {
+            sudo apt-get update -qq && sudo apt-get install -y -qq apparmor
+          }
+          apparmor_parser -Q -d trmnl-terminus/apparmor.txt >/dev/null
+          echo "profile compiles"
+
+          if [ ! -d /sys/kernel/security/apparmor ]; then
+            echo "::warning::Runner kernel has no AppArmor; enforcement not tested"
+            echo "enforced=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          sudo apparmor_parser -r -W trmnl-terminus/apparmor.txt
+          echo "enforced=true" >> "$GITHUB_OUTPUT"
+          echo "profile loaded and enforcing"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -251,7 +272,15 @@ jobs:
           set -e
           echo '{"ha_ip":"127.0.0.1"}' > /tmp/options.json
 
+          if [ "${{ steps.apparmor.outputs.enforced }}" = "true" ]; then
+            SECURITY_OPT="--security-opt=apparmor=trmnl-terminus"
+          else
+            SECURITY_OPT=""
+          fi
+
+          # shellcheck disable=SC2086
           docker run -d --name terminus-smoke -p 2300:2300 \
+            $SECURITY_OPT \
             -v /tmp/options.json:/data/options.json \
             trmnl-terminus:test-amd64 >/dev/null
 
@@ -268,3 +297,29 @@ jobs:
           }
           echo "Terminus add-on healthy"
           docker rm -f terminus-smoke >/dev/null
+
+      # Control run proves /config is readable unconfined, so a failure below
+      # can only be AppArmor.
+      - name: AppArmor denies Home Assistant's config
+        if: matrix.tag == 'amd64' && steps.apparmor.outputs.enforced == 'true'
+        run: |
+          set -e
+          mkdir -p /tmp/fake-ha-config
+          echo "ha-secret" > /tmp/fake-ha-config/secrets.yaml
+
+          docker run --rm --entrypoint cat \
+            -v /tmp/fake-ha-config:/config:ro \
+            trmnl-terminus:test-amd64 /config/secrets.yaml >/dev/null || {
+              echo "::error::Control run could not read /config; the denial test would prove nothing"
+              exit 1
+            }
+          echo "control: /config readable unconfined"
+
+          if docker run --rm --entrypoint cat \
+               --security-opt=apparmor=trmnl-terminus \
+               -v /tmp/fake-ha-config:/config:ro \
+               trmnl-terminus:test-amd64 /config/secrets.yaml >/dev/null 2>&1; then
+            echo "::error::AppArmor did not block /config - the deny rule is not taking effect"
+            exit 1
+          fi
+          echo "enforced: /config denied"

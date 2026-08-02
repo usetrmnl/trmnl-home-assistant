@@ -15,6 +15,7 @@ init: false
 startup: application
 timeout: 90
 stage: stable
+apparmor: true
 ports:
   2300/tcp: 2300
 ports_description:
