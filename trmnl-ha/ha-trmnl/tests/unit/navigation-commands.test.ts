@@ -16,6 +16,8 @@ import {
   WaitForHassReady,
   UpdateLanguage,
   UpdateTheme,
+  isPageReadyForCapture,
+  readinessInternalsPresent,
   type AuthStorage,
 } from '../../lib/browser/navigation-commands.js'
 import { CannotOpenPageError } from '../../error.js'
@@ -816,5 +818,300 @@ describe('UpdateTheme', () => {
       theme: '',
       dark: false,
     })
+  })
+})
+
+// =============================================================================
+// Fake DOM
+//
+// isPageReadyForCapture and readinessInternalsPresent are shipped to the
+// browser by page.evaluate, so they read globals rather than take a tree as an
+// argument. These fakes supply the few DOM methods they use.
+// =============================================================================
+
+interface FakeEl {
+  tagName: string
+  /** Selectors this element answers to, since the fake does not parse CSS. */
+  matches?: string[]
+  shadowRoot?: FakeEl | null
+  children?: FakeEl[]
+  hidden?: boolean
+  _panelState?: string
+  _cards?: unknown[]
+  _data?: unknown
+  _chartData?: unknown
+}
+
+interface FakeNode extends FakeEl {
+  shadowRoot: FakeNode | null
+  firstElementChild: FakeNode | null
+  querySelector: (s: string) => FakeNode | null
+  querySelectorAll: (s: string) => FakeNode[]
+}
+
+function node(el: FakeEl): FakeNode {
+  const children = (el.children ?? []).map(node)
+  const descendants = children.flatMap((c) => [c, ...c.querySelectorAll('*')])
+
+  const querySelectorAll = (sel: string): FakeNode[] => {
+    if (sel === '*') return descendants
+    const wanted = sel.split(',').map((s) => s.trim())
+    return descendants.filter((d) =>
+      (d.matches ?? []).some((m) => wanted.includes(m)),
+    )
+  }
+
+  return {
+    ...el,
+    children,
+    shadowRoot: el.shadowRoot ? node(el.shadowRoot) : null,
+    firstElementChild: children[0] ?? null,
+    querySelectorAll,
+    querySelector: (sel) => querySelectorAll(sel)[0] ?? null,
+  }
+}
+
+function installDom(opts: { launchScreen?: boolean; root?: FakeEl | null }) {
+  const root = opts.root ? node(opts.root) : null
+  const globals = globalThis as unknown as {
+    document: unknown
+    window: unknown
+  }
+  globals.document = {
+    getElementById: (id: string) =>
+      id === 'ha-launch-screen' && opts.launchScreen ? {} : null,
+    querySelector: (sel: string) => (sel === 'home-assistant' ? root : null),
+  }
+  globals.window = {
+    getComputedStyle: (el: FakeNode) =>
+      el.hidden
+        ? { display: 'none', visibility: 'hidden' }
+        : { display: 'block', visibility: 'visible' },
+  }
+}
+
+/** home-assistant tree with the given panel mounted in partial-panel-resolver. */
+function haWith(panel: FakeEl | null): FakeEl {
+  return {
+    tagName: 'HOME-ASSISTANT',
+    shadowRoot: {
+      tagName: '#shadow',
+      children: [
+        {
+          tagName: 'HOME-ASSISTANT-MAIN',
+          matches: ['home-assistant-main'],
+          shadowRoot: {
+            tagName: '#shadow',
+            children: [
+              {
+                tagName: 'PARTIAL-PANEL-RESOLVER',
+                matches: ['partial-panel-resolver'],
+                children: panel ? [panel] : [],
+              },
+            ],
+          },
+        },
+      ],
+    },
+  }
+}
+
+/** A loaded lovelace panel containing the given cards. */
+function lovelaceWith(cards: FakeEl[]): FakeEl {
+  return haWith({
+    tagName: 'HA-PANEL-LOVELACE',
+    _panelState: 'loaded',
+    children: cards,
+  })
+}
+
+/** A loaded lovelace panel whose view declares cards but has rendered some. */
+function viewWith(declared: number, rendered: number): FakeEl {
+  return lovelaceWith([
+    {
+      tagName: 'HUI-VIEW',
+      _cards: Array.from({ length: declared }, () => ({})),
+      children: Array.from({ length: rendered }, () => ({
+        tagName: 'HUI-CARD',
+      })),
+    },
+  ])
+}
+
+const SPINNER: FakeEl = {
+  tagName: 'HA-CIRCULAR-PROGRESS',
+  matches: ['ha-circular-progress'],
+}
+
+// =============================================================================
+// isPageReadyForCapture
+// =============================================================================
+
+describe('isPageReadyForCapture', () => {
+  const selectors =
+    'ha-circular-progress, hass-loading-screen, .loading, .spinner, [loading], hui-card-preview'
+
+  const ready = (): boolean => isPageReadyForCapture(selectors)
+
+  it('captures a page that has no home-assistant element', () => {
+    installDom({ root: null })
+
+    expect(ready()).toBe(true)
+  })
+
+  describe('start up', () => {
+    it('waits while the launch screen is up', () => {
+      installDom({ launchScreen: true, root: lovelaceWith([]) })
+
+      expect(ready()).toBe(false)
+    })
+
+    it('waits after the launch screen goes but before a panel mounts', () => {
+      installDom({ root: haWith(null) })
+
+      expect(ready()).toBe(false)
+    })
+
+    it('waits while the lovelace panel reports itself loading', () => {
+      installDom({
+        root: haWith({ tagName: 'HA-PANEL-LOVELACE', _panelState: 'loading' }),
+      })
+
+      expect(ready()).toBe(false)
+    })
+
+    it('captures panels that report no load state', () => {
+      installDom({ root: haWith({ tagName: 'HA-PANEL-HISTORY' }) })
+
+      expect(ready()).toBe(true)
+    })
+  })
+
+  describe('loading indicators', () => {
+    it('waits while one is visible', () => {
+      installDom({ root: lovelaceWith([SPINNER]) })
+
+      expect(ready()).toBe(false)
+    })
+
+    it('captures when the only one is hidden', () => {
+      installDom({ root: lovelaceWith([{ ...SPINNER, hidden: true }]) })
+
+      expect(ready()).toBe(true)
+    })
+  })
+
+  describe('cards a view has yet to render', () => {
+    it('waits while any are outstanding', () => {
+      installDom({ root: viewWith(3, 0) })
+
+      expect(ready()).toBe(false)
+    })
+
+    it('captures once all are rendered', () => {
+      installDom({ root: viewWith(2, 2) })
+
+      expect(ready()).toBe(true)
+    })
+
+    it('captures a dashboard that declares none', () => {
+      installDom({ root: viewWith(0, 0) })
+
+      expect(ready()).toBe(true)
+    })
+  })
+
+  describe('energy cards', () => {
+    it('waits on one holding no data', () => {
+      installDom({
+        root: lovelaceWith([
+          { tagName: 'HUI-ENERGY-SOURCES-TABLE-CARD', _data: undefined },
+        ]),
+      })
+
+      expect(ready()).toBe(false)
+    })
+
+    it('captures once it has data', () => {
+      installDom({
+        root: lovelaceWith([
+          { tagName: 'HUI-ENERGY-SOURCES-TABLE-CARD', _data: { stats: [] } },
+        ]),
+      })
+
+      expect(ready()).toBe(true)
+    })
+
+    it('waits on a usage graph holding no series', () => {
+      installDom({
+        root: lovelaceWith([
+          { tagName: 'HUI-ENERGY-USAGE-GRAPH-CARD', _chartData: [] },
+        ]),
+      })
+
+      expect(ready()).toBe(false)
+    })
+
+    it('captures once the usage graph has its series', () => {
+      installDom({
+        root: lovelaceWith([
+          { tagName: 'HUI-ENERGY-USAGE-GRAPH-CARD', _chartData: [{}, {}] },
+        ]),
+      })
+
+      expect(ready()).toBe(true)
+    })
+
+    it('captures alongside energy elements that hold neither', () => {
+      installDom({
+        root: lovelaceWith([
+          { tagName: 'HUI-ENERGY-DATE-SELECTION-CARD' },
+          { tagName: 'HUI-ENERGY-PERIOD-SELECTOR' },
+        ]),
+      })
+
+      expect(ready()).toBe(true)
+    })
+  })
+})
+
+// =============================================================================
+// readinessInternalsPresent
+// =============================================================================
+
+describe('readinessInternalsPresent', () => {
+  it('passes a page that has no home-assistant element', () => {
+    installDom({ root: null })
+
+    expect(readinessInternalsPresent()).toBe(true)
+  })
+
+  it('passes a panel that never carried these fields', () => {
+    installDom({ root: haWith({ tagName: 'HA-PANEL-HISTORY' }) })
+
+    expect(readinessInternalsPresent()).toBe(true)
+  })
+
+  it('passes lovelace while both fields are there', () => {
+    installDom({ root: viewWith(0, 0) })
+
+    expect(readinessInternalsPresent()).toBe(true)
+  })
+
+  it('fails when the lovelace panel drops its load state', () => {
+    installDom({
+      root: haWith({
+        tagName: 'HA-PANEL-LOVELACE',
+        children: [{ tagName: 'HUI-VIEW', _cards: [] }],
+      }),
+    })
+
+    expect(readinessInternalsPresent()).toBe(false)
+  })
+
+  it('fails when no view declares its cards', () => {
+    installDom({ root: lovelaceWith([{ tagName: 'HUI-VIEW' }]) })
+
+    expect(readinessInternalsPresent()).toBe(false)
   })
 })
