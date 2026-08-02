@@ -171,6 +171,9 @@ jobs:
       - name: Append the pull references
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The job skips actions/checkout, so gh has no git remote to read the
+          # repository from and needs telling outright.
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
           OWNER: ${{ github.repository_owner }}
         run: |
