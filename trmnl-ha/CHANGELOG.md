@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Energy and history cards were captured before their data arrived, showing "Loading" or empty axes. Navigation now waits for the Home Assistant websocket to go quiet, and restores waiting for the network to settle, before capturing (#87, #84)
+
 ## [0.9.4] - 2026-08-02
 
 ### Added

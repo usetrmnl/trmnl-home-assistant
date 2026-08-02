@@ -84,12 +84,10 @@ export class NavigateToPage {
 
     let response
     try {
-      // 'load' is enough here: the wait pipeline that follows (hass
-      // readiness, loading indicators, paint stability) detects actual
-      // readiness, and a network-idle wait would add a fixed 500ms idle
-      // window on top of it.
+      // networkidle2, not the faster 'load': cards keep loading resources
+      // after the load event fires, so 'load' captures a half-drawn dashboard.
       response = await this.#page.goto(pageUrl, {
-        waitUntil: 'load',
+        waitUntil: 'networkidle2',
         timeout: NAVIGATION_TIMEOUT,
       })
     } catch (err) {
@@ -445,6 +443,62 @@ export class WaitForPaintStability {
       )
     } catch (_err) {
       log.debug`Paint stability check timed out`
+    }
+  }
+}
+
+/**
+ * Waits for the Home Assistant websocket to go quiet.
+ *
+ * Energy and history cards render a plain "Loading" string with no element to
+ * match on while they fetch their data over the websocket, which an HTTP
+ * network-idle check cannot see. Watching the frames covers every such card
+ * without depending on card internals.
+ *
+ * `quietMs` must be long enough to span a card's fetch but short enough to fit
+ * between the routine state updates that also travel this websocket. `timeout`
+ * caps the wait for a dashboard whose updates never pause.
+ */
+export class WaitForWebSocketIdle {
+  #page: Page
+  #quietMs: number
+  #timeout: number
+
+  constructor(page: Page, quietMs: number = 500, timeout: number = 12000) {
+    this.#page = page
+    this.#quietMs = quietMs
+    this.#timeout = timeout
+  }
+
+  async call(): Promise<void> {
+    let client
+    try {
+      client = await this.#page.createCDPSession()
+      await client.send('Network.enable')
+
+      let lastFrameAt = Date.now()
+      const recordFrame = (): void => {
+        lastFrameAt = Date.now()
+      }
+      client.on('Network.webSocketFrameReceived', recordFrame)
+      client.on('Network.webSocketFrameSent', recordFrame)
+
+      const start = Date.now()
+      while (Date.now() - start < this.#timeout) {
+        if (Date.now() - lastFrameAt >= this.#quietMs) return
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+      log.debug`Websocket idle wait reached its ${this.#timeout}ms limit`
+    } catch (err) {
+      log.debug`Websocket idle wait skipped: ${(err as Error).message}`
+    } finally {
+      if (client) {
+        try {
+          await client.detach()
+        } catch (_err) {
+          /* session already gone */
+        }
+      }
     }
   }
 }

@@ -37,6 +37,7 @@ import {
   WaitForLoadingComplete,
   DismissToasts,
   WaitForPaintStability,
+  WaitForWebSocketIdle,
   WaitForHassReady,
   type AuthStorage,
 } from './lib/browser/navigation-commands.js'
@@ -503,7 +504,7 @@ export class Browser {
 
       // An explicit wait adds to these stages rather than replacing them, so
       // it can lengthen a capture but never shorten the checks.
-      // NOTE: page.goto() already uses waitUntil:'networkidle2' so network is settled
+      // page.goto() already waits for networkidle2, so the network is settled.
 
       // Stage 1: Wait for network to re-settle after theme/language changes
       // Theme and language changes trigger WebSocket messages and cascading renders
@@ -538,7 +539,14 @@ export class Browser {
         if (count > 0) log.debug`Dismissed ${count} notification toast(s)`
       }
 
-      // Stage 5: Wait for rendering pipeline to flush
+      // Stage 5: Wait for the websocket to go quiet, so cards that fetch
+      // their data over it (energy, history) have it before capture.
+      if (!isGenericUrl) {
+        const wsIdleCmd = new WaitForWebSocketIdle(page)
+        await timed('nav.waitWsIdle', () => wsIdleCmd.call())
+      }
+
+      // Stage 6: Wait for rendering pipeline to flush
       const paintCmd = new WaitForPaintStability(page)
       await timed('nav.waitPaint', () => paintCmd.call())
 
