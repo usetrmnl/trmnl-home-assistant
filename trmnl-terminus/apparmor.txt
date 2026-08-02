@@ -1,0 +1,81 @@
+#include <tunables/global>
+
+# To audit denials after deploying, SSH into HA, then:
+# journalctl _TRANSPORT="audit" | grep 'apparmor="DENIED"' | grep trmnl-terminus
+profile trmnl-terminus flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+
+  # =============================================================================
+  # CONTAINER FILESYSTEM
+  # =============================================================================
+
+  # Broad allow by design - the security boundary is the deny list below.
+  / r,
+  /** rwmixkl,
+
+  # =============================================================================
+  # CAPABILITIES
+  # =============================================================================
+
+  # Narrows Docker's default capability set further by withholding net_raw.
+  capability chown,
+  capability dac_override,
+  capability dac_read_search,
+  capability fowner,
+  capability fsetid,
+  capability kill,
+  capability setgid,
+  capability setuid,
+  capability setpcap,
+  capability net_bind_service,
+  capability sys_chroot,
+  capability mknod,
+  capability audit_write,
+
+  # =============================================================================
+  # SIGNALS
+  # =============================================================================
+
+  # s6 supervises and stops the three services; valkey/finish sends SHUTDOWN
+  signal (send) set=(kill,term,int,hup,cont,usr1,usr2,quit),
+  signal (receive),
+
+  # =============================================================================
+  # NETWORK
+  # =============================================================================
+
+  # inet for the Terminus HTTP server on 2300; unix for the Postgres and Valkey
+  # sockets the app connects over
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network unix stream,
+  network unix dgram,
+
+  # =============================================================================
+  # DENIALS
+  # =============================================================================
+
+  # Home Assistant's own data - the add-on never has cause to read it.
+  deny /config/** rwx,
+  deny /homeassistant/** rwx,
+  deny /ssl/** rwx,
+  deny /addons/** rwx,
+  deny /backup/** rwx,
+  deny /media/** rwx,
+  deny /share/** rwx,
+
+  # Packet capture on the home network
+  deny network raw,
+  deny network packet,
+
+  # Also denied by Docker's default profile; kept as defense-in-depth.
+  deny ptrace,
+  deny mount,
+  deny umount,
+  deny pivot_root,
+  deny @{PROC}/sys/kernel/** w,
+  deny @{PROC}/sys/net/** w,
+}

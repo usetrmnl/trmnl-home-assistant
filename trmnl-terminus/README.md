@@ -24,6 +24,8 @@ This is a Home Assistant add-on that runs a [TRMNL Terminus Server](https://gith
 
 **Important:** This add-on is designed for trusted home networks. While Terminus itself has authentication features, this add-on wrapper does not provide any special security features when it comes to port or database credential accesses.
 
+The container is confined by an AppArmor profile that denies it access to Home Assistant's `/config`, `/ssl`, `/backup`, `/share` and `/media` directories, to other add-ons, and to raw sockets.
+
 ## License
 
 Copyright (c) 2026 TRMNL
