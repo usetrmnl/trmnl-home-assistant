@@ -59,13 +59,15 @@ profile trmnl-terminus flags=(attach_disconnected,mediate_deleted) {
   # =============================================================================
 
   # Home Assistant's own data - the add-on never has cause to read it.
-  deny /config/** rwx,
-  deny /homeassistant/** rwx,
-  deny /ssl/** rwx,
-  deny /addons/** rwx,
-  deny /backup/** rwx,
-  deny /media/** rwx,
-  deny /share/** rwx,
+  # `audit` because a plain `deny` is silent, and a reach for /config is exactly
+  # the event the DOCS.md journalctl check is meant to surface.
+  audit deny /config/** rwx,
+  audit deny /homeassistant/** rwx,
+  audit deny /ssl/** rwx,
+  audit deny /addons/** rwx,
+  audit deny /backup/** rwx,
+  audit deny /media/** rwx,
+  audit deny /share/** rwx,
 
   # Packet capture on the home network
   deny network raw,
