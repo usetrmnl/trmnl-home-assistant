@@ -1,0 +1,134 @@
+name: Terminus upstream bump
+
+# Opens a pull request when usetrmnl/terminus tags a release newer than the one
+# trmnl-terminus pins.
+#
+# Set a RELEASE_PAT secret (repo scope) to have CI run on the pull requests this
+# opens. Without it the GITHUB_TOKEN opens them, and GitHub deliberately does not
+# trigger workflows from token-authored events, so the bump arrives unverified.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    name: Check for a newer Terminus
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Upstream publishes tags, not releases; sort -V keeps 0.10.0 above 0.9.0.
+      - name: Resolve latest upstream version
+        id: upstream
+        run: |
+          set -euo pipefail
+          current=$(grep '^  amd64:' trmnl-terminus/build.yaml | awk -F: '{print $NF}')
+          latest=$(git ls-remote --tags --refs https://github.com/usetrmnl/terminus.git \
+            | awk -F/ '{print $NF}' \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V | tail -1)
+
+          if [ -z "$latest" ]; then
+            echo "::error::Could not read any version tags from upstream"
+            exit 1
+          fi
+
+          echo "pinned: $current   latest: $latest"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          if [ "$current" = "$latest" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Login to GHCR
+        if: steps.upstream.outputs.changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A tag can exist before its image does; bumping to one breaks every install.
+      - name: Verify the upstream image exists for both architectures
+        if: steps.upstream.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          ref="ghcr.io/usetrmnl/terminus:${{ steps.upstream.outputs.latest }}"
+          manifest=$(docker manifest inspect "$ref")
+          for arch in amd64 arm64; do
+            echo "$manifest" | jq -e --arg a "$arch" \
+              '.manifests[]?|select(.platform.architecture==$a)' >/dev/null \
+              || { echo "::error::$ref has no $arch manifest"; exit 1; }
+          done
+          echo "$ref published for amd64 and arm64"
+
+      - name: Apply the bump
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          LATEST: ${{ steps.upstream.outputs.latest }}
+        run: |
+          set -euo pipefail
+          sed -i "s|ghcr.io/usetrmnl/terminus:.*|ghcr.io/usetrmnl/terminus:${LATEST}|" trmnl-terminus/build.yaml
+          sed -i "s|^version: .*|version: \"${LATEST}\"|" trmnl-terminus/config.yaml
+
+          python3 - <<'PY'
+          import datetime, io, os
+          version = os.environ["LATEST"]
+          today = datetime.date.today().isoformat()
+          path = "trmnl-terminus/CHANGELOG.md"
+          text = io.open(path, encoding="utf-8").read()
+          anchor = "\n## ["
+          entry = (f"\n## [{version}] - {today}\n\n### Changed\n\n"
+                   f"- Updated Terminus to {version}\n")
+          io.open(path, "w", encoding="utf-8").write(
+              text.replace(anchor, entry + anchor, 1))
+          PY
+
+          git diff --stat
+
+      - name: Open the pull request
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+          CURRENT: ${{ steps.upstream.outputs.current }}
+          LATEST: ${{ steps.upstream.outputs.latest }}
+        run: |
+          set -euo pipefail
+          branch="terminus-bump/${LATEST}"
+
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "$branch already exists upstream - a pull request is already open"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -am "Updated Terminus to ${LATEST}"
+          git push origin "$branch"
+
+          {
+            printf 'Upstream tagged `%s`; the add-on pinned `%s`.\n\n' "$LATEST" "$CURRENT"
+            printf -- '- bumps the base image in `build.yaml` for both architectures\n'
+            printf -- '- bumps `config.yaml` to `%s`, which the add-on version mirrors\n' "$LATEST"
+            printf -- '- adds a CHANGELOG entry\n\n'
+            printf 'Upstream changes: https://github.com/usetrmnl/terminus/compare/%s...%s\n\n' "$CURRENT" "$LATEST"
+            printf 'Publishing needs a `terminus-v%s` release once this merges - the Supervisor pulls `image:version` from `config.yaml`, so merging alone ships nothing.\n' "$LATEST"
+          } > /tmp/pr-body.md
+
+          gh pr create --base main --head "$branch" \
+            --title "Updated Terminus to ${LATEST}" \
+            --body-file /tmp/pr-body.md
+
+      - name: Report when already current
+        if: steps.upstream.outputs.changed == 'false'
+        run: echo "Already on ${{ steps.upstream.outputs.current }}; nothing to do."
