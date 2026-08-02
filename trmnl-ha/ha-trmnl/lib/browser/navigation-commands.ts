@@ -24,6 +24,9 @@ import { navigationLogger } from '../logger.js'
 
 const log = navigationLogger()
 
+/** Set once the warning below has been given, so it is given only once. */
+let warnedAboutInternals = false
+
 /** Auth storage for localStorage injection */
 export type AuthStorage = Record<string, string>
 
@@ -187,11 +190,98 @@ export class WaitForPageLoad {
   }
 }
 
+const LOADING_SELECTORS = [
+  'ha-circular-progress',
+  'hass-loading-screen',
+  '.loading',
+  '.spinner',
+  '[loading]',
+  'hui-card-preview',
+].join(', ')
+
 /**
- * Waits for Home Assistant loading indicators to disappear.
+ * Decides whether the page has finished rendering and can be captured.
  *
- * Detects common HA loading patterns: circular progress spinners,
- * skeleton loaders, and loading placeholders.
+ * Runs inside the browser via page.waitForFunction, so it must stay
+ * self-contained: no imports, no module scope, no closures over anything here.
+ *
+ * An absence of loading indicators is not enough on its own. Home Assistant
+ * passes through several states that contain no indicator and no content
+ * either, and each one lasts longer the slower the instance is.
+ *
+ * @param selectors Comma-separated loading-indicator selectors
+ * @returns true when the page can be captured
+ */
+export function isPageReadyForCapture(selectors: string): boolean {
+  // Sits on the document root rather than in a shadow root, and is removed
+  // once the app has started.
+  if (document.getElementById('ha-launch-screen')) return false
+
+  const haEl = document.querySelector('home-assistant')
+  // Either not a Home Assistant page, or its root element is not defined yet.
+  if (!haEl?.shadowRoot) return true
+
+  const main = haEl.shadowRoot.querySelector('home-assistant-main') as
+    | (Element & { shadowRoot?: ShadowRoot | null })
+    | null
+  const resolver = main?.shadowRoot?.querySelector('partial-panel-resolver')
+  const panel = resolver?.firstElementChild as
+    | (Element & { _panelState?: string })
+    | null
+    | undefined
+  // The launch screen goes before a panel is mounted, leaving nothing to find.
+  if (!panel) return false
+  // Only the lovelace panel reports a load state.
+  if ('_panelState' in panel && panel._panelState !== 'loaded') return false
+
+  let pending = false
+  let expectedCards = 0
+  let renderedCards = 0
+
+  const scan = (root: ShadowRoot | Document): void => {
+    for (const el of Array.from(root.querySelectorAll(selectors))) {
+      const style = window.getComputedStyle(el)
+      if (style.display !== 'none' && style.visibility !== 'hidden') {
+        pending = true
+      }
+    }
+
+    for (const el of Array.from(root.querySelectorAll('*'))) {
+      if (el.tagName === 'HUI-CARD') renderedCards++
+
+      // A view lists the cards it will build before building them, so the
+      // panel can report itself loaded while the dashboard is still empty.
+      const declared = (el as Element & { _cards?: unknown })._cards
+      if (Array.isArray(declared)) expectedCards += declared.length
+
+      // Energy cards show a translated "Loading" string as plain text, with
+      // no element or class to match on, so their own fields are the only
+      // way to tell. The table and distribution cards use _data; the usage
+      // graph uses _chartData and draws bare axes until it has series. The
+      // date and period selectors carry neither and must not be waited on.
+      if (el.tagName.startsWith('HUI-ENERGY')) {
+        const card = el as Element & { _data?: unknown; _chartData?: unknown }
+        if ('_data' in el && card._data === undefined) pending = true
+        // A dashboard whose energy statistics are empty also has no series,
+        // so that case waits the full timeout before it is captured.
+        if (Array.isArray(card._chartData) && card._chartData.length === 0) {
+          pending = true
+        }
+      }
+
+      const shadow = (el as Element & { shadowRoot?: ShadowRoot | null })
+        .shadowRoot
+      if (shadow) scan(shadow)
+    }
+  }
+
+  scan(haEl.shadowRoot)
+
+  return !pending && renderedCards >= expectedCards
+}
+
+/**
+ * Waits for the page to finish rendering, up to a timeout.
  *
  * NOTE: Uses Puppeteer's waitForFunction instead of manual evaluate() polling.
  * The function is sent to the browser once and polled internally every 100ms,
@@ -206,70 +296,45 @@ export class WaitForLoadingComplete {
     this.#timeout = timeout
   }
 
-  /**
-   * Waits for loading indicators to disappear or timeout.
-   * @returns Actual wait time in milliseconds
-   */
+  /** @returns Actual wait time in milliseconds */
   async call(): Promise<number> {
     const start = Date.now()
 
-    const loadingSelectors = [
-      'ha-circular-progress',
-      'hass-loading-screen', // Panel loading screen (shown while _panelState === "loading")
-      '.loading',
-      '.spinner',
-      '[loading]',
-      'hui-card-preview', // Card preview placeholder
-    ].join(', ')
-
     try {
       await this.#page.waitForFunction(
-        (selectors: string) => {
-          // ha-launch-screen lives on document root (not in shadow DOM)
-          // It's removed when the app is fully initialized
-          if (document.getElementById('ha-launch-screen')) return false
-
-          const haEl = document.querySelector('home-assistant')
-          if (!haEl?.shadowRoot) return true // No HA element = nothing to wait for
-
-          const checkShadowRoot = (root: ShadowRoot | Document): boolean => {
-            const indicators = Array.from(root.querySelectorAll(selectors))
-            for (const el of indicators) {
-              const style = window.getComputedStyle(el)
-              if (style.display !== 'none' && style.visibility !== 'hidden') {
-                return true
-              }
-            }
-
-            const elementsWithShadow = Array.from(root.querySelectorAll('*'))
-            for (const el of elementsWithShadow) {
-              if ((el as Element & { shadowRoot?: ShadowRoot }).shadowRoot) {
-                if (
-                  checkShadowRoot(
-                    (el as Element & { shadowRoot: ShadowRoot }).shadowRoot,
-                  )
-                ) {
-                  return true
-                }
-              }
-            }
-
-            return false
-          }
-
-          // Return true (ready) when no visible loading indicators remain
-          return !checkShadowRoot(haEl.shadowRoot)
-        },
+        isPageReadyForCapture,
         { timeout: this.#timeout, polling: 100 },
-        loadingSelectors,
+        LOADING_SELECTORS,
       )
     } catch (_err) {
-      log.debug`Loading indicator timeout after ${Date.now() - start}ms`
+      log.debug`Page readiness timed out after ${Date.now() - start}ms`
     }
 
+    await this.#warnIfInternalsMissing()
+
     const actualWait = Date.now() - start
-    log.debug`Loading indicators cleared after ${actualWait}ms`
+    log.debug`Page ready after ${actualWait}ms`
     return actualWait
+  }
+
+  /**
+   * Reports, once per process, that the readiness check has stopped checking
+   * anything. Without this the add-on would quietly go back to capturing
+   * half-drawn dashboards after a Home Assistant upgrade.
+   */
+  async #warnIfInternalsMissing(): Promise<void> {
+    if (warnedAboutInternals) return
+
+    let present = true
+    try {
+      present = await this.#page.evaluate(readinessInternalsPresent)
+    } catch (_err) {
+      return // Page closed or navigated away.
+    }
+    if (present) return
+
+    warnedAboutInternals = true
+    log.warn`This version of Home Assistant no longer reports when a dashboard has finished drawing, so screenshots may be captured before cards have filled in. Please report this along with your Home Assistant version.`
   }
 }
 
@@ -318,6 +383,41 @@ export class DismissToasts {
       return dismissed
     })
   }
+}
+
+/**
+ * Reports whether the Home Assistant fields isPageReadyForCapture depends on
+ * are still there. They are private to the frontend and a release is free to
+ * rename them, at which point the readiness check starts passing everything.
+ *
+ * Runs inside the browser, so it must stay self-contained.
+ *
+ * @returns false only when a lovelace panel is missing those fields
+ */
+export function readinessInternalsPresent(): boolean {
+  const haEl = document.querySelector('home-assistant')
+  if (!haEl?.shadowRoot) return true
+
+  const main = haEl.shadowRoot.querySelector('home-assistant-main') as
+    | (Element & { shadowRoot?: ShadowRoot | null })
+    | null
+  const resolver = main?.shadowRoot?.querySelector('partial-panel-resolver')
+  const panel = resolver?.firstElementChild
+  // Only the lovelace panel exposes these; other panels never had them.
+  if (panel?.tagName !== 'HA-PANEL-LOVELACE') return true
+  if (!('_panelState' in panel)) return false
+
+  let sawDeclaredCards = false
+  const walk = (root: ShadowRoot | Document): void => {
+    for (const el of Array.from(root.querySelectorAll('*'))) {
+      if ('_cards' in el) sawDeclaredCards = true
+      const shadow = (el as Element & { shadowRoot?: ShadowRoot | null })
+        .shadowRoot
+      if (shadow) walk(shadow)
+    }
+  }
+  walk(haEl.shadowRoot)
+  return sawDeclaredCards
 }
 
 /**
