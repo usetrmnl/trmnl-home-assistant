@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - 2026-08-02
+
+### Added
+
+- A `rest_command` recipe for calling a schedule's send endpoint from a Home Assistant automation, so on-demand captures no longer need a `shell_command` or curl (#25)
+
+### Fixed
+
+- Dashboards were captured before they finished drawing, coming back blank or missing cards. The readiness check only looked for loading indicators, and there are none while Home Assistant sits between removing its launch screen and mounting a panel, nor while a mounted panel is still building its cards. It now also waits for a panel that reports itself loaded and for every card a view has declared (#87)
+- Energy cards were captured showing "Loading". They render it as plain text with no element or class to match on, so the check now reads the data the cards hold instead (#87)
+- Energy charts were captured with empty axes, because their bars grow from zero as the data arrives. Pages now render with reduced motion (#87)
+- Cards were left rebuilding when the screenshot was taken. The retry for the WebSocket subscription race re-mounted the panel by routing to `/` and back, which lands on the default dashboard rather than unmounting, and it triggered on a warning Home Assistant also raises for ordinary unmounts. The retry has been removed (#84)
+
+### Changed
+
+- A `wait` value is now added to the readiness checks rather than replacing them, so it can lengthen a capture but never shorten the checks. Setting one previously skipped readiness detection altogether (#84, #87)
+
+### Removed
+
+- The 50KB warning on the preview, since the upload endpoint validates image size itself
+
 ## [0.9.3] - 2026-07-17
 
 ### Added
@@ -347,4 +368,5 @@ Based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main
 [0.9.1]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.9.0...v0.9.1
 [0.9.2]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.9.1...v0.9.2
 [0.9.3]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.9.2...v0.9.3
+[0.9.4]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.9.3...v0.9.4
 [0.2.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.1.0...v0.2.0
