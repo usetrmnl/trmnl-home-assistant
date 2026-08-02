@@ -5,6 +5,7 @@ slug: trmnl-terminus
 description: >-
   Starts a Terminus Server that enables local management of TRMNL devices (BYOS)
 url: https://github.com/usetrmnl/trmnl-home-assistant
+image: ghcr.io/usetrmnl/trmnl-terminus-{arch}
 # NOTE: Uncomment after setting up Codenotary signing in CI
 # codenotary: dev@usetrmnl.com
 arch:
