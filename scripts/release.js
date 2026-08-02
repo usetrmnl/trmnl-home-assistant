@@ -6,7 +6,7 @@
  */
 
 import { readFileSync, writeFileSync } from 'fs'
-import { execSync } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
@@ -424,11 +424,21 @@ function release(bumpType, options = {}) {
     const releaseNotes = entries || `Release ${newVersion}`
 
     try {
-      execSync(
-        `gh release create ${TAG_PREFIX}${newVersion} --title "${TAG_PREFIX}${newVersion}" -R ${GITHUB_REPO} --notes "${releaseNotes.replace(
-          /"/g,
-          '\\"'
-        )}"`,
+      // NOTE: argv form, not a shell string - release notes are built from commit
+      // subjects, which would otherwise be evaluated as shell syntax.
+      execFileSync(
+        'gh',
+        [
+          'release',
+          'create',
+          `${TAG_PREFIX}${newVersion}`,
+          '--title',
+          `${TAG_PREFIX}${newVersion}`,
+          '-R',
+          GITHUB_REPO,
+          '--notes',
+          releaseNotes,
+        ],
         {
           stdio: 'inherit',
         }
