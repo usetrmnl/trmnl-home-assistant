@@ -157,3 +157,47 @@ jobs:
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.TERMINUS_CACHE_REPO }}:${{ matrix.cache_tag }},mode=max
           provenance: false
 
+  # A release holds file assets, and images live in the registry, so the pull
+  # references are the only way to reach them from the release page.
+  link-images:
+    name: List the images on the release
+    runs-on: ubuntu-latest
+    needs: [build-and-push, build-and-push-terminus]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Append the pull references
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+
+          case "$TAG" in
+            terminus-v*) image="trmnl-terminus"; version="${TAG#terminus-v}" ;;
+            v*)          image="trmnl-ha";      version="${TAG#v}" ;;
+            *)           echo "$TAG is not a release tag; nothing to link"; exit 0 ;;
+          esac
+
+          body=$(gh release view "$TAG" --json body --jq .body)
+
+          # Re-running a release must not stack a second block onto the notes.
+          # The substitution strips the trailing newlines the cut leaves behind,
+          # without which every re-run grows the notes by a blank line.
+          marker='<!-- images -->'
+          body=$(printf '%s' "${body%%"$marker"*}")
+
+          {
+            printf '%s\n\n' "$body"
+            printf '%s\n' "$marker"
+            printf '### Images\n\n'
+            for arch in amd64 aarch64; do
+              printf -- '- `ghcr.io/%s/%s-%s:%s`\n' "$OWNER" "$image" "$arch" "$version"
+            done
+          } > /tmp/body.md
+
+          gh release edit "$TAG" --notes-file /tmp/body.md
+          echo "Listed ${image} ${version} images on ${TAG}"
