@@ -18,7 +18,6 @@
 import puppeteer from 'puppeteer'
 import type {
   Browser as PuppeteerBrowser,
-  ConsoleMessage,
   Page,
   Viewport,
 } from 'puppeteer'
@@ -137,7 +136,7 @@ export interface NavigateParams {
   /** Full target URL (if provided, overrides pagePath + base URL resolution) */
   targetUrl?: string
   viewport: Viewport
-  /** Fixed wait time in ms. If omitted, waits for loading indicators to clear. */
+  /** Settling time in ms, added after the page reports itself ready. */
   extraWait?: number
   zoom?: number
   lang?: string
@@ -313,6 +312,12 @@ export class Browser {
     // Create fresh page
     try {
       const page = await timed('browser.newPage', () => this.#browser!.newPage())
+      // Charts grow their bars from zero when data arrives, so a capture taken
+      // during that would show empty axes. An e-ink display cannot show
+      // animation in any case.
+      await page.emulateMediaFeatures([
+        { name: 'prefers-reduced-motion', value: 'reduce' },
+      ])
       this.#setupPageLogging(page)
       this.#page = page
       return this.#page
@@ -427,42 +432,8 @@ export class Browser {
     const start = Date.now()
     this.#busy = true
     try {
-      // home-assistant-js-websocket's subscribeMessage() has a microtask race
-      // between handler registration and incoming WS frames. When the server's
-      // response arrives faster than the registration microtask completes
-      // (notably on cold cache where RTT is ~15ms vs ~38ms warm), HA logs
-      // "Received event for unknown subscription N. Unsubscribing." and drops
-      // the forecast/render-template data. The card never re-subscribes, so
-      // forecast renders empty.
-      //
-      // Retry strategy on detection:
-      //   - Attempt 1 is always a full fresh-page navigation (the per-request
-      //     reset that issue #34 mandates).
-      //   - Attempts 2..N reuse the live page and re-mount the panel via an
-      //     in-app router transition (pushState to '/', then back to the
-      //     target). The WebSocket connection stays open and the JS heap
-      //     stays hot, which is what actually makes the race stop losing.
-      //     Closing and re-creating the page on each retry would throw away
-      //     the warmth we need.
-      //
-      // Cost is paid only on attempts that detect the orphan warning;
-      // dashboards built from REST/static cards (no subscribeMessage calls)
-      // never trigger the retry path.
-      const MAX_ATTEMPTS = 5
-      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        const orphaned = await this.#runNavigationAttempt(params, attempt === 1)
-        if (!orphaned) {
-          recordTiming('nav.total', Date.now() - start)
-          return { time: Date.now() - start }
-        }
-        if (attempt === MAX_ATTEMPTS) {
-          log.warn`HA WS subscription race persisted after ${MAX_ATTEMPTS} attempts; some card data may be missing from this screenshot`
-          recordTiming('nav.total', Date.now() - start)
-          return { time: Date.now() - start }
-        }
-        log.info`HA WS subscription race detected on attempt ${attempt}; soft-retrying via in-page router transition`
-      }
-      // Loop always returns or throws; this is unreachable.
+      await this.#runNavigation(params)
+      recordTiming('nav.total', Date.now() - start)
       return { time: Date.now() - start }
     } finally {
       this.#busy = false
@@ -470,80 +441,34 @@ export class Browser {
   }
 
   /**
-   * Runs a single navigation attempt and reports whether the HA WS
-   * subscription race was observed during the run. Throws on hard errors
-   * (browser crash, navigation failure) so the retry loop does not mask them.
-   *
-   * @param freshPage true to discard the current page and do a full
-   *   page.goto() (the per-request reset); false to reuse the live page and
-   *   re-mount the panel via an in-app router transition (used by retries).
-   * @returns true if a "Received event for unknown subscription" console
-   *   warning fired during this attempt, false otherwise.
+   * Navigates to the target page and runs the readiness pipeline.
+   * Throws on hard errors (browser crash, navigation failure).
    */
-  async #runNavigationAttempt(
-    {
-      pagePath,
-      targetUrl,
-      viewport,
-      extraWait,
-      zoom = 1,
-      lang,
-      theme,
-      dark,
-    }: NavigateParams,
-    freshPage: boolean,
-  ): Promise<boolean> {
-    let orphanDetected = false
-    let consoleHandler: ((msg: ConsoleMessage) => void) | undefined
-    let listeningPage: Page | undefined
-
+  async #runNavigation({
+    pagePath,
+    targetUrl,
+    viewport,
+    extraWait,
+    zoom = 1,
+    lang,
+    theme,
+    dark,
+  }: NavigateParams): Promise<void> {
     try {
-      if (freshPage) {
-        // Fresh page per request: close existing page to eliminate accumulated
-        // stale state (WebSocket connections, cached renders, component state)
-        await this.#closePage()
-      }
+      // Fresh page per request: close existing page to eliminate accumulated
+      // stale state (WebSocket connections, cached renders, component state)
+      await this.#closePage()
 
       const page = await this.#getPage()
-      if (freshPage) {
-        await page.setViewport(viewport)
-      }
+      await page.setViewport(viewport)
 
-      // Listen for the orphaned-subscription console warning that signals
-      // the HA WS subscribeMessage race. Attaching here (after #getPage)
-      // catches warnings from the entire navigation, including card-mount
-      // subscribes triggered by pushState.
-      consoleHandler = (msg) => {
-        // Puppeteer 24+ returns 'warn'; older versions returned 'warning'.
-        // Accept both (as string — 'warning' left the type union) so we
-        // don't break if puppeteer's enum shifts again.
-        const type: string = msg.type()
-        if (
-          (type === 'warn' || type === 'warning') &&
-          msg.text().includes('Received event for unknown subscription')
-        ) {
-          orphanDetected = true
-        }
-      }
-      page.on('console', consoleHandler)
-      listeningPage = page
-
-      if (freshPage) {
-        // First attempt: full fresh navigation — injects auth, full page.goto()
-        const authStorage = this.#buildAuthStorage()
-        const navigateCmd = new NavigateToPage(
-          page,
-          authStorage,
-          this.#homeAssistantUrl,
-        )
-        await timed('nav.goto', () => navigateCmd.call(pagePath, targetUrl))
-      } else {
-        // Warm retry: re-mount the panel via SPA pushState on the live page.
-        // WS connection, JS heap, and auth all carry over from attempt 1.
-        await timed('nav.softReroute', () =>
-          this.#softReroute(page, pagePath, targetUrl),
-        )
-      }
+      const authStorage = this.#buildAuthStorage()
+      const navigateCmd = new NavigateToPage(
+        page,
+        authStorage,
+        this.#homeAssistantUrl,
+      )
+      await timed('nav.goto', () => navigateCmd.call(pagePath, targetUrl))
 
       // Check if we landed on HA login/auth page (indicates invalid token)
       const currentUrl = page.url()
@@ -576,51 +501,53 @@ export class Browser {
         this.#lastRequestedDarkMode = dark
       }
 
-      // Wait strategy: explicit fixed wait OR multi-stage readiness detection
+      // An explicit wait adds to these stages rather than replacing them, so
+      // it can lengthen a capture but never shorten the checks.
       // NOTE: page.goto() already uses waitUntil:'networkidle2' so network is settled
+
+      // Stage 1: Wait for network to re-settle after theme/language changes
+      // Theme and language changes trigger WebSocket messages and cascading renders
+      if (setupResult.themeChanged || setupResult.langChanged) {
+        log.debug`Waiting for network idle after page setup changes`
+        try {
+          await timed('nav.waitNetworkIdle', () =>
+            page.waitForNetworkIdle({ idleTime: 500, concurrency: 2 }),
+          )
+        } catch (_err) {
+          log.debug`Network idle wait timed out after page setup`
+        }
+      }
+
+      // Stage 2: Wait for HA entity data to load (HA pages only)
+      if (!isGenericUrl) {
+        const hassReadyCmd = new WaitForHassReady(page)
+        await timed('nav.waitHassReady', () => hassReadyCmd.call())
+      }
+
+      // Stage 3: Wait for the dashboard to finish drawing
+      const loadingCmd = new WaitForLoadingComplete(page, 15000)
+      const loadingWait = await timed('nav.waitLoading', () =>
+        loadingCmd.call(),
+      )
+      log.debug`Dashboard ready after ${loadingWait}ms`
+
+      // Stage 4: Dismiss notification toasts (HA pages only)
+      if (!isGenericUrl) {
+        const dismissCmd = new DismissToasts(page)
+        const count = await timed('nav.dismissToasts', () => dismissCmd.call())
+        if (count > 0) log.debug`Dismissed ${count} notification toast(s)`
+      }
+
+      // Stage 5: Wait for rendering pipeline to flush
+      const paintCmd = new WaitForPaintStability(page)
+      await timed('nav.waitPaint', () => paintCmd.call())
+
+      // Stage 6: Extra settling time for cards that fill in late
       if (extraWait && extraWait > 0) {
         log.debug`Explicit wait: ${extraWait}ms`
         await new Promise((resolve) => setTimeout(resolve, extraWait))
-      } else {
-        // Stage 1: Wait for network to re-settle after theme/language changes
-        // Theme and language changes trigger WebSocket messages and cascading renders
-        if (setupResult.themeChanged || setupResult.langChanged) {
-          log.debug`Waiting for network idle after page setup changes`
-          try {
-            await timed('nav.waitNetworkIdle', () =>
-              page.waitForNetworkIdle({ idleTime: 500, concurrency: 2 }),
-            )
-          } catch (_err) {
-            log.debug`Network idle wait timed out after page setup`
-          }
-        }
-
-        // Stage 2: Wait for HA entity data to load (HA pages only)
-        if (!isGenericUrl) {
-          const hassReadyCmd = new WaitForHassReady(page)
-          await timed('nav.waitHassReady', () => hassReadyCmd.call())
-        }
-
-        // Stage 3: Wait for loading indicators to clear
-        const loadingCmd = new WaitForLoadingComplete(page, 15000)
-        const loadingWait = await timed('nav.waitLoading', () =>
-          loadingCmd.call(),
-        )
-        log.debug`Loading indicators cleared after ${loadingWait}ms`
-
-        // Stage 4: Dismiss notification toasts (HA pages only)
-        if (!isGenericUrl) {
-          const dismissCmd = new DismissToasts(page)
-          const count = await timed('nav.dismissToasts', () => dismissCmd.call())
-          if (count > 0) log.debug`Dismissed ${count} notification toast(s)`
-        }
-
-        // Stage 5: Wait for rendering pipeline to flush
-        const paintCmd = new WaitForPaintStability(page)
-        await timed('nav.waitPaint', () => paintCmd.call())
       }
 
-      return orphanDetected
     } catch (err) {
       this.#pageErrorDetected = false
 
@@ -641,53 +568,7 @@ export class Browser {
       }
 
       throw err
-    } finally {
-      // Detach the orphan listener so listeners don't accumulate across
-      // retries / subsequent screenshots. Page may be closed already; ignore.
-      if (consoleHandler && listeningPage) {
-        try {
-          listeningPage.off('console', consoleHandler)
-        } catch (_err) {
-          /* page closed */
-        }
-      }
     }
-  }
-
-  /**
-   * Re-mounts the panel on the live page by routing to '/' and then back to
-   * the target path via pushState + popstate. Used by retries instead of a
-   * fresh page.goto() so the existing WebSocket connection and JS heap are
-   * preserved — those are the actual carriers of "warmth" that win the
-   * subscribeMessage race on slow hardware.
-   */
-  async #softReroute(
-    page: Page,
-    pagePath: string,
-    targetUrl?: string,
-  ): Promise<void> {
-    const pageUrl =
-      targetUrl || new URL(pagePath, this.#homeAssistantUrl).toString()
-    const u = new URL(pageUrl)
-    const targetPath = u.pathname + u.search
-
-    // Unmount the current panel by routing to '/'
-    await page.evaluate(() => {
-      history.pushState(null, '', '/')
-      window.dispatchEvent(new PopStateEvent('popstate'))
-    })
-
-    // Brief settle so HA's partial-panel-resolver tears down the panel
-    // before we route back. Without this, the back-transition can merge
-    // with the unmount and skip a full remount cycle.
-    await new Promise((resolve) => setTimeout(resolve, 300))
-
-    // Route back to the target path; cards re-mount and re-subscribe on
-    // top of the live connection.
-    await page.evaluate((path: string) => {
-      history.pushState(null, '', path)
-      window.dispatchEvent(new PopStateEvent('popstate'))
-    }, targetPath)
   }
 
   /**
