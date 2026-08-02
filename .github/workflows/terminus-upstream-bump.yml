@@ -99,10 +99,20 @@ jobs:
         if: steps.upstream.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
           CURRENT: ${{ steps.upstream.outputs.current }}
           LATEST: ${{ steps.upstream.outputs.latest }}
         run: |
           set -euo pipefail
+
+          # An unset or empty RELEASE_PAT falls back silently, and the fallback
+          # produces a pull request with no checks on it at all.
+          if [ -n "${RELEASE_PAT:-}" ]; then
+            echo "RELEASE_PAT in use - CI will run on the pull request"
+          else
+            echo "::warning::RELEASE_PAT is unset or empty; using GITHUB_TOKEN, so the pull request will have no checks"
+          fi
+
           branch="terminus-bump/${LATEST}"
 
           if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
