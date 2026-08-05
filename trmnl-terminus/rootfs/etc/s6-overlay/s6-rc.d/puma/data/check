@@ -1,0 +1,3 @@
+#!/bin/bash
+# /up redirects to /login when signed out, and curl -f counts a 302 as success.
+exec curl -sf -o /dev/null "http://localhost:${HANAMI_PORT:-2300}/up"
