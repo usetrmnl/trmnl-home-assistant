@@ -55,4 +55,7 @@ RUN chmod +x /etc/cont-init.d/* && \
     chmod +x /etc/s6-overlay/s6-rc.d/*/finish 2>/dev/null || true && \
     chmod +x /etc/s6-overlay/s6-rc.d/*/data/check 2>/dev/null || true
 
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+    CMD /usr/local/bin/healthcheck.sh
+
 ENTRYPOINT ["/init"]

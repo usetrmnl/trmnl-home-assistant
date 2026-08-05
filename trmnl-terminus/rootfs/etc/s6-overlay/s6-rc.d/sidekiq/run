@@ -1,0 +1,12 @@
+#!/command/with-contenv bash
+# shellcheck shell=bash
+set -e
+
+source /usr/local/bin/terminus-env.sh
+
+echo "[sidekiq] Starting Sidekiq..."
+
+# APP_SETUP stays unset so this does not re-run migrations. The entrypoint is
+# here for the jemalloc LD_PRELOAD it sets.
+exec s6-setuidgid app bash -c \
+    'cd /app && exec scripts/docker/entrypoint bundle exec sidekiq -r ./config/sidekiq.rb'

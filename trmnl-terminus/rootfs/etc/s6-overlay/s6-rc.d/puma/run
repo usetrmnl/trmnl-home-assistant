@@ -1,0 +1,17 @@
+#!/command/with-contenv bash
+# shellcheck shell=bash
+set -e
+
+source /usr/local/bin/terminus-env.sh
+
+# APP_SETUP is set here and nowhere else, so assets compile and migrations run
+# once. Sidekiq depends on this service and starts after the schema is current.
+export APP_SETUP=true
+
+echo "[puma] Starting Terminus on port ${HANAMI_PORT}..."
+
+# s6-notifyoncheck reads data/check from the current directory, so this script
+# must not cd. The child changes to /app instead.
+exec s6-notifyoncheck -d -n 90 -s 1000 -w 2000 \
+    s6-setuidgid app bash -c \
+        'cd /app && exec scripts/docker/entrypoint bundle exec puma --config ./config/puma.rb'
