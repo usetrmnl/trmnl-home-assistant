@@ -9,6 +9,14 @@ between upstream releases takes a `-1`, `-2` suffix.
 
 ## [0.69.0] - 2026-08-17
 
+### Added
+
+- Optional add-on options for Terminus settings such as
+  `api_access_token_period`, the session and HTTP timeouts, the Puma thread
+  and worker counts, the synchronizer toggles, and
+  `rack_attack_allowed_subnets`. Each is exported as the matching environment
+  variable only when set, so Terminus keeps its own defaults otherwise.
+
 ### Changed
 
 - Updated Terminus to 0.69.0

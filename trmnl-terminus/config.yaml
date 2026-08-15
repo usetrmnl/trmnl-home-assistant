@@ -29,3 +29,24 @@ backup_exclude:
   - "*/tmp/*"
 schema:
   ha_ip: str
+  # Optional Terminus tunables. Each key maps to the env var of the same name,
+  # uppercased, and is only exported when set, so Terminus keeps its own
+  # defaults otherwise. See https://github.com/usetrmnl/terminus/blob/main/doc/configuration.adoc
+  api_access_token_period: int(60,)?
+  session_expiration_enabled: bool?
+  session_inactivity_limit: int(60,)?
+  session_lifetime_limit: int(60,)?
+  ferrum_default_timeout: int(1,)?
+  ferrum_process_timeout: int(1,)?
+  ferrum_javascript_errors: bool?
+  http_timeout_connect: int(1,)?
+  http_timeout_read: int(1,)?
+  http_timeout_write: int(1,)?
+  hanami_max_threads: int(1,)?
+  hanami_min_threads: int(1,)?
+  hanami_web_concurrency: int(0,)?
+  firmware_synchronizer: bool?
+  font_synchronizer: bool?
+  model_synchronizer: bool?
+  screen_synchronizer: bool?
+  rack_attack_allowed_subnets: str?
