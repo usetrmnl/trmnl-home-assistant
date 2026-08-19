@@ -124,9 +124,14 @@ function getCommitsSinceLastTag() {
   const range = lastTag ? `${lastTag}..HEAD` : 'HEAD'
   let commits
   try {
-    commits = execSync(`git log ${range} --pretty=format:"%s" --no-merges`, {
-      encoding: 'utf8',
-    })
+    // Scoped to this add-on's directory too: both add-ons share a history, so
+    // an unscoped log describes the other one's work in this one's notes.
+    commits = execSync(
+      `git log ${range} --pretty=format:"%s" --no-merges -- ${ADDON.dir}`,
+      {
+        encoding: 'utf8',
+      }
+    )
       .trim()
       .split('\n')
       .filter(Boolean)
@@ -147,7 +152,12 @@ function getCommitsSinceLastTag() {
     // Skip release commits
     if (lower.startsWith('release ')) continue
 
+    // Both vocabularies are here on purpose: this repo writes commits in the
+    // past tense (Added, Updated, Fixed, Removed, Refactored) and contributors
+    // arrive with conventional prefixes. Reading only the latter filed every
+    // house-style commit as Changed, whatever it actually did.
     if (
+      lower.startsWith('added ') ||
       lower.startsWith('feat:') ||
       lower.startsWith('feat(') ||
       lower.startsWith('add:') ||
@@ -155,12 +165,16 @@ function getCommitsSinceLastTag() {
     ) {
       categories.added.push(cleanCommitMessage(commit))
     } else if (
+      lower.startsWith('fixed ') ||
       lower.startsWith('fix:') ||
       lower.startsWith('fix(') ||
       lower.startsWith('bugfix:')
     ) {
       categories.fixed.push(cleanCommitMessage(commit))
     } else if (
+      lower.startsWith('updated ') ||
+      lower.startsWith('removed ') ||
+      lower.startsWith('refactored ') ||
       lower.startsWith('change:') ||
       lower.startsWith('refactor:') ||
       lower.startsWith('update:') ||
