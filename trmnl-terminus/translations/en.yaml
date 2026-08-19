@@ -5,3 +5,90 @@ configuration:
     description: >-
       IP address of your Home Assistant instance
       (e.g. 192.168.1.50).
+  api_access_token_period:
+    name: API access token period
+    description: >-
+      Seconds a device API access token stays valid before a refresh is
+      required. Leave empty for the Terminus default (1800).
+  session_expiration_enabled:
+    name: Session expiration
+    description: >-
+      Expire sessions and tokens. Leave empty for the Terminus default
+      (enabled).
+  session_inactivity_limit:
+    name: Session inactivity limit
+    description: >-
+      Seconds of inactivity before you must log in again. Leave empty for the
+      Terminus default (1800).
+  session_lifetime_limit:
+    name: Session lifetime limit
+    description: >-
+      Maximum seconds a session lasts before you must log in again. Leave empty
+      for the Terminus default (86400).
+  ferrum_default_timeout:
+    name: Browser response timeout
+    description: >-
+      Seconds the headless browser waits for a response when rendering screens.
+      Leave empty for the Terminus default (30).
+  ferrum_process_timeout:
+    name: Browser startup timeout
+    description: >-
+      Seconds allowed for the headless browser to start. Leave empty for the
+      Terminus default (15).
+  ferrum_javascript_errors:
+    name: Browser JavaScript errors
+    description: >-
+      Raise JavaScript errors encountered while rendering. Leave empty for the
+      Terminus default (enabled).
+  http_timeout_connect:
+    name: HTTP connect timeout
+    description: >-
+      Seconds to wait when opening an outbound HTTP connection. Leave empty for
+      the Terminus default (2).
+  http_timeout_read:
+    name: HTTP read timeout
+    description: >-
+      Seconds to wait for an outbound HTTP read. Leave empty for the Terminus
+      default (10).
+  http_timeout_write:
+    name: HTTP write timeout
+    description: >-
+      Seconds to wait for an outbound HTTP write. Leave empty for the Terminus
+      default (10).
+  hanami_max_threads:
+    name: Maximum Puma threads
+    description: >-
+      Maximum web server threads. Leave empty for the Terminus default (5).
+  hanami_min_threads:
+    name: Minimum Puma threads
+    description: >-
+      Minimum web server threads. Leave empty to match the maximum.
+  hanami_web_concurrency:
+    name: Puma workers
+    description: >-
+      Number of web server worker processes. Leave empty for the Terminus
+      default (0). Each worker adds memory use.
+  firmware_synchronizer:
+    name: Firmware synchronizer
+    description: >-
+      Sync device firmware from the TRMNL cloud. Leave empty for the Terminus
+      default (enabled).
+  font_synchronizer:
+    name: Font synchronizer
+    description: >-
+      Sync TRMNL Framework fonts. Leave empty for the Terminus default
+      (enabled).
+  model_synchronizer:
+    name: Model synchronizer
+    description: >-
+      Sync device models from the TRMNL cloud. Leave empty for the Terminus
+      default (enabled).
+  screen_synchronizer:
+    name: Screen synchronizer
+    description: >-
+      Sync device screens. Leave empty for the Terminus default (enabled).
+  rack_attack_allowed_subnets:
+    name: Allowed subnets
+    description: >-
+      Comma-separated IPs or subnets permitted to reach the server
+      (e.g. 192.168.1.0/24). Leave empty to allow all.
