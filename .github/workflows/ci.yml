@@ -265,6 +265,12 @@ jobs:
           cache-to: ${{ github.event_name == 'push' && format('type=registry,ref={0}/{1}:{2},mode=max', env.REGISTRY, env.TERMINUS_CACHE_REPO, matrix.tag) || format('type=gha,mode=max,scope=terminus-{0}', matrix.tag) }}
           provenance: false
 
+      # The boot test below starts the add-on with ha_ip alone, so nothing
+      # there exercises an option. This does.
+      - name: Test add-on option handling
+        if: matrix.tag == 'amd64'
+        run: trmnl-terminus/tests/init-environment.test.sh trmnl-terminus:test-amd64
+
       # amd64 only - QEMU makes arm64 boot tests too slow here.
       - name: Smoke test add-on boot
         if: matrix.tag == 'amd64'
