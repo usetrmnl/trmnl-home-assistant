@@ -1,4 +1,4 @@
 {
   "ha_ip": "192.168.1.50",
-  "api_access_token_period": 3600
+  "session_expiration_enabled": false
 }

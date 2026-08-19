@@ -12,7 +12,7 @@ The IP address of your Home Assistant instance (e.g. `192.168.1.50`).
 
 ### Terminus settings (optional)
 
-Every other option is optional and left unset by default, in which case Terminus applies its own default. Setting one exports the matching [Terminus environment variable](https://github.com/usetrmnl/terminus/blob/main/doc/configuration.adoc) (the option key, uppercased) into the server and worker processes.
+Every other option is optional. Apart from **Session expiration**, described below, each is left unset by default, in which case Terminus applies its own default. Setting one exports the matching [Terminus environment variable](https://github.com/usetrmnl/terminus/blob/main/doc/configuration.adoc) (the option key, uppercased) into the server and worker processes.
 
 | Option | Environment variable | Terminus default |
 |--------|----------------------|------------------|
@@ -38,6 +38,14 @@ Every other option is optional and left unset by default, in which case Terminus
 Variables the add-on manages itself — `API_URI`, `APP_SECRET`, `APP_SETUP`, `DATABASE_*`, `KEYVALUE_*`, `HANAMI_PORT`, `FONTS_PATH` — are not configurable, since the container wires them to its bundled Postgres, Valkey and `/data` layout.
 
 To add another variable from the Terminus docs, add the lowercased key to `schema:` in `config.yaml` and to `PASSTHROUGH_OPTIONS` in `rootfs/etc/cont-init.d/01-init-environment.sh`.
+
+### Session expiration (default: off)
+
+This is the one option the add-on sets a default for. Terminus expires a session after 30 minutes idle and 24 hours in total, and ties its API tokens to that session. Anything pushing screens on a schedule cannot survive those limits unattended: refreshing resets the inactivity timer but never the lifetime cap, so the session lapses a day after login however diligently the token is refreshed, and every push then fails until somebody signs in by hand. Sessions therefore do not expire unless you switch this on.
+
+Turn it on if the server is reachable beyond your trusted network, and expect to re-authenticate any BYOS push schedules once per lifetime. The [TRMNL add-on](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/docs/webhook-formats.md) can save its login and sign in again on its own if you would rather keep expiry on.
+
+Raising `api_access_token_period` on its own does not extend a session: `session_inactivity_limit` and `session_lifetime_limit` still apply, and the shortest of the three is what ends it. Move all three together.
 
 ## Security
 

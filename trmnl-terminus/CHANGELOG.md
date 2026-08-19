@@ -19,6 +19,9 @@ between upstream releases takes a `-1`, `-2` suffix.
 
 ### Changed
 
+- Sessions no longer expire by default. Terminus ends a session 24 hours after
+  login however often its token is refreshed, which broke scheduled pushes
+  overnight until someone signed in again
 - Updated Terminus to 0.69.0
 
 ## [0.68.0] - 2026-08-10
