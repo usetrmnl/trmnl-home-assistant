@@ -29,6 +29,7 @@ import {
   getValidAccessToken,
   isRefreshable,
 } from './lib/scheduler/byos-auth.js'
+import { notifyReauthRequired } from './lib/ha-notify.js'
 import { sleep } from './lib/sleep.js'
 import {
   SCHEDULER_RELOAD_INTERVAL_MS,
@@ -205,6 +206,7 @@ export class Scheduler {
           if (auth.access_token && !this.#deadTokensWarned.has(schedule.id)) {
             this.#deadTokensWarned.add(schedule.id)
             log.warn`BYOS tokens for "${schedule.name}" expired beyond the refresh window — re-authenticate in the schedule settings`
+            void notifyReauthRequired(schedule)
           }
           continue
         }

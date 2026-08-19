@@ -159,7 +159,7 @@ The scheduler refreshes tokens every minute once they are 10 minutes old, well i
 
 ### Sessions that expire
 
-Terminus ties its API tokens to a login session, and where session expiration is on it ends that session 24 hours after login however often the token is refreshed - refreshing resets the inactivity timer, never the lifetime cap. When it lapses, sends fail with `401` until somebody signs in again.
+Terminus ties its API tokens to a login session, and where session expiration is on it ends that session 24 hours after login however often the token is refreshed - refreshing resets the inactivity timer, never the lifetime cap. When it lapses, sends fail with `401`, and where no login is saved the add-on raises a Home Assistant notification asking you to sign in again.
 
 Two ways to stop that:
 
