@@ -8,13 +8,15 @@ configuration:
   api_access_token_period:
     name: API access token period
     description: >-
-      Seconds a device API access token stays valid before a refresh is
-      required. Leave empty for the Terminus default (1800).
+      Seconds an API access token stays valid before it has to be refreshed.
+      Only applies while session expiration is on. Leave empty for the
+      Terminus default (1800).
   session_expiration_enabled:
     name: Session expiration
     description: >-
-      Expire sessions and tokens. Leave empty for the Terminus default
-      (enabled).
+      Expire browser sessions and API tokens. Off by default so scheduled
+      pushes keep working without a daily sign-in. Turn it on if this server
+      is reachable beyond your trusted network.
   session_inactivity_limit:
     name: Session inactivity limit
     description: >-

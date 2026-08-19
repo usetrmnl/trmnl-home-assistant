@@ -27,6 +27,12 @@ backup: cold
 backup_exclude:
   - "*/logs/*"
   - "*/tmp/*"
+options:
+  # Terminus expires a session 24 hours after login however often its token is
+  # refreshed, which a scheduled push cannot survive unattended. Its own
+  # default suits a server on the open internet; this one suits the trusted
+  # network the add-on is built for.
+  session_expiration_enabled: false
 schema:
   ha_ip: str
   # Optional Terminus tunables. Each key maps to the env var of the same name,
