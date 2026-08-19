@@ -152,10 +152,19 @@ Schedules created before this feature shipped have no `delivery_mode` field in t
 
 BYOS requires JWT authentication. You can either:
 
-1. **Login via UI:** Enter your BYOS credentials in the schedule settings. The add-on exchanges them for tokens (credentials are NOT stored).
+1. **Login via UI:** Enter your BYOS credentials in the schedule settings. The add-on exchanges them for tokens.
 2. **Manual tokens:** Paste your access and refresh tokens directly if you prefer not to enter credentials.
 
-Tokens auto-refresh when expired (25-minute validity, refreshed before 30-minute expiry).
+The scheduler refreshes tokens every minute once they are 10 minutes old, well inside Terminus' 30 minute access token window.
+
+### Sessions that expire
+
+Terminus ties its API tokens to a login session, and where session expiration is on it ends that session 24 hours after login however often the token is refreshed - refreshing resets the inactivity timer, never the lifetime cap. When it lapses, sends fail with `401` until somebody signs in again.
+
+Two ways to stop that:
+
+- **Stay signed in**, in the schedule's JWT settings. The add-on saves your BYOS login and signs in again by itself when the session lapses. The password is stored in plain text in the add-on's schedules file, alongside the access token that already lives there, so treat the two the same. Leave it off if your server does not expire sessions.
+- **Turn expiry off on the server.** The [Terminus add-on](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-terminus/DOCS.md) does not expire sessions unless you switch **Session expiration** on. Running Terminus yourself with Docker Compose, set `SESSION_EXPIRATION_ENABLED=false` - and note it has to appear in the compose file's `environment:` block, not only in `.env`, or the container never sees it. To keep expiry but make it longer, raise `API_ACCESS_TOKEN_PERIOD`, `SESSION_INACTIVITY_LIMIT` and `SESSION_LIFETIME_LIMIT` together; the shortest of the three is what ends the session.
 
 ### 422 Error Handling
 

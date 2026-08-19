@@ -25,6 +25,7 @@ import { JobManager } from './lib/scheduler/job-manager.js'
 import { CooldownTracker } from './lib/scheduler/cooldown-tracker.js'
 import {
   buildRefreshedAuthUpdate,
+  canRelogin,
   getValidAccessToken,
   isRefreshable,
 } from './lib/scheduler/byos-auth.js'
@@ -198,7 +199,9 @@ export class Scheduler {
         const auth = schedule.webhook_format?.byosConfig?.auth
         if (!schedule.webhook_url || !auth?.enabled) continue
 
-        if (!isRefreshable(auth)) {
+        // A saved login recovers past the refresh window, so only a schedule
+        // without one is genuinely stuck.
+        if (!isRefreshable(auth) && !canRelogin(auth)) {
           if (auth.access_token && !this.#deadTokensWarned.has(schedule.id)) {
             this.#deadTokensWarned.add(schedule.id)
             log.warn`BYOS tokens for "${schedule.name}" expired beyond the refresh window — re-authenticate in the schedule settings`

@@ -171,7 +171,7 @@ export interface ByosHanamiConfig {
   auth?: ByosAuthConfig
 }
 
-/** BYOS JWT authentication configuration (tokens only - no credentials stored) */
+/** BYOS JWT authentication configuration */
 export interface ByosAuthConfig {
   /** Enable JWT authentication */
   enabled: boolean
@@ -181,6 +181,14 @@ export interface ByosAuthConfig {
   refresh_token?: string
   /** Timestamp when tokens were obtained */
   obtained_at?: number
+  /**
+   * Login stored so the scheduler can re-authenticate itself once the server
+   * expires the session, which no amount of refreshing survives. Opt-in: the
+   * password is written to the schedules file in plain text, so it is only
+   * present when the user ticked "stay signed in".
+   */
+  login_email?: string
+  login_password?: string
 }
 
 /** Webhook format configuration */

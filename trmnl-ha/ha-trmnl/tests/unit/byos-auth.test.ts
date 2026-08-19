@@ -3,7 +3,8 @@
  *
  * Covers:
  * - getBaseUrl() — pure URL parsing
- * - getValidAccessToken() — token validation and refresh flow
+ * - getValidAccessToken() — token validation, refresh and re-login flow
+ * - canRelogin() — stored credential detection
  * - login() — fetch-based login with error handling
  *
  * Uses globalThis.fetch override (scoped to this file) instead of
@@ -16,6 +17,7 @@
 import { describe, it, expect, beforeEach, afterAll, mock } from 'bun:test'
 import {
   buildRefreshedAuthUpdate,
+  canRelogin,
   getBaseUrl,
   getValidAccessToken,
   isRefreshable,
@@ -331,6 +333,132 @@ describe('byos-auth', () => {
       await getValidAccessToken('https://host.com/api', auth, onTokenRefresh)
 
       expect(onTokenRefresh).not.toHaveBeenCalled()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // canRelogin
+  // -------------------------------------------------------------------------
+
+  describe('#canRelogin', () => {
+    it('is true when both stored credentials are present', () => {
+      expect(
+        canRelogin({
+          enabled: true,
+          login_email: 'me@example.com',
+          login_password: 'secret',
+        }),
+      ).toBe(true)
+    })
+
+    it('is false when only the email was stored', () => {
+      expect(
+        canRelogin({ enabled: true, login_email: 'me@example.com' }),
+      ).toBe(false)
+    })
+
+    it('is false when no credentials were stored', () => {
+      expect(canRelogin({ enabled: true })).toBe(false)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // getValidAccessToken — re-login after the session expires
+  // -------------------------------------------------------------------------
+
+  describe('#getValidAccessToken re-login', () => {
+    /** Auth whose refresh window has closed, with credentials stored */
+    const expiredWithCredentials = (): ByosAuthConfig => ({
+      enabled: true,
+      access_token: 'dead',
+      refresh_token: 'dead-refresh',
+      obtained_at: Date.now() - 30 * 60 * 1000,
+      login_email: 'me@example.com',
+      login_password: 'secret',
+    })
+
+    /** Rejects the refresh, then answers the login with fresh tokens */
+    const mockRefreshFailsThenLogin = (): void => {
+      globalThis.fetch = mock(async (url: unknown) =>
+        String(url).endsWith('/login')
+          ? new Response(
+              JSON.stringify({
+                access_token: 'relogin-access',
+                refresh_token: 'relogin-refresh',
+              }),
+              { status: 200 },
+            )
+          : new Response('{"error":"expired JWT access token"}', {
+              status: 400,
+            }),
+      ) as unknown as typeof fetch
+    }
+
+    it('logs in again when the refresh is rejected', async () => {
+      const auth = expiredWithCredentials()
+      mockRefreshFailsThenLogin()
+
+      const result = await getValidAccessToken('https://host.com/api', auth)
+
+      expect(result).toBe('relogin-access')
+    })
+
+    it('persists the tokens the re-login returned', async () => {
+      const auth = expiredWithCredentials()
+      mockRefreshFailsThenLogin()
+
+      let persisted: unknown = null
+      await getValidAccessToken('https://host.com/api', auth, (tokens) => {
+        persisted = tokens
+      })
+
+      expect(persisted).toMatchObject({
+        access_token: 'relogin-access',
+        refresh_token: 'relogin-refresh',
+      })
+      expect(auth.access_token).toBe('relogin-access')
+    })
+
+    it('sends the stored credentials to the login endpoint', async () => {
+      const auth = expiredWithCredentials()
+      const requests = captureFetch()
+
+      await getValidAccessToken('https://host.com/api', auth)
+
+      const loginRequest = requests.find((request) =>
+        request.url.endsWith('/login'),
+      )
+      expect(JSON.parse(loginRequest?.init?.body as string)).toEqual({
+        login: 'me@example.com',
+        password: 'secret',
+      })
+    })
+
+    it('does not log in while the refresh still works', async () => {
+      const auth = expiredWithCredentials()
+      const requests = captureFetch()
+      mockFetch({
+        ok: true,
+        json: async () => ({
+          access_token: 'refreshed',
+          refresh_token: 'refreshed-refresh',
+        }),
+      })
+
+      await getValidAccessToken('https://host.com/api', auth)
+
+      expect(requests.some((request) => request.url.endsWith('/login'))).toBe(
+        false,
+      )
+    })
+
+    it('falls back to the stored access token when the re-login also fails', async () => {
+      const auth = expiredWithCredentials()
+      mockFetch({ ok: false, status: 401 })
+
+      const result = await getValidAccessToken('https://host.com/api', auth)
+
+      expect(result).toBe('dead')
     })
   })
 

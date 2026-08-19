@@ -403,7 +403,7 @@ For BYOS Hanami, the add-on offers two **delivery modes**:
 
 See **[Webhook Formats Guide](docs/webhook-formats.md)** for:
 - Detailed format specifications and delivery mode selection
-- JWT authentication setup for BYOS
+- JWT authentication setup for BYOS, and what to do about sessions that expire
 - Deployment topology examples for the Add-on URL (Docker, LAN, reverse proxy)
 - How to add custom webhook formats
 
