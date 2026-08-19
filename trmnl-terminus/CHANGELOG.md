@@ -7,7 +7,7 @@ The version mirrors the [Terminus](https://github.com/usetrmnl/terminus) release
 the add-on bundles, so add-on 0.66.0 ships Terminus 0.66.0. A wrapper-only fix
 between upstream releases takes a `-1`, `-2` suffix.
 
-## [0.69.0] - 2026-08-17
+## [0.69.0-1] - 2026-08-19
 
 ### Added
 
@@ -22,6 +22,11 @@ between upstream releases takes a `-1`, `-2` suffix.
 - Sessions no longer expire by default. Terminus ends a session 24 hours after
   login however often its token is refreshed, which broke scheduled pushes
   overnight until someone signed in again
+
+## [0.69.0] - 2026-08-17
+
+### Changed
+
 - Updated Terminus to 0.69.0
 
 ## [0.68.0] - 2026-08-10
