@@ -395,14 +395,18 @@ export class RenderScheduleContent {
                   Clear Tokens
                 </button>
               </div>
-              <p class="text-xs text-gray-500 mt-1">Tokens auto-refresh. Valid for ~14 days.</p>
+              <p class="text-xs text-gray-500 mt-1">${
+                byosConfig?.auth?.login_password
+                  ? 'Tokens auto-refresh, and the add-on signs in again on its own if the session expires.'
+                  : 'Tokens auto-refresh. If the server expires the session, sign in again here.'
+              }</p>
               `
                   : `
               <!-- Auth options: Login or Manual Token -->
               <div class="space-y-3">
                 <!-- Option 1: Login with credentials -->
                 <div class="p-2 rounded-md bg-gray-50 border border-gray-200">
-                  <p class="text-xs font-medium text-gray-600 mb-2">Option 1: Login (credentials not stored)</p>
+                  <p class="text-xs font-medium text-gray-600 mb-2">Option 1: Login</p>
                   <div class="space-y-2">
                     <input type="email" id="s_byos_auth_login"
                       class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
@@ -410,6 +414,11 @@ export class RenderScheduleContent {
                     <input type="password" id="s_byos_auth_password"
                       class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
                       placeholder="Password" />
+                    <label class="flex items-start gap-2 text-xs text-gray-600 cursor-pointer">
+                      <input type="checkbox" id="s_byos_auth_remember"
+                        class="h-4 w-4 mt-0.5 border-gray-300 rounded" />
+                      <span>Stay signed in &mdash; saves your password so scheduled sends survive the server expiring the session. Leave off unless they keep dropping.</span>
+                    </label>
                     <button type="button" onclick="window.app.byosLogin()"
                       class="w-full px-3 py-1.5 text-sm text-white rounded-md transition hover:opacity-90"
                       style="background-color: var(--primary)">

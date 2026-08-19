@@ -954,7 +954,8 @@ class App {
   }
 
   /**
-   * Authenticates with BYOS server. Credentials are NOT stored.
+   * Authenticates with the BYOS server. The login is only stored when the
+   * user asks for it - see ByosAuthConfig.
    */
   async byosLogin(): Promise<void> {
     const schedule = this.#scheduleManager.activeSchedule
@@ -1003,11 +1004,16 @@ class App {
         return
       }
 
-      // Save tokens to schedule (NOT credentials)
+      const remember = (
+        document.getElementById('s_byos_auth_remember') as HTMLInputElement | null
+      )?.checked
+
       const updates = this.#buildByosAuthUpdate(schedule, {
         access_token: result.access_token,
         refresh_token: result.refresh_token,
         obtained_at: result.obtained_at,
+        login_email: remember ? login : undefined,
+        login_password: remember ? password : undefined,
       })
 
       await this.#scheduleManager.update(schedule.id, updates)
@@ -1037,7 +1043,7 @@ class App {
     const confirmed = await this.#confirmModal.show({
       title: 'Logout from BYOS',
       message:
-        'This will remove your authentication tokens. You will need to re-authenticate to send screenshots.',
+        'This will remove your authentication tokens and any saved login. You will need to re-authenticate to send screenshots.',
       confirmText: 'Logout',
       cancelText: 'Cancel',
       confirmClass: 'bg-red-600 hover:bg-red-700',
@@ -1045,11 +1051,13 @@ class App {
 
     if (!confirmed) return
 
-    // Clear auth tokens but keep other BYOS config
+    // Clear auth tokens and any stored login, but keep other BYOS config
     const updates = this.#buildByosAuthUpdate(schedule, {
       access_token: undefined,
       refresh_token: undefined,
       obtained_at: undefined,
+      login_email: undefined,
+      login_password: undefined,
     })
 
     await this.#scheduleManager.update(schedule.id, updates)
