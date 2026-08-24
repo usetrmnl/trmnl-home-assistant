@@ -46,6 +46,11 @@ const log = schedulerLogger()
 /**
  * Detects whether loaded schedules differ from the previous reload.
  *
+ * BYOS auth is excluded: the keepalive rotates those tokens every 10 minutes,
+ * and counting a rotation as an edit re-registered every job, restarting the
+ * interval timers before a schedule slower than the token lifetime could fire
+ * (#108). Jobs read their schedule when they run, so none of them go stale.
+ *
  * @param schedules - Schedules loaded from disk this tick
  * @param lastSnapshot - Serialized snapshot from the previous reload
  * @returns New snapshot string when changed, null when identical
@@ -54,7 +59,9 @@ export function changedSnapshot(
   schedules: Schedule[],
   lastSnapshot: string,
 ): string | null {
-  const snapshot = JSON.stringify(schedules)
+  const snapshot = JSON.stringify(schedules, (key: string, value: unknown) =>
+    key === 'auth' ? undefined : value,
+  )
   return snapshot === lastSnapshot ? null : snapshot
 }
 

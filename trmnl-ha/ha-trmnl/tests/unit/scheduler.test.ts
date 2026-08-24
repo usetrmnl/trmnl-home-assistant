@@ -9,7 +9,23 @@
 
 import { describe, it, expect } from 'bun:test'
 import { changedSnapshot } from '../../scheduler.js'
-import { buildSchedule } from '../helpers/schedule-fixtures.js'
+import {
+  buildByosSchedule,
+  buildSchedule,
+} from '../helpers/schedule-fixtures.js'
+import type { Schedule } from '../../types/domain.js'
+
+/** A BYOS schedule whose stored tokens carry the given rotation stamp. */
+function byosWithTokens(stamp: number): Schedule[] {
+  const schedule = buildByosSchedule()
+  schedule.webhook_format!.byosConfig!.auth = {
+    enabled: true,
+    access_token: `access-${stamp}`,
+    refresh_token: `refresh-${stamp}`,
+    obtained_at: stamp,
+  }
+  return [schedule]
+}
 
 describe('changedSnapshot', () => {
   it('returns a snapshot on first load', () => {
@@ -41,5 +57,19 @@ describe('changedSnapshot', () => {
     const first = changedSnapshot([buildSchedule()], '')!
 
     expect(changedSnapshot([], first)).toBeTypeOf('string')
+  })
+
+  it('returns null when only the BYOS tokens rotated', () => {
+    const first = changedSnapshot(byosWithTokens(1000), '')!
+
+    expect(changedSnapshot(byosWithTokens(2000), first)).toBeNull()
+  })
+
+  it('returns a new snapshot when a rotation accompanies a real edit', () => {
+    const first = changedSnapshot(byosWithTokens(1000), '')!
+    const [edited] = byosWithTokens(2000)
+    edited!.interval_minutes = 30
+
+    expect(changedSnapshot([edited!], first)).toBeTypeOf('string')
   })
 })
