@@ -297,8 +297,12 @@ export class Browser {
           }),
         )
 
-        // Monitor browser process death
+        // Puppeteer fires this for our own close as well as for a crash.
+        // cleanup() clears #browser before closing, so a disconnect from the
+        // browser still held here is the crash, and anything else is us.
         browser.on('disconnected', () => {
+          if (this.#browser !== browser) return
+
           browserLog.error`Browser process disconnected!`
           this.#browser = undefined
           this.#page = undefined
