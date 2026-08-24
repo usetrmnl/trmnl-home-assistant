@@ -2,7 +2,7 @@
  * @module tests/unit/job-manager
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach, jest } from 'bun:test'
 import { JobManager, startIntervalJob } from '../../lib/scheduler/job-manager.js'
 import { sleep } from '../../lib/sleep.js'
 import type { Schedule } from '../../types/domain.js'
@@ -67,6 +67,51 @@ describe('JobManager', () => {
       manager.upsertJob(buildJobInput({ interval_minutes: -1 }), noop)
 
       expect(manager.jobCount).toBe(1)
+    })
+
+    describe('when a reload re-upserts a running job', () => {
+      beforeEach(() => {
+        jest.useFakeTimers()
+      })
+
+      afterEach(() => {
+        jest.useRealTimers()
+      })
+
+      it('still fires on time when the timing is unchanged', () => {
+        let fired = 0
+        const schedule = buildJobInput({ interval_minutes: 3 })
+        manager.upsertJob(schedule, () => {
+          fired++
+        })
+
+        for (let minute = 0; minute < 3; minute++) {
+          jest.advanceTimersByTime(60_000)
+          manager.upsertJob(schedule, () => {
+            fired++
+          })
+        }
+
+        expect(fired).toBe(1)
+      })
+
+      it('restarts the timer when the timing changes', () => {
+        let fired = 0
+        manager.upsertJob(buildJobInput({ interval_minutes: 3 }), () => {
+          fired++
+        })
+
+        jest.advanceTimersByTime(60_000)
+        manager.upsertJob(buildJobInput({ interval_minutes: 5 }), () => {
+          fired++
+        })
+
+        jest.advanceTimersByTime(120_000)
+        expect(fired).toBe(0)
+
+        jest.advanceTimersByTime(180_000)
+        expect(fired).toBe(1)
+      })
     })
   })
 

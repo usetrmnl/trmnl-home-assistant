@@ -177,7 +177,7 @@ export class Scheduler {
 
       activeIds.add(schedule.id)
 
-      this.#jobManager.upsertJob(schedule, () => this.#runSchedule(schedule))
+      this.#jobManager.upsertJob(schedule, () => this.#runSchedule(schedule.id))
     }
 
     this.#jobManager.pruneInactiveJobs(activeIds)
@@ -229,8 +229,18 @@ export class Scheduler {
     }
   }
 
-  /** Cron callback: skips while cooling down, jitters, then executes. */
-  async #runSchedule(schedule: Schedule): Promise<void> {
+  /**
+   * Cron callback: loads the schedule, skips while cooling down, jitters, then
+   * executes.
+   *
+   * The job closes over the id rather than the schedule so it survives a reload
+   * without going stale.
+   */
+  async #runSchedule(scheduleId: string): Promise<void> {
+    const schedules = await loadSchedules()
+    const schedule = schedules.find((s) => s.id === scheduleId)
+    if (!schedule?.enabled) return
+
     const blockedUntil = this.#cooldowns.blockedUntil(schedule.id)
     if (blockedUntil !== null) {
       log.info`Skipping "${schedule.name}": server cooldown active until ${new Date(blockedUntil).toISOString()}`
