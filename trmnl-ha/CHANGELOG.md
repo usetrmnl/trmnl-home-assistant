@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-08-24
+
+### Fixed
+
+- Schedules never fired on an interval longer than ten minutes: refreshing a BYOS token counted as a schedule edit, and the reload it triggered restarted the interval timer before it could reach a fire (#109)
+- A routine browser close was logged as a crash, so an idle cleanup read as a capture having brought the browser down (#110)
+
 ## [0.10.0] - 2026-08-19
 
 ### Added
