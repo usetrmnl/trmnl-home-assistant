@@ -423,26 +423,47 @@ export function readinessInternalsPresent(): boolean {
  * callbacks ensure the browser has composed and painted at least one frame.
  * This catches the gap between "loading indicators gone" and "pixels painted".
  */
+/**
+ * Waits for the rendered layout to stop changing.
+ *
+ * Frontend modules loaded as Lovelace resources (card-mod and friends) restyle
+ * cards after the dashboard reports itself ready, which resizes everything
+ * around them. Sampling the layout until it holds still catches that; a couple
+ * of animation frames returns before it has even started.
+ */
 export class WaitForPaintStability {
   #page: Page
+  #quietMs: number
+  #timeout: number
 
-  constructor(page: Page) {
+  constructor(page: Page, quietMs: number = 300, timeout: number = 3000) {
     this.#page = page
+    this.#quietMs = quietMs
+    this.#timeout = timeout
   }
 
   async call(): Promise<void> {
     try {
       await this.#page.waitForFunction(
-        () =>
-          new Promise((resolve) => {
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => resolve(true))
-            })
-          }),
-        { timeout: 2000 },
+        (quietMs: number) => {
+          const root = document.documentElement
+          const signature = `${root.scrollHeight}:${root.scrollWidth}:${document.querySelectorAll('*').length}`
+          const store = window as unknown as Record<string, unknown>
+          const seen = store['__trmnlLayout'] as
+            | { signature: string; since: number }
+            | undefined
+
+          if (seen?.signature !== signature) {
+            store['__trmnlLayout'] = { signature, since: Date.now() }
+            return false
+          }
+          return Date.now() - seen.since >= quietMs
+        },
+        { timeout: this.#timeout, polling: 100 },
+        this.#quietMs,
       )
     } catch (_err) {
-      log.debug`Paint stability check timed out`
+      log.debug`Layout stability wait timed out`
     }
   }
 }

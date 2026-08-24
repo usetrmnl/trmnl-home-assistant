@@ -682,7 +682,7 @@ describe('WaitForPaintStability', () => {
     await cmd.call()
   })
 
-  it('uses 2 second timeout', async () => {
+  it('polls until the layout holds still', async () => {
     let capturedOptions: unknown
     const mockPage = {
       waitForFunction: async (_fn: unknown, opts: unknown) => {
@@ -693,10 +693,10 @@ describe('WaitForPaintStability', () => {
     const cmd = new WaitForPaintStability(mockPage)
     await cmd.call()
 
-    expect(capturedOptions).toEqual({ timeout: 2000 })
+    expect(capturedOptions).toEqual({ timeout: 3000, polling: 100 })
   })
 
-  it('passes a function that returns a promise (double-rAF)', async () => {
+  it('passes the layout sampler to the page', async () => {
     let capturedFn: unknown
     const mockPage = {
       waitForFunction: async (fn: unknown) => {
