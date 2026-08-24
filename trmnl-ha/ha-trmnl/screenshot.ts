@@ -18,6 +18,7 @@
 import puppeteer from 'puppeteer'
 import type {
   Browser as PuppeteerBrowser,
+  Frame,
   Page,
   Viewport,
 } from 'puppeteer'
@@ -485,8 +486,89 @@ export class Browser {
         // Continue anyway - will capture the login page (helps user see the issue)
       }
 
-      // Apply page setup strategy (HA vs Generic have different requirements)
+      // Home Assistant can reload the dashboard while we are still preparing
+      // it - its service worker takes over on the second load in a reused
+      // browser. That discards the zoom and every readiness wait already done,
+      // so watch for it and settle the replacement document once more.
       const isGenericUrl = !!targetUrl
+      let reloaded = false
+      const noteReload = (frame: Frame): void => {
+        if (frame === page.mainFrame()) reloaded = true
+      }
+
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        reloaded = false
+        page.on('framenavigated', noteReload)
+        try {
+          await this.#settlePage(page, {
+            isGenericUrl,
+            zoom,
+            lang,
+            theme,
+            dark,
+            extraWait,
+          })
+        } finally {
+          page.off('framenavigated', noteReload)
+        }
+
+        if (!reloaded) break
+
+        // The new document kept none of the setup, so the cache saying the
+        // theme and language are already applied is wrong for it.
+        this.#lastRequestedLang = undefined
+        this.#lastRequestedTheme = undefined
+        this.#lastRequestedDarkMode = undefined
+        log.debug`Dashboard reloaded mid-capture; settling it again`
+      }
+
+    } catch (err) {
+      this.#pageErrorDetected = false
+
+      if (err instanceof BrowserCrashError) throw err
+      if (this.#pageErrorDetected) {
+        throw new PageCorruptedError(
+          `Navigation failed with page errors: ${(err as Error).message}`,
+        )
+      }
+      if (err instanceof CannotOpenPageError) throw err
+
+      if (
+        (err as Error).message?.includes('Target closed') ||
+        (err as Error).message?.includes('Session closed') ||
+        (err as Error).message?.includes('Protocol error')
+      ) {
+        throw new BrowserCrashError(err as Error)
+      }
+
+      throw err
+    }
+  }
+
+  /**
+   * Applies the page setup strategy and runs the readiness waits.
+   *
+   * Split out so a dashboard that reloads underneath us can be settled again:
+   * everything here is applied to one document and is lost with it.
+   */
+  async #settlePage(
+    page: Page,
+    {
+      isGenericUrl,
+      zoom,
+      lang,
+      theme,
+      dark,
+      extraWait,
+    }: {
+      isGenericUrl: boolean
+      zoom: number
+      lang?: string
+      theme?: string
+      dark?: boolean
+      extraWait?: number
+    },
+  ): Promise<void> {
       const setupStrategy = getPageSetupStrategy(isGenericUrl)
       const setupResult = await timed('nav.setup', () =>
         setupStrategy.setup(page, {
@@ -560,27 +642,6 @@ export class Browser {
         await new Promise((resolve) => setTimeout(resolve, extraWait))
       }
 
-    } catch (err) {
-      this.#pageErrorDetected = false
-
-      if (err instanceof BrowserCrashError) throw err
-      if (this.#pageErrorDetected) {
-        throw new PageCorruptedError(
-          `Navigation failed with page errors: ${(err as Error).message}`,
-        )
-      }
-      if (err instanceof CannotOpenPageError) throw err
-
-      if (
-        (err as Error).message?.includes('Target closed') ||
-        (err as Error).message?.includes('Session closed') ||
-        (err as Error).message?.includes('Protocol error')
-      ) {
-        throw new BrowserCrashError(err as Error)
-      }
-
-      throw err
-    }
   }
 
   /**
