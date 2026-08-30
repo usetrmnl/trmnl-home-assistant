@@ -27,6 +27,14 @@ const log = navigationLogger()
 /** Set once the warning below has been given, so it is given only once. */
 let warnedAboutInternals = false
 
+/**
+ * Clears the one-time internals warning. Exists for tests: the flag is process
+ * wide, so without this whichever test runs first decides what the others see.
+ */
+export function resetInternalsWarning(): void {
+  warnedAboutInternals = false
+}
+
 /** Auth storage for localStorage injection */
 export type AuthStorage = Record<string, string>
 

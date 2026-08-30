@@ -54,6 +54,9 @@ import { screenshotLogger, browserLogger } from './lib/logger.js'
 import { recordTiming, timed } from './lib/metrics.js'
 
 const log = screenshotLogger()
+
+/** How many times a navigation mid-preparation is worth starting over for. */
+const MAX_SETTLE_PASSES = 2
 const browserLog = browserLogger()
 
 // =============================================================================
@@ -496,7 +499,7 @@ export class Browser {
         if (frame === page.mainFrame()) reloaded = true
       }
 
-      for (let attempt = 1; attempt <= 2; attempt++) {
+      for (let pass = 1; pass <= MAX_SETTLE_PASSES; pass++) {
         reloaded = false
         page.on('framenavigated', noteReload)
         try {
@@ -515,10 +518,17 @@ export class Browser {
         if (!reloaded) break
 
         // The new document kept none of the setup, so the cache saying the
-        // theme and language are already applied is wrong for it.
+        // theme and language are already applied describes a document that is
+        // gone.
         this.#lastRequestedLang = undefined
         this.#lastRequestedTheme = undefined
         this.#lastRequestedDarkMode = undefined
+
+        if (pass === MAX_SETTLE_PASSES) {
+          log.debug`Dashboard is still reloading; capturing it as it stands`
+          break
+        }
+
         log.debug`Dashboard reloaded mid-capture; settling it again`
       }
 

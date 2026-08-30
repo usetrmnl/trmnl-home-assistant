@@ -13,6 +13,7 @@ import {
   WaitForLoadingComplete,
   DismissToasts,
   WaitForPaintStability,
+  resetInternalsWarning,
   WaitForWebSocketIdle,
   WaitForHassReady,
   UpdateLanguage,
@@ -462,6 +463,7 @@ describe('WaitForLoadingComplete', () => {
   // before anything else in the suite drives a page whose evaluate() reports
   // the internals as missing.
   it('checks the Home Assistant internals once and not again', async () => {
+    resetInternalsWarning()
     let checks = 0
     const missingInternals = {
       waitForFunction: async () => {},
