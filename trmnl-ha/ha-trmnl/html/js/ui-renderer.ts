@@ -16,7 +16,7 @@
  */
 
 import type { Schedule } from '../../types/domain.js'
-import { BYOS_DEFAULT_DELIVERY_MODE } from '../shared/byos-constants.js'
+import { deliveryModeFor } from '../shared/byos-constants.js'
 import type { PaletteOption } from './palette-options.js'
 import { buildScreenshotParams } from '../shared/build-screenshot-params.js'
 import { resolveScreenshotTarget } from '../shared/screenshot-target.js'
@@ -308,6 +308,7 @@ export class RenderScheduleContent {
     const currentFormat = s.webhook_format?.format ?? 'raw'
     const byosConfig = s.webhook_format?.byosConfig
     const showByosFields = currentFormat === 'byos-hanami'
+    const deliveryMode = deliveryModeFor(byosConfig)
 
     return `
       <div id="webhookFormatSection" >
@@ -317,13 +318,13 @@ export class RenderScheduleContent {
             onchange="window.app.toggleWebhookFormat(this.value)"
             title="Payload format for webhook requests">
             <option value="raw" ${currentFormat === 'raw' ? 'selected' : ''}>Raw Image (default)</option>
-            <option value="byos-hanami" ${currentFormat === 'byos-hanami' ? 'selected' : ''}>BYOS Hanami API</option>
+            <option value="byos-hanami" ${currentFormat === 'byos-hanami' ? 'selected' : ''}>Terminus</option>
           </select>
-          <p class="text-xs text-gray-500 mt-1">Raw: sends binary image | BYOS: JSON-wrapped base64 for self-hosted TRMNL</p>
+          <p class="text-xs text-gray-500 mt-1">Raw: sends the image itself | Terminus: sends JSON to your own Terminus server</p>
         </div>
 
         <div id="byosConfigSection" class="${showByosFields ? '' : 'hidden'} mt-3 p-3 rounded-md" style="background-color: #f9fafb; border: 1px solid #e5e7eb">
-          <p class="text-xs font-medium text-gray-600 mb-2">BYOS Hanami Configuration (/api/screens)</p>
+          <p class="text-xs font-medium text-gray-600 mb-2">Terminus Configuration (/api/screens)</p>
           <div class="space-y-2">
             <div>
               <label class="block text-xs text-gray-600 mb-1">Label</label>
@@ -331,7 +332,7 @@ export class RenderScheduleContent {
                 class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
                 onchange="window.app.updateScheduleFromForm()"
                 placeholder="Home Assistant"
-                title="Display label shown in BYOS dashboard" />
+                title="Display label shown in Terminus" />
             </div>
             <div>
               <label class="block text-xs text-gray-600 mb-1">Screen Name</label>
@@ -347,7 +348,7 @@ export class RenderScheduleContent {
                 class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
                 onchange="window.app.updateScheduleFromForm()"
                 placeholder="1"
-                title="BYOS model ID for your device" />
+                title="Terminus model ID for your device" />
             </div>
             <div>
               <label class="block text-xs text-gray-600 mb-1">Delivery Mode</label>
@@ -355,12 +356,12 @@ export class RenderScheduleContent {
                 class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
                 onchange="window.app.toggleByosDeliveryMode(this.value)"
                 title="How Terminus receives the screenshot">
-                <option value="data" ${(byosConfig?.delivery_mode ?? BYOS_DEFAULT_DELIVERY_MODE) === 'data' ? 'selected' : ''}>Legacy base64 (Terminus ≤ 0.51.0)</option>
-                <option value="uri" ${byosConfig?.delivery_mode === 'uri' ? 'selected' : ''}>URI (Terminus ≥ 0.52.0, recommended)</option>
+                <option value="uri" ${deliveryMode === 'uri' ? 'selected' : ''}>URI (recommended)</option>
+                <option value="data" ${deliveryMode === 'data' ? 'selected' : ''}>Legacy base64 (Terminus ≤ 0.51.0 only)</option>
               </select>
-              <p class="text-xs text-gray-500 mt-1">Base64 was removed in Terminus 0.52.0. Pick URI if you're on 0.52.0 or newer.</p>
+              <p class="text-xs text-gray-500 mt-1">Terminus stopped accepting base64 in 0.52.0. Stay on URI unless your server is older than that.</p>
             </div>
-            <div id="s_byos_addon_url_field" class="${(byosConfig?.delivery_mode ?? BYOS_DEFAULT_DELIVERY_MODE) === 'uri' ? '' : 'hidden'}">
+            <div id="s_byos_addon_url_field" class="${deliveryMode === 'uri' ? '' : 'hidden'}">
               <label class="block text-xs text-gray-600 mb-1">Add-on URL</label>
               <input type="text" id="s_byos_addon_url" value="${byosConfig?.addon_base_url || ''}"
                 class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
@@ -377,7 +378,7 @@ export class RenderScheduleContent {
               <input type="checkbox" id="s_byos_auth_enabled" ${byosConfig?.auth?.enabled ? 'checked' : ''}
                 class="h-4 w-4 border-gray-300 rounded"
                 onchange="window.app.toggleByosAuth(this.checked)"
-                title="Enable JWT authentication for BYOS API" />
+                title="Enable JWT authentication for the Terminus API" />
               JWT Authentication
             </label>
             <div id="byosAuthFields" class="${byosConfig?.auth?.enabled ? '' : 'hidden'}">
@@ -451,7 +452,7 @@ export class RenderScheduleContent {
           </div>
 
           <p class="text-xs text-gray-500 mt-2">
-            <a href="https://github.com/usetrmnl/byos_hanami/blob/main/doc/api.adoc#screens" target="_blank" class="underline" style="color: var(--primary)">BYOS Hanami docs</a>
+            <a href="https://github.com/usetrmnl/terminus/blob/main/doc/api.adoc#screens" target="_blank" class="underline" style="color: var(--primary)">Terminus API docs</a>
           </p>
         </div>
       </div>

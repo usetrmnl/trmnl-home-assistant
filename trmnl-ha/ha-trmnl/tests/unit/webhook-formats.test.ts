@@ -13,6 +13,7 @@ import {
   getTransformer,
 } from '../../lib/scheduler/webhook-formats.js'
 import type { WebhookFormatConfig } from '../../types/domain.js'
+import { deliveryModeFor } from '../../html/shared/byos-constants.js'
 
 describe('RawFormatTransformer', () => {
   const transformer = new RawFormatTransformer()
@@ -222,5 +223,21 @@ describe('getTransformer factory', () => {
     const transformer = getTransformer(config)
 
     expect(transformer).toBeInstanceOf(RawFormatTransformer)
+  })
+})
+
+describe('deliveryModeFor', () => {
+  it('defaults a new schedule to uri', () => {
+    expect(deliveryModeFor()).toBe('uri')
+  })
+
+  it('keeps an explicit choice', () => {
+    expect(deliveryModeFor({ delivery_mode: 'data' })).toBe('data')
+    expect(deliveryModeFor({ delivery_mode: 'uri' })).toBe('uri')
+  })
+
+  it('reads a stored schedule the way the transformer does', () => {
+    expect(deliveryModeFor({})).toBe('data')
+    expect(deliveryModeFor({ addon_base_url: 'http://host:10000' })).toBe('uri')
   })
 })
