@@ -1,6 +1,6 @@
 ---
 name: Terminus Server (BYOS)
-version: "0.70.0"
+version: "0.71.0"
 slug: trmnl-terminus
 description: >-
   Starts a Terminus Server that enables local management of TRMNL devices (BYOS)
