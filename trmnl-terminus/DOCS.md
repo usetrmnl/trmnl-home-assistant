@@ -43,7 +43,7 @@ To add another variable from the Terminus docs, add the lowercased key to `schem
 
 This is the one option the add-on sets a default for. Terminus expires a session after 30 minutes idle and 24 hours in total, and ties its API tokens to that session. Anything pushing screens on a schedule cannot survive those limits unattended: refreshing resets the inactivity timer but never the lifetime cap, so the session lapses a day after login however diligently the token is refreshed, and every push then fails until somebody signs in by hand. Sessions therefore do not expire unless you switch this on.
 
-Turn it on if the server is reachable beyond your trusted network, and expect to re-authenticate any BYOS push schedules once per lifetime. The [TRMNL add-on](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/docs/webhook-formats.md) can save its login and sign in again on its own if you would rather keep expiry on.
+Turn it on if the server is reachable beyond your trusted network, and expect to re-authenticate any Terminus push schedules once per lifetime. The [TRMNL add-on](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/docs/webhook-formats.md) can save its login and sign in again on its own if you would rather keep expiry on.
 
 Raising `api_access_token_period` on its own does not extend a session: `session_inactivity_limit` and `session_lifetime_limit` still apply, and the shortest of the three is what ends it. Move all three together.
 

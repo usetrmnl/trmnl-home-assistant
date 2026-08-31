@@ -272,7 +272,7 @@ called.
 
 | Architecture | Description | Use Case |
 |--------------|-------------|----------|
-| **Pull (Fetch URL)** | Device requests image on-demand via HTTP GET | ESPHome, custom e-ink, TRMNL BYOS, testing |
+| **Pull (Fetch URL)** | Device requests image on-demand via HTTP GET | ESPHome, custom e-ink, Terminus, testing |
 | **Push (Webhook)** | Add-on POSTs to webhook on schedule | TRMNL devices, automated updates |
 
 **Pull mode** generates a fresh screenshot on every request. The browser launches automatically if not already running.
@@ -389,23 +389,19 @@ Presets auto-configure viewport, rotation, dithering, and format.
 
 ## Webhook Formats
 
-The add-on supports multiple webhook payload formats for different e-ink display backends:
+A schedule can send its screenshot in one of two shapes:
 
 | Format | Use Case |
 |--------|----------|
-| **Raw** (default) | TRMNL devices, custom endpoints |
-| **BYOS Hanami** | Self-hosted [Terminus / BYOS Hanami](https://github.com/usetrmnl/terminus) servers |
+| **Raw Image** (default) | TRMNL devices, custom endpoints |
+| **Terminus** | Your own [Terminus](https://github.com/usetrmnl/terminus) server |
 
-For BYOS Hanami, the add-on offers two **delivery modes**:
+For Terminus, the add-on sends a short message naming the screen, and Terminus fetches the image from the add-on. That means **Add-on URL** has to be an address **Terminus** can reach — often *not* `localhost`.
 
-- **URI mode** (recommended, required for Terminus ≥ 0.52.0): the add-on sends a URL; Terminus fetches the image itself. Set **Add-on URL** to an address **Terminus** can reach — often *not* `localhost`. See the guide for deployment topologies.
-- **Legacy base64 mode**: inlines the image in the JSON body. Only works on Terminus ≤ 0.51.0.
-
-See **[Webhook Formats Guide](docs/webhook-formats.md)** for:
-- Detailed format specifications and delivery mode selection
-- JWT authentication setup for BYOS, and what to do about sessions that expire
-- Deployment topology examples for the Add-on URL (Docker, LAN, reverse proxy)
-- How to add custom webhook formats
+See **[Sending screenshots to a server](docs/webhook-formats.md)** for:
+- What to put in each field
+- Signing in, and what to do when sessions expire
+- Which Add-on URL to use for your setup (Docker, LAN, reverse proxy)
 
 ---
 

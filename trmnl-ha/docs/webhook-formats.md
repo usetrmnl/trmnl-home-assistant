@@ -1,61 +1,64 @@
-# Webhook Formats
+# Sending screenshots to a server
 
-When uploading screenshots via webhooks, the add-on supports multiple payload formats to integrate with different e-ink display backends.
+A schedule takes a screenshot of your dashboard and sends it somewhere. This page covers the two ways it can send, and how to set each one up.
 
-## Supported Formats
+If you are not sure which you need:
 
-| Format | Content-Type | Use Case |
-|--------|--------------|----------|
-| **Raw** (default) | `image/png`, `image/jpeg`, `image/bmp` | Direct binary upload to TRMNL or custom endpoints |
-| **BYOS Hanami** | `application/json` | Self-hosted [Terminus / BYOS Hanami](https://github.com/usetrmnl/terminus) servers |
+| Send it to | Use | Why |
+|---|---|---|
+| A TRMNL device, or anything that accepts an image | **Raw Image** | It posts the picture and nothing else. Nothing to configure. |
+| Your own [Terminus](https://github.com/usetrmnl/terminus) server | **Terminus** | Terminus wants the picture wrapped in a small message describing which screen it belongs to. |
+
+You pick this in the schedule editor, under **Webhook Format**.
 
 ---
 
-## Raw Format
+## Raw Image
 
-The default format sends the image binary directly as the request body. This is the simplest format and works with most webhook endpoints.
+The add-on posts the image on its own, as the whole body of the request.
 
-**Request:**
 ```http
 POST /your-webhook-endpoint
 Content-Type: image/png
 Authorization: Bearer <optional-token>
 
-<binary image data>
+<the image>
 ```
 
-**When to use:** TRMNL devices, custom webhook endpoints, any service expecting raw image uploads.
+That is all there is to it. Point **Webhook URL** at whatever should receive the picture and you are done.
 
 ---
 
-## BYOS Hanami Format
+## Terminus
 
-For self-hosted [Terminus / BYOS Hanami](https://github.com/usetrmnl/terminus) installations, this format wraps the screen metadata in a JSON payload and delivers the image to `POST /api/screens`.
+Terminus is TRMNL's self-hosted server — you run it yourself instead of using trmnl.com. It stores "screens", and each screen is one image with a name attached. The add-on sends screenshots to your server's `/api/screens` address.
 
-### Delivery Modes
+Set **Webhook URL** to that address, for example `https://terminus.example.com/api/screens`.
 
-Terminus supports two incompatible payload shapes depending on its version. The add-on exposes both via a **Delivery Mode** dropdown in the schedule UI.
+### The fields
 
-| Mode | Terminus versions | Image transport |
-|------|-------------------|-----------------|
-| **URI** (recommended) | `≥ 0.11.0`, required from `0.52.0` onward | Terminus fetches the image from the add-on over HTTP |
-| **Legacy base64** | `≤ 0.51.0` only | Add-on inlines the image as base64 in the JSON body |
+| Field | What to put in it |
+|---|---|
+| **Label** | The name you want to see in Terminus. Anything readable, like "Kitchen dashboard". |
+| **Screen Name** | A short id with no spaces, like `ha-dashboard`. Terminus uses it to recognize the same screen each time, so keep it the same once you have picked one. |
+| **Model ID** | Which device model this screen is for, taken from your Terminus setup. `1` if you only have one. |
+| **Delivery Mode** | Leave on **URI**. See below. |
+| **Add-on URL** | Where Terminus can find this add-on. This one catches people out — see [Setting the Add-on URL](#setting-the-add-on-url). |
 
-Base64 support was removed from Terminus in `0.52.0` (released 2026-04-01). New installations should pick **URI** mode; older deployments can stay on **Legacy base64** until they upgrade.
+The add-on also tells Terminus the image is already prepared for e-ink, so Terminus leaves it alone. The add-on does that conversion itself, and doing it twice makes the picture worse.
 
-### URI Mode
+### How it sends
 
-In URI mode, the add-on sends a small JSON payload referencing a screenshot endpoint on the add-on itself. Terminus then calls back to that URL, downloads the dithered image, and stores it.
+The add-on posts a short message naming the screen and where the picture can be collected. Terminus then comes back and downloads it.
 
-**Request:**
 ```http
 POST /api/screens
 Content-Type: application/json
-Authorization: <jwt-access-token>
+Authorization: <access token>
 
 {
   "screen": {
-    "uri": "http://192.168.1.100:10000/lovelace/0?viewport=800x480&dithering=&dither_method=floyd-steinberg&palette=gray-4",
+    "uri": "http://192.168.1.100:10000/output/ha-dashboard.png",
     "label": "Home Assistant",
     "name": "ha-dashboard",
     "model_id": "1",
@@ -64,241 +67,88 @@ Authorization: <jwt-access-token>
 }
 ```
 
-**Requirements:**
+So there are two trips: the add-on tells Terminus about the picture, then Terminus fetches it. That second trip is why the Add-on URL matters.
 
-- `preprocessed: true` tells Terminus to use the image as-is without running its own dithering. The add-on always sends preprocessed images since it dithers locally.
-- The add-on's screenshot endpoint must be reachable without authentication, or the Add-on URL must include any credentials Terminus needs.
-- If URI mode is selected but **Add-on URL** is blank, the add-on throws a clear error at delivery time rather than silently falling back.
+---
 
-#### Setting the Add-on URL
+## Setting the Add-on URL
 
-> ⚠️ **This is the URL Terminus will use to reach the add-on — not the URL you use in your browser.**
->
-> The Add-on URL field must resolve from *Terminus's* network vantage point, not yours. If Terminus runs in Docker on the same host, `http://localhost:10000` will **not** work — inside the Terminus container, `localhost` points at the container itself, and nothing is listening on port `10000` there.
+> ⚠️ **This is the address *Terminus* uses to reach the add-on. It is not the address you type into your browser.**
 
-Think of it as two asymmetric network hops:
+Those are often different, even when both programs run on the same machine. Three separate connections are involved, and each one starts somewhere else:
 
 ```
-You (browser) ──────▶ Add-on UI       (your browser resolves "localhost")
-Add-on ──────▶ Terminus               (webhook URL, see "Webhook URL" field)
-Terminus ──────▶ Add-on screenshot    (Add-on URL, see this section)
+You, in a browser  ──▶ the add-on's page     (whatever you type in the address bar)
+The add-on         ──▶ Terminus              (the Webhook URL field)
+Terminus           ──▶ the add-on's image    (the Add-on URL field — this one)
 ```
 
-The second and third hops resolve DNS from different vantage points, so the Webhook URL and the Add-on URL often need to be different strings even when both services are on the same physical machine.
+`localhost` means "the machine I am on", so it means something different depending on who says it. If Terminus runs in Docker and you tell it `http://localhost:10000`, it looks inside its own container, finds nothing there, and the send fails.
 
-Pick the value that matches your deployment topology:
+Pick the row that matches your setup:
 
 | Where Terminus runs | Set Add-on URL to | Notes |
 |---|---|---|
-| Docker on the same host as the add-on (Docker Desktop on Mac/Windows) | `http://host.docker.internal:10000` | Docker Desktop's built-in DNS name for the host machine |
-| Docker on the same Linux host | `http://172.17.0.1:10000` or your LAN IP | `172.17.0.1` is the default docker bridge gateway; LAN IP also works |
-| A different machine on the same LAN | `http://<add-on-lan-ip>:10000` | Use the add-on host's routable IP, never `localhost` |
-| Behind a reverse proxy / public URL | `https://trmnl.example.com` | Whatever public hostname forwards to the add-on's port 10000 |
-| As a Home Assistant add-on, accessed via ingress | The add-on's ingress URL | See your HA installation's external ingress configuration |
+| Docker on the same computer, using Docker Desktop (Mac or Windows) | `http://host.docker.internal:10000` | Docker Desktop's built-in name for the computer it runs on |
+| Docker on the same Linux computer | `http://172.17.0.1:10000`, or that computer's network address | `172.17.0.1` is Docker's default gateway on Linux |
+| A different computer on your network | `http://<address-of-the-add-on's-computer>:10000` | Its actual network address. Never `localhost`. |
+| Behind a reverse proxy or on a public address | `https://trmnl.example.com` | Whatever public address forwards to port 10000 |
+| As a Home Assistant add-on reached through ingress | The add-on's ingress address | See your Home Assistant setup |
 
-**Verification shortcut.** Before retrying a failed schedule, shell into the Terminus container and confirm it can reach the add-on:
+**Check it before anything else.** If a schedule fails, run this from inside Terminus and see whether it can reach the add-on at all:
 
 ```sh
 docker compose -p terminus-development exec web \
   curl -sI http://host.docker.internal:10000/health
-# Expected: HTTP/1.1 200 OK
+# You want: HTTP/1.1 200 OK
 ```
 
-If that curl fails, fix the URL before touching anything else — every downstream error (`ECONNREFUSED`, `improper image header` from MiniMagick, 500 from Terminus) traces back to this one setting.
+If that fails, fix the address before changing anything else. Nearly every error you will see downstream — `ECONNREFUSED`, `improper image header`, a 500 from Terminus — comes back to this one field.
 
-### Legacy Base64 Mode
+---
 
-Legacy mode embeds the image directly in the JSON body. Keep it selected only if your Terminus is `≤ 0.51.0`.
+## Signing in
 
-**Request:**
-```http
-POST /api/screens
-Content-Type: application/json
-Authorization: <jwt-access-token>
+Terminus asks for a token before it will accept anything. Turn on **JWT Authentication** in the schedule and use either option.
 
+**Option 1 — sign in here.** Type your Terminus email and password and press Authenticate. The add-on trades them for tokens and keeps those. It does not keep the password unless you tick "Stay signed in".
+
+**Option 2 — paste tokens you already have.** If you would rather not type your password into the add-on, or you want to script the setup, ask Terminus for tokens yourself:
+
+```sh
+curl -X POST https://terminus.example.com/login \
+  -H 'Content-Type: application/json' \
+  -d '{"login": "you@example.com", "password": "your-password"}'
+```
+
+Terminus answers with two tokens:
+
+```json
 {
-  "screen": {
-    "data": "<base64-encoded-image>",
-    "label": "Home Assistant",
-    "name": "ha-dashboard",
-    "model_id": "1",
-    "file_name": "ha-dashboard.png",
-    "preprocessed": true
-  }
+  "access_token": "...",
+  "refresh_token": "..."
 }
 ```
 
-### Backward Compatibility
+Paste both into the schedule. You only do this once — the access token lasts about 30 minutes, and the add-on quietly swaps the refresh token for a fresh pair (`POST /api/jwt`) before it runs out.
 
-Schedules created before this feature shipped have no `delivery_mode` field in their stored config. The add-on treats them as follows:
+### When sign-ins stop working
 
-- No `delivery_mode` + no Add-on URL → **Legacy base64** (preserves pre-existing behavior)
-- No `delivery_mode` + Add-on URL configured → **URI**
-- Explicit `delivery_mode: 'data'` → **Legacy base64** (user choice wins even if Add-on URL is set)
-- Explicit `delivery_mode: 'uri'` → **URI** (throws if Add-on URL is missing)
+Terminus can be set to end a session 24 hours after you signed in, no matter how active it has been. Refreshing keeps the session from going idle, but it cannot extend that 24-hour ceiling. When the session ends, sends fail with a `401` and the add-on raises a Home Assistant notification asking you to sign in again.
 
-### Configuration Fields
+Two ways to avoid that:
 
-| Field | Description |
-|-------|-------------|
-| `label` | Display name shown in BYOS UI |
-| `name` | Unique screen identifier (slug format) |
-| `model_id` | BYOS device model ID (from your BYOS setup) |
-| `preprocessed` | Whether the image is already optimized for e-ink (always `true` from the add-on) |
-| `delivery_mode` | `'uri'` or `'data'`. Omitted on legacy schedules. |
-| `addon_base_url` | URL of this add-on as reachable **from Terminus**, required for URI mode. See [Setting the Add-on URL](#setting-the-add-on-url). |
-
-### JWT Authentication
-
-BYOS requires JWT authentication. You can either:
-
-1. **Login via UI:** Enter your BYOS credentials in the schedule settings. The add-on exchanges them for tokens.
-2. **Manual tokens:** Paste your access and refresh tokens directly if you prefer not to enter credentials.
-
-The scheduler refreshes tokens every minute once they are 10 minutes old, well inside Terminus' 30 minute access token window.
-
-### Sessions that expire
-
-Terminus ties its API tokens to a login session, and where session expiration is on it ends that session 24 hours after login however often the token is refreshed - refreshing resets the inactivity timer, never the lifetime cap. When it lapses, sends fail with `401`, and where no login is saved the add-on raises a Home Assistant notification asking you to sign in again.
-
-Two ways to stop that:
-
-- **Stay signed in**, in the schedule's JWT settings. The add-on saves your BYOS login and signs in again by itself when the session lapses. The password is stored in plain text in the add-on's schedules file, alongside the access token that already lives there, so treat the two the same. Leave it off if your server does not expire sessions.
-- **Turn expiry off on the server.** The [Terminus add-on](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-terminus/DOCS.md) does not expire sessions unless you switch **Session expiration** on. Running Terminus yourself with Docker Compose, set `SESSION_EXPIRATION_ENABLED=false` - and note it has to appear in the compose file's `environment:` block, not only in `.env`, or the container never sees it. To keep expiry but make it longer, raise `API_ACCESS_TOKEN_PERIOD`, `SESSION_INACTIVITY_LIMIT` and `SESSION_LIFETIME_LIMIT` together; the shortest of the three is what ends the session.
-
-### 422 Error Handling
-
-If BYOS returns `422 Unprocessable Entity` (screen already exists), the add-on automatically:
-1. Lists existing screens via `GET /api/screens`
-2. Finds and deletes the screen with matching `model_id`
-3. Retries the upload
+- **Tick "Stay signed in"** in the schedule. The add-on saves your Terminus password and signs in again by itself. Worth knowing: the password is stored in plain text in the add-on's schedules file, next to the token that already lives there. Treat both the same way. Leave this off if your server does not expire sessions.
+- **Turn expiry off on the server.** The [Terminus add-on](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-terminus/DOCS.md) leaves sessions alone unless you switch **Session expiration** on. Running Terminus yourself with Docker Compose, set `SESSION_EXPIRATION_ENABLED=false` — and put it in the compose file's `environment:` block, not only in `.env`, or the container never sees it. To keep expiry but stretch it out, raise `API_ACCESS_TOKEN_PERIOD`, `SESSION_INACTIVITY_LIMIT` and `SESSION_LIFETIME_LIMIT` together; whichever is shortest is what ends the session.
 
 ---
 
-## Adding Custom Formats
+## If the screen already exists
 
-The webhook system uses a **Strategy Pattern** for extensibility. To add a new format:
-
-### 1. Define the Format Type
-
-Add your format to `types/domain.ts`:
-
-```typescript
-// Add to WebhookFormat union type
-export type WebhookFormat = 'raw' | 'byos-hanami' | 'your-format'
-
-// Add config interface if needed
-export interface YourFormatConfig {
-  apiKey: string
-  // ... other fields
-}
-```
-
-### 2. Create a Transformer
-
-Add a new file `lib/scheduler/your-format-transformer.ts` or add to `webhook-formats.ts`:
-
-```typescript
-import type { FormatTransformer, WebhookPayload } from './webhook-formats.js'
-import type { ImageFormat } from '../../types/domain.js'
-
-export class YourFormatTransformer implements FormatTransformer {
-  transform(
-    imageBuffer: Buffer,
-    format: ImageFormat,
-    config?: YourFormatConfig,
-    screenshotUrl?: string,
-  ): WebhookPayload {
-    // Transform the image buffer into your payload format.
-    // `screenshotUrl` is only set for URI-mode formats (see BYOS Hanami).
-    // Formats that inline the image can ignore it.
-    return {
-      body: JSON.stringify({
-        image: imageBuffer.toString('base64'),
-        // ... your format's structure
-      }),
-      contentType: 'application/json',
-    }
-  }
-}
-```
-
-### 3. Register the Transformer
-
-Update `getTransformer()` in `lib/scheduler/webhook-formats.ts`:
-
-```typescript
-export function getTransformer(
-  formatConfig?: WebhookFormatConfig | null,
-): FormatTransformer {
-  const format = formatConfig?.format ?? 'raw'
-
-  switch (format) {
-    case 'byos-hanami':
-      return new ByosHanamiFormatTransformer()
-    case 'your-format':
-      return new YourFormatTransformer()
-    default:
-      return new RawFormatTransformer()
-  }
-}
-```
-
-### 4. Add UI Controls (Optional)
-
-If your format needs configuration, add form fields in `html/js/ui-renderer.ts`:
-
-```typescript
-// In #renderWebhookFormatSection()
-if (format === 'your-format') {
-  html += `
-    <div class="form-group">
-      <label>API Key</label>
-      <input type="text" name="your_api_key" value="${config?.apiKey ?? ''}" />
-    </div>
-  `
-}
-```
-
-### 5. Write Tests
-
-Add tests in `tests/unit/webhook-formats.test.ts`:
-
-```typescript
-describe('YourFormatTransformer', () => {
-  it('transforms image to your format', () => {
-    const transformer = new YourFormatTransformer()
-    const result = transformer.transform(testBuffer, 'png', { apiKey: 'test' })
-
-    expect(result.contentType).toBe('application/json')
-    // ... verify payload structure
-  })
-})
-```
+Terminus answers `422` when a screen with that model is already there. The add-on handles it: it looks up the existing screens, removes the one with the same Model ID, and sends again. You do not need to do anything.
 
 ---
 
-## Architecture Overview
+## Older Terminus servers
 
-```
-Schedule Execution
-       ↓
-ScheduleExecutor.call()
-       ↓
-#buildScreenshotUrl(schedule)   ← URI mode only; undefined otherwise
-       ↓
-uploadToWebhook(options)
-       ↓
-getTransformer(webhookFormat)   ← Strategy selection
-       ↓
-transformer.transform(buffer, format, config, screenshotUrl)
-       ↓                         ← BYOS transformer branches on delivery_mode
-fetch(webhookUrl, { body, headers })
-```
-
-For BYOS in URI mode, Terminus then performs a second round-trip back to the add-on's screenshot endpoint to download the actual image.
-
-The transformer is responsible for:
-- Converting the image buffer to the target payload format
-- Setting the appropriate `Content-Type` header
-- Encoding data as needed (base64, multipart, etc.)
+Terminus used to accept the image inside the message itself, rather than fetching it. That was removed in Terminus `0.52.0`. The **Legacy base64** delivery mode still exists for anyone running `0.51.0` or older, and it is the only reason to move off **URI**. If you are on a current Terminus — including the Terminus add-on in this repository — leave it on URI.
