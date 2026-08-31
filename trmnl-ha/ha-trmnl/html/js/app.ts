@@ -554,7 +554,7 @@ class App {
       const authEnabled = checkbox('s_byos_auth_enabled')
       const rawDeliveryMode = select('s_byos_delivery_mode')
       const deliveryMode: ByosDeliveryMode =
-        rawDeliveryMode === 'uri' ? 'uri' : BYOS_DEFAULT_DELIVERY_MODE
+        rawDeliveryMode === 'data' ? 'data' : BYOS_DEFAULT_DELIVERY_MODE
 
       // Preserve existing auth tokens (managed by byosLogin/byosLogout, not form)
       // If auth is enabled but no tokens yet, create empty auth object with enabled: true

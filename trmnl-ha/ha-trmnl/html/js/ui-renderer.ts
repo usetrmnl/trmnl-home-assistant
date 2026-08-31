@@ -16,7 +16,7 @@
  */
 
 import type { Schedule } from '../../types/domain.js'
-import { BYOS_DEFAULT_DELIVERY_MODE } from '../shared/byos-constants.js'
+import { deliveryModeFor } from '../shared/byos-constants.js'
 import type { PaletteOption } from './palette-options.js'
 import { buildScreenshotParams } from '../shared/build-screenshot-params.js'
 import { resolveScreenshotTarget } from '../shared/screenshot-target.js'
@@ -308,6 +308,7 @@ export class RenderScheduleContent {
     const currentFormat = s.webhook_format?.format ?? 'raw'
     const byosConfig = s.webhook_format?.byosConfig
     const showByosFields = currentFormat === 'byos-hanami'
+    const deliveryMode = deliveryModeFor(byosConfig)
 
     return `
       <div id="webhookFormatSection" >
@@ -355,12 +356,12 @@ export class RenderScheduleContent {
                 class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
                 onchange="window.app.toggleByosDeliveryMode(this.value)"
                 title="How Terminus receives the screenshot">
-                <option value="data" ${(byosConfig?.delivery_mode ?? BYOS_DEFAULT_DELIVERY_MODE) === 'data' ? 'selected' : ''}>Legacy base64 (Terminus ≤ 0.51.0)</option>
-                <option value="uri" ${byosConfig?.delivery_mode === 'uri' ? 'selected' : ''}>URI (Terminus ≥ 0.52.0, recommended)</option>
+                <option value="uri" ${deliveryMode === 'uri' ? 'selected' : ''}>URI (recommended)</option>
+                <option value="data" ${deliveryMode === 'data' ? 'selected' : ''}>Legacy base64 (Terminus ≤ 0.51.0 only)</option>
               </select>
-              <p class="text-xs text-gray-500 mt-1">Base64 was removed in Terminus 0.52.0. Pick URI if you're on 0.52.0 or newer.</p>
+              <p class="text-xs text-gray-500 mt-1">Terminus stopped accepting base64 in 0.52.0. Stay on URI unless your server is older than that.</p>
             </div>
-            <div id="s_byos_addon_url_field" class="${(byosConfig?.delivery_mode ?? BYOS_DEFAULT_DELIVERY_MODE) === 'uri' ? '' : 'hidden'}">
+            <div id="s_byos_addon_url_field" class="${deliveryMode === 'uri' ? '' : 'hidden'}">
               <label class="block text-xs text-gray-600 mb-1">Add-on URL</label>
               <input type="text" id="s_byos_addon_url" value="${byosConfig?.addon_base_url || ''}"
                 class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
