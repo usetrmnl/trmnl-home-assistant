@@ -834,7 +834,12 @@ class App {
 
   async applyDevicePreset(): Promise<void> {
     const preset = this.#devicePresetsManager.applyDevicePreset()
-    if (preset) await this.updateScheduleFromForm(preset.dithering as Partial<Schedule['dithering']>)
+    if (preset) return this.updateScheduleFromForm(preset.dithering as Partial<Schedule['dithering']>)
+
+    // Bit depth has no form field, so clearing the preset must drop it here
+    const schedule = this.#scheduleManager.activeSchedule
+    if (schedule?.dithering) delete schedule.dithering.bitDepth
+    await this.updateScheduleFromForm()
   }
 
   applyDashboardSelection(): void {

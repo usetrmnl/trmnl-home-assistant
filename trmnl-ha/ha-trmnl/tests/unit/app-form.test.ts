@@ -130,6 +130,25 @@ it('applies all preset dithering fields in one save, including replacing bit dep
   }
 })
 
+it('drops the preset bit depth and device when the preset is cleared', async () => {
+  inputs.set('s_palette', { value: 'gray-16' })
+  const select = {
+    value: '',
+    selectedIndex: 0,
+    options: [{ value: '', dataset: { device: '{}' } }],
+    appendChild(option: { value: string; dataset: { device: string } }) { select.options.push(option) },
+    remove(index: number) { select.options.splice(index, 1) },
+  }
+  inputs.set('devicePreset', select)
+
+  await app.applyDevicePreset()
+
+  expect(saves).toHaveLength(1)
+  expect(saves[0]!.device).toBeNull()
+  expect(saves[0]!.dithering).not.toHaveProperty('bitDepth')
+  expect(saves[0]!.dithering.palette).toBe('gray-16')
+})
+
 for (const position of ['bottom-right', 'bottom-left', 'top-left', 'top-right'] as TimestampPosition[]) {
   it(`round-trips the ${position} timestamp corner through the form`, async () => {
     const content = { innerHTML: '' }
