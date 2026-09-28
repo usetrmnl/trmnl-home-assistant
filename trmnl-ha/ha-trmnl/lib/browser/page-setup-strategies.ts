@@ -64,6 +64,25 @@ export class HAPageSetup implements PageSetupStrategy {
       document.body.style.zoom = String(zoomLevel)
     }, zoom)
 
+    // Headless Chromium's locale is always en-US, so HA's "system" formats
+    // would show 12-hour clocks and US decimals whatever the user's language (#122)
+    await page.evaluate(() => {
+      type SelectFormat = (format: string, persist: boolean) => void
+      const haEl = document.querySelector('home-assistant') as
+        | (Element & {
+            hass?: { locale?: { time_format?: string; number_format?: string; date_format?: string } }
+            _selectTimeFormat?: SelectFormat
+            _selectNumberFormat?: SelectFormat
+            _selectDateFormat?: SelectFormat
+          })
+        | null
+      const locale = haEl?.hass?.locale
+      if (!haEl || !locale) return
+      if (locale.time_format === 'system') haEl._selectTimeFormat?.('language', false)
+      if (locale.number_format === 'system') haEl._selectNumberFormat?.('language', false)
+      if (locale.date_format === 'system') haEl._selectDateFormat?.('language', false)
+    })
+
     // Update language if changed
     if (lang !== lastLang) {
       const langCmd = new UpdateLanguage(page)

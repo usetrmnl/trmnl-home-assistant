@@ -6,7 +6,7 @@
  * @module tests/unit/page-setup-strategies
  */
 
-import { describe, it, expect, beforeEach, mock } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test'
 import {
   HAPageSetup,
   GenericPageSetup,
@@ -246,6 +246,57 @@ describe('Page Setup Strategies', () => {
         )
 
         expect(result.waitTime).toBeGreaterThanOrEqual(1000)
+      })
+    })
+
+    describe('locale formats', () => {
+      /** Runs every in-page callback against a home-assistant element with the given locale */
+      async function selectedFormats(locale: Record<string, string>) {
+        const calls: unknown[][] = []
+        const record = (name: string) => (format: string, persist: boolean) => {
+          calls.push([name, format, persist])
+        }
+        const haElement = {
+          hass: { locale },
+          _selectTimeFormat: record('time'),
+          _selectNumberFormat: record('number'),
+          _selectDateFormat: record('date'),
+        }
+        globalThis.document = {
+          body: { style: {} },
+          querySelector: () => haElement,
+        } as never
+
+        await strategy.setup(mockPage as never, defaultOptions())
+        for (const call of mockPage.evaluateCalls) {
+          await (call.fn as (...args: unknown[]) => unknown)(...call.args)
+        }
+
+        return calls
+      }
+
+      afterEach(() => {
+        delete (globalThis as { document?: unknown }).document
+      })
+
+      it('uses the language formats when HA asks the browser', async () => {
+        const locale = { time_format: 'system', number_format: 'system', date_format: 'system' }
+
+        expect(await selectedFormats(locale)).toEqual([
+          ['time', 'language', false],
+          ['number', 'language', false],
+          ['date', 'language', false],
+        ])
+      })
+
+      it('keeps formats the user chose', async () => {
+        const locale = { time_format: '24', number_format: 'comma_decimal', date_format: 'YMD' }
+
+        expect(await selectedFormats(locale)).toEqual([])
+      })
+
+      it('does nothing before HA has a locale', async () => {
+        expect(await selectedFormats(undefined as never)).toEqual([])
       })
     })
 
