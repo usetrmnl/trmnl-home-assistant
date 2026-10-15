@@ -11,6 +11,7 @@ import { describe, it, expect, afterAll, mock } from 'bun:test'
 import {
   uploadToWebhook,
   WebhookHttpError,
+  redactWebhookUrl,
 } from '../../lib/scheduler/webhook-delivery.js'
 import { mockFetch, restoreFetch } from '../helpers/fetch-mock.js'
 
@@ -48,16 +49,50 @@ describe('uploadToWebhook — connection errors', () => {
     expect(upload()).rejects.toThrow(/HTTP 500/)
   })
 
-  it('keeps the connection error message for a malformed webhook URL', async () => {
+  it('does not echo a malformed webhook URL in a connection error', async () => {
     globalThis.fetch = mock(async () => {
       throw new Error('Invalid URL')
     }) as unknown as typeof fetch
 
-    expect(upload('not a url')).rejects.toThrow(/Could not reach not a url/)
+    expect(upload('not a url')).rejects.toThrow(/Could not reach \[invalid webhook URL\]/)
+  })
+
+  it('redacts a credential-bearing webhook URL from a fetch error', async () => {
+    const url = 'https://trmnl.example/api/plugin_settings/private-id/image?token=private'
+    globalThis.fetch = mock(async () => {
+      throw new Error(`Could not fetch ${url}`)
+    }) as unknown as typeof fetch
+
+    const error = await upload(url).then(() => null, (err: unknown) => err as Error)
+    expect(error?.message).not.toContain(url)
+    expect(error?.message).toContain('[redacted webhook URL]')
+  })
+})
+
+describe('redactWebhookUrl', () => {
+  it('removes each copy of the configured URL without masking safe context', () => {
+    const url = 'https://trmnl.example/api/plugin_settings/private-id/image?token=private'
+    expect(redactWebhookUrl(`POST ${url} failed: ${url}`, url)).toBe(
+      'POST [redacted webhook URL] failed: [redacted webhook URL]',
+    )
   })
 })
 
 describe('uploadToWebhook — HTTP error details', () => {
+  it('redacts the configured URL from response details that callers may log', async () => {
+    const url = 'https://trmnl.example/api/plugin_settings/private-id/image?token=private'
+    mockFetch({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+      text: async () => JSON.stringify({ message: `Rejected ${url}` }),
+    })
+
+    const error = await upload(url).then(() => null, (err: unknown) => err as Error)
+    expect(error?.message).not.toContain(url)
+    expect(error?.message).toContain('[redacted webhook URL]')
+  })
+
   it('throws a WebhookHttpError carrying the Retry-After delay on 429', async () => {
     mockFetch({
       ok: false,

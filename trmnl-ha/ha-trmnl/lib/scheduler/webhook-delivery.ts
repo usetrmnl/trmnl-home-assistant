@@ -15,6 +15,11 @@ import { getValidAccessToken, getBaseUrl, type TokenResponse } from './byos-auth
 
 const log = webhookLogger()
 
+/** Webhook URLs can contain write credentials in their path or query string. */
+export function redactWebhookUrl(text: string, webhookUrl: string): string {
+  return webhookUrl ? text.replaceAll(webhookUrl, '[redacted webhook URL]') : text
+}
+
 /**
  * HTTP error from a webhook send, carrying the status and any parsed
  * Retry-After delay so the scheduler can apply a cooldown without re-parsing
@@ -205,7 +210,7 @@ class DeliverWebhook {
   }
 
   #buildPayload(): { body: BodyInit; contentType: string } {
-    const { imageBuffer, format, webhookFormat, screenshotUrl, webhookUrl } =
+    const { imageBuffer, format, webhookFormat, screenshotUrl } =
       this.#options
     const { body, contentType } = getTransformer(webhookFormat).transform(
       imageBuffer,
@@ -214,7 +219,7 @@ class DeliverWebhook {
       screenshotUrl,
     )
 
-    log.info`Sending webhook: ${webhookUrl} (${contentType}, ${imageBuffer.length} bytes, format: ${webhookFormat?.format ?? 'raw'})`
+    log.info`Sending webhook (${contentType}, ${imageBuffer.length} bytes, format: ${webhookFormat?.format ?? 'raw'})`
 
     // String for JSON payloads, Uint8Array for binary (fetch rejects Buffer)
     return {
@@ -263,19 +268,20 @@ class DeliverWebhook {
       // resolve from inside the add-on container (#71), so name the host
       // and the likely fix.
       const host = this.#hostname()
+      const detail = redactWebhookUrl((err as Error).message, this.#options.webhookUrl)
       throw new Error(
-        `Could not reach ${host}: ${(err as Error).message}. ` +
+        `Could not reach ${host}: ${detail}. ` +
           `If ${host} is a local hostname, it may not resolve inside the add-on container — try the server's IP address instead.`,
       )
     }
   }
 
-  /** The webhook host for error messages; a malformed URL is shown raw. */
+  /** The webhook host for error messages; never echo a malformed URL. */
   #hostname(): string {
     try {
       return new URL(this.#options.webhookUrl).hostname
     } catch {
-      return this.#options.webhookUrl
+      return '[invalid webhook URL]'
     }
   }
 
@@ -340,10 +346,12 @@ class DeliverWebhook {
   #errorDetail(responseText: string): string {
     if (!responseText) return ''
 
-    log.error`Response body: ${responseText.substring(0, SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH)}`
+    const safeText = redactWebhookUrl(responseText, this.#options.webhookUrl)
+
+    log.error`Response body: ${safeText.substring(0, SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH)}`
 
     try {
-      const parsed = JSON.parse(responseText) as {
+      const parsed = JSON.parse(safeText) as {
         error?: string
         message?: string
       }
@@ -352,14 +360,15 @@ class DeliverWebhook {
       return ''
     } catch {
       // Not JSON; short bodies are safe to show raw
-      return responseText.length <= 100 ? ` - ${responseText}` : ''
+      return safeText.length <= 100 ? ` - ${safeText}` : ''
     }
   }
 
   #successResult(response: Response, responseText: string): WebhookDeliveryResult {
     log.info`Webhook success: ${response.status} ${response.statusText}`
     if (responseText) {
-      log.debug`Response body: ${responseText.substring(0, SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH)}`
+      const safeText = redactWebhookUrl(responseText, this.#options.webhookUrl)
+      log.debug`Response body: ${safeText.substring(0, SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH)}`
     }
     return this.#result(response)
   }
