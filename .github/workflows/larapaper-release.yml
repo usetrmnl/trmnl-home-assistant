@@ -1,0 +1,107 @@
+name: LaraPaper release
+
+# Publishes the release a merged version bump needs. The Supervisor pulls
+# image:version from config.yaml, so merging a bump ships nothing on its own -
+# release.yml only builds once a larapaper-v* release exists.
+#
+# Upstream keeps a RELEASE_PAT secret (repo scope). A release created with that
+# token fires the release event, which starts release.yml.
+#
+# Forks do not inherit that secret. A release created with GITHUB_TOKEN does
+# not fire workflows, so this workflow then sends an addon-release dispatch,
+# which release.yml accepts and builds from. The dispatch is explicit, so it
+# cannot loop.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - trmnl-larapaper/config.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish the add-on release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve the version
+        id: version
+        run: |
+          set -euo pipefail
+          version=$(grep '^version:' trmnl-larapaper/config.yaml | awk '{print $2}' | tr -d '"')
+          if [ -z "$version" ]; then
+            echo "::error::No version found in trmnl-larapaper/config.yaml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "config.yaml pins $version"
+
+      # config.yaml changes for reasons other than a bump; those must not retag.
+      - name: Skip when the release already exists
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "larapaper-v${VERSION}" >/dev/null 2>&1; then
+            echo "larapaper-v${VERSION} is already published; nothing to do"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # RELEASE_PAT keeps the upstream path: the release event starts release.yml.
+      # Without it, publish with GITHUB_TOKEN and dispatch the build. Failing
+      # here used to strand forks, because they cannot see the upstream secret.
+      - name: Publish the release
+        if: steps.existing.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          title="$(grep '^name:' trmnl-larapaper/config.yaml | cut -d: -f2- | sed 's/^ *//;s/"//g') ${VERSION}"
+
+          # Lift this version's CHANGELOG section; the bump workflow wrote it.
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' trmnl-larapaper/CHANGELOG.md > /tmp/notes.md
+
+          if [ ! -s /tmp/notes.md ]; then
+            printf 'Bundles LaraPaper %s; the add-on version mirrors the bundled server release.\n' "$VERSION" > /tmp/notes.md
+          fi
+
+          tag="larapaper-v${VERSION}"
+
+          gh release create "$tag" \
+            --target main \
+            --title "$title" \
+            --notes-file /tmp/notes.md
+
+          if [ -n "${RELEASE_PAT:-}" ]; then
+            echo "Published ${tag} with RELEASE_PAT - release.yml runs from the release event"
+            exit 0
+          fi
+
+          # Roll the release back if the build cannot be started. Leaving the
+          # tag in place would make the next run treat it as already published.
+          echo "Published ${tag} with GITHUB_TOKEN - dispatching the image build"
+          if ! jq -n --arg tag "$tag" \
+            '{event_type:"addon-release", client_payload:{tag:$tag}}' \
+            | gh api --method POST "repos/${GITHUB_REPOSITORY}/dispatches" --input -; then
+            gh release delete "$tag" --cleanup-tag --yes || true
+            echo "::error::Image build was not started, so ${tag} was removed. release.yml would not have run."
+            exit 1
+          fi
+          echo "Dispatched release.yml for ${tag}"

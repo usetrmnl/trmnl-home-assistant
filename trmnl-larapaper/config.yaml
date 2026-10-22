@@ -1,0 +1,31 @@
+---
+name: LaraPaper (BYOS)
+version: "0.45.1"
+slug: trmnl-larapaper
+description: >-
+  Runs LaraPaper, a self-hosted TRMNL server (BYOS) with recipes, playlists and
+  mashups, with its web UI inside Home Assistant
+url: https://github.com/usetrmnl/trmnl-home-assistant
+image: ghcr.io/usetrmnl/trmnl-larapaper-{arch}
+arch:
+  - aarch64
+  - amd64
+init: false
+startup: services
+stage: experimental
+# The web UI through Home Assistant (sidebar, Open Web UI), also away from home;
+# ingress_port is left at its default, 8099
+ingress: true
+panel_icon: mdi:tablet-dashboard
+panel_title: LaraPaper
+# The TRMNL device API (and the web UI) on the home network
+ports:
+  8080/tcp: 4567
+ports_description:
+  8080/tcp: TRMNL device API and LaraPaper web UI
+options:
+  app_url: ""
+  registration_enabled: true
+schema:
+  app_url: url
+  registration_enabled: bool

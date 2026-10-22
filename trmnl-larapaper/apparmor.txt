@@ -1,0 +1,87 @@
+#include <tunables/global>
+
+# To audit denials after deploying, SSH into HA, then:
+# journalctl _TRANSPORT="audit" | grep 'apparmor="DENIED"' | grep trmnl-larapaper
+profile trmnl-larapaper flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+
+  # =============================================================================
+  # CONTAINER FILESYSTEM
+  # =============================================================================
+
+  # Broad allow by design - the security boundary is the deny list below.
+  / r,
+  /** rwmixkl,
+
+  # =============================================================================
+  # CAPABILITIES
+  # =============================================================================
+
+  # Narrows Docker's default capability set further by withholding net_raw. The
+  # entrypoint runs as root to take ownership of /data; s6 then drops nginx,
+  # PHP-FPM, the queue worker and the scheduler to www-data.
+  capability chown,
+  capability dac_override,
+  capability dac_read_search,
+  capability fowner,
+  capability fsetid,
+  capability kill,
+  capability setgid,
+  capability setuid,
+  capability setpcap,
+  capability net_bind_service,
+  capability sys_chroot,
+  capability mknod,
+  capability audit_write,
+
+  # =============================================================================
+  # SIGNALS
+  # =============================================================================
+
+  # s6 supervises and stops the services, PHP-FPM and nginx signal their workers,
+  # and Browsershot stops the headless Chromium it starts for each screen
+  signal (send) set=(kill,term,int,hup,cont,usr1,usr2,quit),
+  signal (receive),
+
+  # =============================================================================
+  # NETWORK
+  # =============================================================================
+
+  # inet for the web UI and device API on 8080, ingress on 8099 and recipes polling
+  # their data; unix for PHP-FPM and Chromium's own sockets
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network unix stream,
+  network unix dgram,
+  network unix seqpacket,
+
+  # =============================================================================
+  # DENIALS
+  # =============================================================================
+
+  # Home Assistant's own data - the add-on never has cause to read it.
+  # `audit` because a plain `deny` is silent, and a reach for /config is exactly
+  # the event the DOCS.md journalctl check is meant to surface.
+  audit deny /config/** rwx,
+  audit deny /homeassistant/** rwx,
+  audit deny /ssl/** rwx,
+  audit deny /addons/** rwx,
+  audit deny /backup/** rwx,
+  audit deny /media/** rwx,
+  audit deny /share/** rwx,
+
+  # Packet capture on the home network
+  deny network raw,
+  deny network packet,
+
+  # Also denied by Docker's default profile; kept as defense-in-depth.
+  deny ptrace,
+  deny mount,
+  deny umount,
+  deny pivot_root,
+  deny @{PROC}/sys/kernel/** w,
+  deny @{PROC}/sys/net/** w,
+}

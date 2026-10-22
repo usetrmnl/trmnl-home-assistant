@@ -335,3 +335,150 @@ jobs:
             exit 1
           fi
           echo "enforced: /config denied"
+
+  build-larapaper:
+    name: Build LaraPaper Add-on (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            tag: amd64
+            arch: amd64
+          - platform: linux/arm64
+            tag: arm64
+            arch: aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint the add-on config
+        if: matrix.tag == 'amd64'
+        uses: frenck/action-addon-linter@v2
+        with:
+          path: ./trmnl-larapaper
+
+      # The entry Home Assistant's update dialog and the GitHub release show: LaraPaper's
+      # notes when this version first bundles a release, then the add-on's own changes.
+      - name: Check the CHANGELOG entry
+        if: matrix.tag == 'amd64'
+        run: |
+          set -euo pipefail
+          version=$(grep '^version:' trmnl-larapaper/config.yaml | awk '{print $2}' | tr -d '"')
+          entry=$(awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' trmnl-larapaper/CHANGELOG.md)
+          if [ -z "$entry" ]; then
+            echo "::error file=trmnl-larapaper/CHANGELOG.md::no [${version}] entry"
+            exit 1
+          fi
+          status=0
+          if ! printf '%s\n' "$entry" | grep -qxF '### Home Assistant add-on'; then
+            echo "::error file=trmnl-larapaper/CHANGELOG.md::the [${version}] entry has no \"### Home Assistant add-on\" section"
+            status=1
+          fi
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+             && ! printf '%s\n' "$entry" | grep -qxF "### LaraPaper ${version}"; then
+            echo "::error file=trmnl-larapaper/CHANGELOG.md::the [${version}] entry has no \"### LaraPaper ${version}\" section; generate it with: sh scripts/larapaper-release-notes.sh ${version}"
+            status=1
+          fi
+          exit "$status"
+
+      - name: Lowercase the registry owner
+        id: registry
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      # Rejects a non-compiling profile before it reaches a real install.
+      - name: Load AppArmor profile
+        id: apparmor
+        if: matrix.tag == 'amd64'
+        run: |
+          set -e
+          command -v apparmor_parser >/dev/null 2>&1 || {
+            sudo apt-get update -qq && sudo apt-get install -y -qq apparmor
+          }
+          apparmor_parser -Q -d trmnl-larapaper/apparmor.txt >/dev/null
+          echo "profile compiles"
+
+          if [ ! -d /sys/kernel/security/apparmor ]; then
+            echo "::warning::Runner kernel has no AppArmor; enforcement not tested"
+            echo "enforced=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          sudo apparmor_parser -r -W trmnl-larapaper/apparmor.txt
+          echo "enforced=true" >> "$GITHUB_OUTPUT"
+          echo "profile loaded and enforcing"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The Supervisor supplies BUILD_FROM from build.yaml; plain buildx does not.
+      - name: Resolve LaraPaper base image
+        id: base
+        working-directory: trmnl-larapaper
+        run: echo "image=$(grep "^  ${{ matrix.arch }}:" build.yaml | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Build add-on image
+        uses: docker/build-push-action@v5
+        with:
+          context: trmnl-larapaper
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: true
+          tags: trmnl-larapaper:test-${{ matrix.tag }}
+          build-args: |
+            BUILD_FROM=${{ steps.base.outputs.image }}
+          cache-from: |
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.registry.outputs.owner }}/trmnl-larapaper-cache:${{ matrix.tag }}
+            type=gha,scope=larapaper-${{ matrix.tag }}
+          cache-to: ${{ github.event_name == 'push' && format('type=registry,ref={0}/{1}/trmnl-larapaper-cache:{2},mode=max', env.REGISTRY, steps.registry.outputs.owner, matrix.tag) || format('type=gha,mode=max,scope=larapaper-{0}', matrix.tag) }}
+          provenance: false
+
+      # Boots the add-on, confined by its AppArmor profile, and checks a screen render,
+      # options, /data and ingress. amd64 only - QEMU makes arm64 boot tests too slow here.
+      - name: Smoke test add-on boot
+        if: matrix.tag == 'amd64'
+        env:
+          SMOKE_DOCKER_ARGS: ${{ steps.apparmor.outputs.enforced == 'true' && '--security-opt=apparmor=trmnl-larapaper' || '' }}
+        run: trmnl-larapaper/tests/smoke.test.sh trmnl-larapaper:test-amd64
+
+      # Control run proves /config is readable unconfined, so a failure below
+      # can only be AppArmor.
+      - name: AppArmor denies Home Assistant's config
+        if: matrix.tag == 'amd64' && steps.apparmor.outputs.enforced == 'true'
+        run: |
+          set -e
+          mkdir -p /tmp/fake-ha-config
+          echo "ha-secret" > /tmp/fake-ha-config/secrets.yaml
+
+          docker run --rm --entrypoint cat \
+            -v /tmp/fake-ha-config:/config:ro \
+            trmnl-larapaper:test-amd64 /config/secrets.yaml >/dev/null || {
+              echo "::error::Control run could not read /config; the denial test would prove nothing"
+              exit 1
+            }
+          echo "control: /config readable unconfined"
+
+          if docker run --rm --entrypoint cat \
+               --security-opt=apparmor=trmnl-larapaper \
+               -v /tmp/fake-ha-config:/config:ro \
+               trmnl-larapaper:test-amd64 /config/secrets.yaml >/dev/null 2>&1; then
+            echo "::error::AppArmor did not block /config - the deny rule is not taking effect"
+            exit 1
+          fi
+          echo "enforced: /config denied"

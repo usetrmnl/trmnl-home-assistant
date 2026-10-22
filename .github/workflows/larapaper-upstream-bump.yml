@@ -1,0 +1,161 @@
+name: LaraPaper upstream bump
+
+# Opens a pull request when usetrmnl/larapaper tags a release newer than the one
+# trmnl-larapaper pins.
+#
+# Set a RELEASE_PAT secret (repo scope) to have CI run on the pull requests this
+# opens. Without it the GITHUB_TOKEN opens them, and GitHub deliberately does not
+# trigger workflows from token-authored events, so the bump arrives unverified.
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    name: Check for a newer LaraPaper
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Upstream publishes tags, not releases; sort -V keeps 0.10.0 above 0.9.0.
+      - name: Resolve latest upstream version
+        id: upstream
+        run: |
+          set -euo pipefail
+          current=$(grep '^  amd64:' trmnl-larapaper/build.yaml | awk -F: '{print $NF}')
+          latest=$(git ls-remote --tags --refs https://github.com/usetrmnl/larapaper.git \
+            | awk -F/ '{print $NF}' \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V | tail -1)
+
+          if [ -z "$latest" ]; then
+            echo "::error::Could not read any version tags from upstream"
+            exit 1
+          fi
+
+          echo "pinned: $current   latest: $latest"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          if [ "$current" = "$latest" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Login to GHCR
+        if: steps.upstream.outputs.changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A tag can exist before its image does; bumping to one breaks every install.
+      - name: Verify the upstream image exists for both architectures
+        if: steps.upstream.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          ref="ghcr.io/usetrmnl/larapaper:${{ steps.upstream.outputs.latest }}"
+          manifest=$(docker manifest inspect "$ref")
+          for arch in amd64 arm64; do
+            echo "$manifest" | jq -e --arg a "$arch" \
+              '.manifests[]?|select(.platform.architecture==$a)' >/dev/null \
+              || { echo "::error::$ref has no $arch manifest"; exit 1; }
+          done
+          echo "$ref published for amd64 and arm64"
+
+      # The CHANGELOG entry carries LaraPaper's own release notes, then the add-on's
+      # changes; Home Assistant's update dialog and the GitHub release both show it.
+      - name: Apply the bump
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST: ${{ steps.upstream.outputs.latest }}
+        run: |
+          set -euo pipefail
+          sed -i "s|ghcr.io/usetrmnl/larapaper:.*|ghcr.io/usetrmnl/larapaper:${LATEST}|" trmnl-larapaper/build.yaml
+          sed -i "s|^version: .*|version: \"${LATEST}\"|" trmnl-larapaper/config.yaml
+
+          # A tag can come before its release notes; link the release then.
+          if ! sh scripts/larapaper-release-notes.sh "$LATEST" > /tmp/larapaper-notes.md; then
+            echo "::warning::LaraPaper ${LATEST} has no release notes yet; the entry links the release instead"
+            printf '### LaraPaper %s\n\nSee the [LaraPaper %s release](https://github.com/usetrmnl/larapaper/releases/tag/%s).\n' \
+              "$LATEST" "$LATEST" "$LATEST" > /tmp/larapaper-notes.md
+          fi
+
+          python3 - <<'PY'
+          import datetime, io, os
+          version = os.environ["LATEST"]
+          today = datetime.date.today().isoformat()
+          path = "trmnl-larapaper/CHANGELOG.md"
+          text = io.open(path, encoding="utf-8").read()
+          notes = io.open("/tmp/larapaper-notes.md", encoding="utf-8").read().strip()
+          anchor = "\n## ["
+          entry = (f"\n## [{version}] - {today}\n\n{notes}\n\n"
+                   f"### Home Assistant add-on\n\n"
+                   f"- Updated LaraPaper to {version}\n")
+          io.open(path, "w", encoding="utf-8").write(
+              text.replace(anchor, entry + anchor, 1))
+          PY
+
+          git diff --stat
+
+      - name: Open the pull request
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+          CURRENT: ${{ steps.upstream.outputs.current }}
+          LATEST: ${{ steps.upstream.outputs.latest }}
+        run: |
+          set -euo pipefail
+
+          # An unset or empty RELEASE_PAT falls back silently, and the fallback
+          # produces a pull request with no checks on it at all.
+          if [ -n "${RELEASE_PAT:-}" ]; then
+            echo "RELEASE_PAT in use - CI will run on the pull request"
+          else
+            echo "::warning::RELEASE_PAT is unset or empty; using GITHUB_TOKEN, so the pull request will have no checks"
+          fi
+
+          branch="larapaper-bump/${LATEST}"
+
+          # Test for the pull request, not the branch: a run that pushed and then
+          # failed to open one leaves the branch behind, and keying off the branch
+          # would skip every retry and never reopen it.
+          open_pr=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$open_pr" ]; then
+            echo "pull request #${open_pr} is already open for ${branch}"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -am "Updated LaraPaper to ${LATEST}"
+          # Replaces any branch a previous failed run left behind.
+          git push --force origin "$branch"
+
+          {
+            printf 'Upstream tagged `%s`; the add-on pinned `%s`.\n\n' "$LATEST" "$CURRENT"
+            printf -- '- bumps the base image in `build.yaml` for both architectures\n'
+            printf -- '- bumps `config.yaml` to `%s`, which the add-on version mirrors\n' "$LATEST"
+            printf -- '- adds a CHANGELOG entry with LaraPaper'"'"'s release notes\n\n'
+            printf 'Upstream changes: https://github.com/usetrmnl/larapaper/compare/%s...%s\n\n' "$CURRENT" "$LATEST"
+            printf 'Publishing needs a `larapaper-v%s` release once this merges - the Supervisor pulls `image:version` from `config.yaml`, so merging alone ships nothing.\n' "$LATEST"
+          } > /tmp/pr-body.md
+
+          gh pr create --base main --head "$branch" \
+            --title "Updated LaraPaper to ${LATEST}" \
+            --body-file /tmp/pr-body.md
+
+      - name: Report when already current
+        if: steps.upstream.outputs.changed == 'false'
+        run: echo "Already on ${{ steps.upstream.outputs.current }}; nothing to do."

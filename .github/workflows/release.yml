@@ -13,7 +13,8 @@ on:
 env:
   REGISTRY: ghcr.io
 
-# Tag prefix routes the build: terminus-v* -> trmnl-terminus, v* -> trmnl-ha.
+# Tag prefix routes the build: terminus-v* -> trmnl-terminus,
+# larapaper-v* -> trmnl-larapaper, v* -> trmnl-ha.
 jobs:
   release-tag:
     name: Resolve release tag
@@ -37,8 +38,8 @@ jobs:
           fi
           # The dispatch payload is caller-controlled. Refuse anything that
           # is not a release tag before it can reach checkout or a registry push.
-          if [[ ! "$tag" =~ ^(terminus-v|v)[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::Refusing to build from '$tag'. Expected a v* or terminus-v* release tag."
+          if [[ ! "$tag" =~ ^(terminus-v|larapaper-v|v)[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Refusing to build from '$tag'. Expected a v*, terminus-v* or larapaper-v* release tag."
             exit 1
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
@@ -48,7 +49,7 @@ jobs:
     name: Build & Push (${{ matrix.arch }})
     runs-on: ubuntu-latest
     needs: release-tag
-    if: ${{ needs.release-tag.result == 'success' && !startsWith(needs.release-tag.outputs.tag, 'terminus-v') }}
+    if: ${{ needs.release-tag.result == 'success' && !startsWith(needs.release-tag.outputs.tag, 'terminus-v') && !startsWith(needs.release-tag.outputs.tag, 'larapaper-v') }}
     permissions:
       contents: read
       packages: write
@@ -213,12 +214,102 @@ jobs:
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.registry.outputs.owner }}/trmnl-terminus-cache:${{ matrix.cache_tag }},mode=max
           provenance: false
 
+  build-and-push-larapaper:
+    name: Build & Push LaraPaper (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    needs: release-tag
+    if: ${{ needs.release-tag.result == 'success' && startsWith(needs.release-tag.outputs.tag, 'larapaper-v') }}
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            cache_tag: amd64
+          - platform: linux/arm64
+            arch: aarch64
+            cache_tag: arm64
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-tag.outputs.tag }}
+
+      - name: Lowercase the registry owner
+        id: registry
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Must match config.yaml's version - Supervisor pulls image:version from there.
+      - name: Extract and verify version
+        id: version
+        env:
+          RELEASE_TAG: ${{ needs.release-tag.outputs.tag }}
+        run: |
+          version="${RELEASE_TAG#larapaper-v}"
+          config_version=$(grep '^version:' trmnl-larapaper/config.yaml | awk '{print $2}' | tr -d '"')
+          if [ "$version" != "$config_version" ]; then
+            echo "::error::Tag version ($version) does not match trmnl-larapaper/config.yaml ($config_version)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve LaraPaper base image
+        id: base
+        working-directory: trmnl-larapaper
+        run: echo "image=$(grep "^  ${{ matrix.arch }}:" build.yaml | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      # repository_dispatch reports the default branch as github.sha. The
+      # checkout above is the release tag, which is the commit that was built.
+      - name: Resolve built revision
+        id: rev
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: trmnl-larapaper
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ steps.registry.outputs.owner }}/trmnl-larapaper-${{ matrix.arch }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ steps.registry.outputs.owner }}/trmnl-larapaper-${{ matrix.arch }}:latest
+          # Without these the base image's labels survive, and GitHub attaches the
+          # package to usetrmnl/larapaper rather than to this repository.
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.title=trmnl-larapaper
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.rev.outputs.sha }}
+          build-args: |
+            BUILD_FROM=${{ steps.base.outputs.image }}
+          cache-from: |
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.registry.outputs.owner }}/trmnl-larapaper-cache:${{ matrix.cache_tag }}
+            type=gha,scope=larapaper-${{ matrix.cache_tag }}
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.registry.outputs.owner }}/trmnl-larapaper-cache:${{ matrix.cache_tag }},mode=max
+          provenance: false
+
   # A release holds file assets, and images live in the registry, so the pull
   # references are the only way to reach them from the release page.
   link-images:
     name: List the images on the release
     runs-on: ubuntu-latest
-    needs: [release-tag, build-and-push, build-and-push-terminus]
+    needs: [release-tag, build-and-push, build-and-push-terminus, build-and-push-larapaper]
     if: ${{ !cancelled() && needs.release-tag.result == 'success' && !contains(needs.*.result, 'failure') }}
     permissions:
       contents: write
@@ -241,6 +332,7 @@ jobs:
 
           case "$TAG" in
             terminus-v*) image="trmnl-terminus"; version="${TAG#terminus-v}" ;;
+            larapaper-v*) image="trmnl-larapaper"; version="${TAG#larapaper-v}" ;;
             v*)          image="trmnl-ha";      version="${TAG#v}" ;;
             *)           echo "$TAG is not a release tag; nothing to link"; exit 0 ;;
           esac
