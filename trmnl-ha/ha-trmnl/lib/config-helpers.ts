@@ -11,6 +11,8 @@ import { existsSync, readFileSync } from 'fs'
  * Options configuration interface
  */
 export interface Options {
+  trmnl_account_token?: string
+  refresh_schedules?: import('./scheduler/refresh-planner.js').RefreshConfig[]
   home_assistant_url?: string
   access_token?: string
   timezone?: string

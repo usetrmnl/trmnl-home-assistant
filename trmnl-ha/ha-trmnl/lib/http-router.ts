@@ -67,6 +67,8 @@ const MIME_TYPES: Record<string, string> = {
 
 /** Scheduler interface for manual execution */
 interface Scheduler {
+  refreshHealth?(): import('./scheduler/refresh-worker.js').RefreshHealth
+  refreshStatus?(): object
   executeNow(
     scheduleId: string,
   ): Promise<{ success: boolean; savedPath: string; webhook?: WebhookResult }>
@@ -169,6 +171,12 @@ export class HttpRouter {
       return true
     }
 
+    if (pathname === '/api/refresh-status' && request.method === 'GET') {
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify(this.#scheduler?.refreshStatus?.() ?? { schedules: {} }))
+      return true
+    }
+
     if (pathname === '/api/schedules') {
       return this.#handleSchedulesAPI(request, response)
     }
@@ -247,9 +255,11 @@ export class HttpRouter {
   #handleHealth(response: ServerResponse): boolean {
     const health = this.#facade.checkHealth()
     const stats = this.#facade.getStats()
+    const scheduler = this.#scheduler?.refreshHealth?.()
 
-    const status = health.healthy ? 'ok' : 'degraded'
-    const httpStatus = health.healthy ? 200 : 503
+    const healthy = health.healthy && scheduler?.healthy !== false
+    const status = healthy ? 'ok' : 'degraded'
+    const httpStatus = healthy ? 200 : 503
 
     response.writeHead(httpStatus, { 'Content-Type': 'application/json' })
     response.end(
@@ -258,6 +268,7 @@ export class HttpRouter {
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
         browser: { ...health, ...stats },
+        ...(scheduler ? { scheduler } : {}),
         timings: metricsSummary(),
       }),
     )

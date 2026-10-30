@@ -161,7 +161,10 @@ if (hasEnvConfig) {
  * Valid values: IANA timezone names like "America/New_York", "Europe/London"
  * @see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
  */
-const timezone = process.env.TZ ?? options.timezone ?? fileOptions.timezone
+// Supervisor options must override the image's default TZ=Etc/UTC.
+const timezone = detectIsAddOn(process.env, optionsFile)
+  ? fileOptions.timezone || process.env.TZ
+  : process.env.TZ ?? fileOptions.timezone
 if (timezone) {
   // Validate timezone - invalid values silently fall back to UTC
   const isValid = isValidTimezone(timezone)
@@ -575,3 +578,8 @@ export const SCHEDULER_NETWORK_ERROR_PATTERNS: readonly string[] =
  * Re-exported from config-helpers for backward compatibility
  */
 export const isSchedulerNetworkError = isNetworkError
+
+/** Account credential is separate from HA authentication and never exposed by status. */
+export const TRMNL_ACCOUNT_TOKEN = process.env['TRMNL_ACCOUNT_TOKEN'] ?? fileOptions.trmnl_account_token ?? ''
+/** Optional alignment; ordinary cron/interval schedules remain unchanged. */
+export const REFRESH_SCHEDULES = fileOptions.refresh_schedules ?? []

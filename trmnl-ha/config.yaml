@@ -33,6 +33,8 @@ ports_description:
 
 # Configuration options
 options:
+  trmnl_account_token: ""
+  refresh_schedules: []
   access_token: ""
   home_assistant_url: "http://homeassistant:8123"
   timezone: ""
@@ -45,6 +47,14 @@ options:
 
 # Schema for options validation
 schema:
+  trmnl_account_token: password?
+  refresh_schedules:
+    - schedule_id: str
+      device_id: int(1,)
+      lead_seconds: int(60,600)
+      fallback_interval_seconds: int(60,86400)
+      initial_intervals_seconds:
+        - int(60,86400)
   access_token: str
   home_assistant_url: str?
   timezone: str?

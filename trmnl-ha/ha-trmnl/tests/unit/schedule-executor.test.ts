@@ -26,6 +26,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { ScheduleExecutor } from '../../lib/scheduler/schedule-executor.js'
+import { captureLogs } from '../helpers/log-capture.js'
 import * as sleepModule from '../../lib/sleep.js'
 import {
   captureFetch,
@@ -173,5 +174,20 @@ describe('ScheduleExecutor — webhook failure reporting', () => {
       statusCode: 503,
     })
     expect(result.webhook!.retryAfterMs).toBeUndefined()
+  })
+})
+
+
+describe('ScheduleExecutor credential-safe completion log', () => {
+  it('never logs the credential-bearing webhook after successful upload', async () => {
+    const capture = await captureLogs()
+    try {
+      captureFetch()
+      const executor = createExecutor(async () => Buffer.from('png'))
+      const schedule = buildSchedule({ webhook_url: 'https://trmnl.com/api/custom_plugins/private-write-token' })
+      await executor.call(schedule)
+      expect(capture.contains('Completed:')).toBe(true)
+      expect(capture.contains('private-write-token')).toBe(false)
+    } finally { await capture.stop(); restoreFetch() }
   })
 })

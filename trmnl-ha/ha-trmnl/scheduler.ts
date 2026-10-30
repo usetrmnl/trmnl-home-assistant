@@ -17,6 +17,8 @@
  * @module scheduler
  */
 
+import { RefreshWorker, readAccountTiming } from './lib/scheduler/refresh-worker.js'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { loadSchedules, updateSchedule } from './lib/scheduleStore.js'
@@ -37,6 +39,8 @@ import {
   SCHEDULER_JITTER_MAX_MS,
   SCHEDULER_COOLDOWN_DEFAULT_MS,
   DATA_DIR,
+  REFRESH_SCHEDULES,
+  TRMNL_ACCOUNT_TOKEN,
 } from './const.js'
 import type { Schedule } from './types/domain.js'
 import { schedulerLogger } from './lib/logger.js'
@@ -78,6 +82,7 @@ export function jitterMs(maxMs: number, rand: () => number = Math.random): numbe
  * High-level scheduler orchestrating cron jobs and screenshot execution.
  */
 export class Scheduler {
+  #refreshWorker: RefreshWorker
   #outputDir: string
   #jobManager: JobManager
   #executor: ScheduleExecutor
@@ -97,6 +102,13 @@ export class Scheduler {
     this.#jobManager = new JobManager()
     this.#executor = new ScheduleExecutor(screenshotFn, this.#outputDir)
 
+    this.#refreshWorker = new RefreshWorker(REFRESH_SCHEDULES, path.join(DATA_DIR, 'refresh-state.json'), {
+      readDevice: id => readAccountTiming(id, TRMNL_ACCOUNT_TOKEN),
+      execute: schedule => this.#executor.call(schedule),
+      loadSchedules,
+      now: () => new Date(),
+    })
+
     // Ensure output directory exists
     if (!fs.existsSync(this.#outputDir)) {
       fs.mkdirSync(this.#outputDir, { recursive: true })
@@ -109,7 +121,7 @@ export class Scheduler {
   start(): void {
     log.info`Starting scheduler...`
     // Fire-and-forget initial load (errors logged by loadAndSchedule)
-    void this.#loadAndSchedule()
+    void this.#loadAndSchedule().then(() => this.#refreshWorker.tick())
     void this.#keepByosTokensFresh()
 
     // The same tick keeps BYOS tokens fresh: the server only accepts
@@ -117,7 +129,7 @@ export class Scheduler {
     // send time alone fails for schedules running less often than the
     // token lifetime
     this.#reloadInterval = setInterval(() => {
-      void this.#loadAndSchedule()
+      void this.#loadAndSchedule().then(() => this.#refreshWorker.tick())
       void this.#keepByosTokensFresh()
     }, SCHEDULER_RELOAD_INTERVAL_MS)
   }
@@ -129,6 +141,18 @@ export class Scheduler {
     log.info`Stopping scheduler...`
     clearInterval(this.#reloadInterval)
     this.#jobManager.stopAll()
+  }
+
+  /** Progress health for the existing process watchdog, independent of cloud availability. */
+  refreshHealth(): ReturnType<RefreshWorker['health']> { return this.#refreshWorker.health() }
+
+  /** Safe refresh timing diagnostics; never includes schedules or credentials. */
+  refreshStatus(): object {
+    const digest = createHash('sha256')
+    for (const file of ['./scheduler.ts', './const.ts', './lib/scheduler/refresh-worker.ts', './lib/scheduler/refresh-planner.ts', './lib/scheduler/schedule-executor.ts']) {
+      digest.update(fs.readFileSync(new URL(file, import.meta.url)))
+    }
+    return { source_sha256: digest.digest('hex'), timezone: process.env.TZ, ...this.#refreshWorker.status() }
   }
 
   /**
@@ -247,6 +271,11 @@ export class Scheduler {
     const schedules = await loadSchedules()
     const schedule = schedules.find((s) => s.id === scheduleId)
     if (!schedule?.enabled) return
+
+    if (this.#refreshWorker.owns(scheduleId)) {
+      await this.#refreshWorker.tick(scheduleId)
+      return
+    }
 
     const blockedUntil = this.#cooldowns.blockedUntil(schedule.id)
     if (blockedUntil !== null) {
