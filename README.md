@@ -85,6 +85,13 @@ If running Home Assistant OS in Proxmox, set the VM host type to `host` for Chro
 | [Troubleshooting](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#troubleshooting) | Common issues and fixes |
 | [Local Development](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#local-development) | Development setup |
 
+## Other add-ons in this repository
+
+| Add-on | What it does |
+|--------|--------------|
+| [Terminus Server (BYOS)](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-terminus/README.md) | Runs [Terminus](https://github.com/usetrmnl/terminus), a self-hosted TRMNL server |
+| [LaraPaper (BYOS)](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-larapaper/README.md) | Runs [LaraPaper](https://github.com/usetrmnl/larapaper), a self-hosted TRMNL server with recipes |
+
 ## Attribution
 
 This project is based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main/puppet) Home Assistant add-on by [Paulus Schoutsen](https://github.com/balloob).

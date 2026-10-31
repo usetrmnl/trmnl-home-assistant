@@ -1,0 +1,11 @@
+---
+configuration:
+  app_url:
+    name: App URL
+    description: >-
+      Address the TRMNL device (and your browser) uses to reach this add-on, e.g.
+      http://192.168.1.10:4567. The device downloads its screen image from here, so
+      use an IP address or a name the device can resolve.
+  registration_enabled:
+    name: Allow registration
+    description: Turn off after creating your account.

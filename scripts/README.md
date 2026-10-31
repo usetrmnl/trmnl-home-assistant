@@ -4,7 +4,7 @@
 
 Automates the version bump process across all project files.
 
-`--addon` is required. The repo ships two add-ons off one tag stream, and
+`--addon` is required. The repo ships several add-ons off one tag stream, and
 releasing the wrong one is silent, so there is no default.
 
 ### trmnl-ha
@@ -21,6 +21,19 @@ Versioned in this repo and tagged `v<version>`.
 Its version mirrors the bundled Terminus release and is written by the
 `terminus-upstream-bump` workflow, so it takes no bump type. The script only
 publishes whatever `config.yaml` already says, tagged `terminus-v<version>`.
+
+### trmnl-larapaper
+
+The same as trmnl-terminus for the bundled LaraPaper release: the
+`larapaper-upstream-bump` workflow writes the version, and the script publishes it,
+tagged `larapaper-v<version>`.
+
+## larapaper-release-notes.sh
+
+Prints a LaraPaper release's notes as the `### LaraPaper <version>` section of a
+`trmnl-larapaper/CHANGELOG.md` entry; the add-on's own changes follow under
+`### Home Assistant add-on`. The `larapaper-upstream-bump` workflow writes it into the
+bump's entry, and CI checks both headings.
 
 ### Usage
 
@@ -41,6 +54,9 @@ bun scripts/release.js --addon=trmnl-ha major --push
 
 # Publish the Terminus add-on at its current version
 bun scripts/release.js --addon=trmnl-terminus --push
+
+# Publish the LaraPaper add-on at its current version
+bun scripts/release.js --addon=trmnl-larapaper --push
 ```
 
 ### Options

@@ -15,7 +15,7 @@ const __dirname = dirname(__filename)
 const ROOT_DIR = join(__dirname, '..')
 const GITHUB_REPO = 'usetrmnl/trmnl-home-assistant'
 
-// The repo ships two add-ons off one tag stream, so which one is being released
+// The repo ships several add-ons off one tag stream, so which one is being released
 // has to be stated rather than assumed.
 const ADDONS = {
   'trmnl-ha': {
@@ -30,6 +30,14 @@ const ADDONS = {
     tagPrefix: 'terminus-v',
     // Its version mirrors the bundled Terminus release, so it is never bumped
     // here - the upstream bump workflow sets it and this only publishes it.
+    bumpable: false,
+  },
+  'trmnl-larapaper': {
+    dir: 'trmnl-larapaper',
+    packageJson: null,
+    tagPrefix: 'larapaper-v',
+    // Mirrors the bundled LaraPaper release, like trmnl-terminus: set by the
+    // larapaper-upstream-bump workflow, only published here.
     bumpable: false,
   },
 }
@@ -496,6 +504,8 @@ Add-ons:
                    upstream bump workflow, so it takes no bump type and
                    publishes whatever config.yaml already says as
                    terminus-v<version>
+  trmnl-larapaper  the same for the bundled LaraPaper, tagged
+                   larapaper-v<version>
 
 Bump types (trmnl-ha only):
   patch   0.0.1 -> 0.0.2 (bug fixes)
@@ -510,10 +520,11 @@ Examples:
   bun scripts/release.js --addon=trmnl-ha patch
   bun scripts/release.js --addon=trmnl-ha minor --dry-run
   bun scripts/release.js --addon=trmnl-terminus --push
+  bun scripts/release.js --addon=trmnl-larapaper --push
 `
 
 // Required rather than defaulted: releasing the wrong add-on is silent, and
-// both live in one repo off one tag stream.
+// all live in one repo off one tag stream.
 if (!addonArg || !ADDONS[addonArg]) {
   console.error(
     `\n❌ Pass --addon=<${Object.keys(ADDONS).join('|')}>\n${usage}`
@@ -530,7 +541,7 @@ if (ADDON.bumpable && !bumpType) {
 
 if (!ADDON.bumpable && bumpType) {
   console.error(
-    `\n❌ ${addonArg} takes no bump type - its version mirrors the bundled Terminus release\n${usage}`
+    `\n❌ ${addonArg} takes no bump type - its version mirrors the upstream release it bundles\n${usage}`
   )
   process.exit(1)
 }
