@@ -48,6 +48,7 @@ import {
   isNetworkError,
   parseOptionsFile,
   resolveNavigationTimeout,
+  resolveCheckInLeadSeconds,
   OptionsParseError,
   type Options,
   NETWORK_ERROR_PATTERNS as SCHEDULER_NETWORK_ERROR_PATTERNS_IMPORT,
@@ -145,6 +146,7 @@ const options: Options = {
       ? parseInt(process.env['SERVER_PORT'], 10)
       : fileOptions.server_port,
   navigation_timeout_ms: fileOptions.navigation_timeout_ms,
+  check_in_lead_seconds: fileOptions.check_in_lead_seconds,
 }
 
 // Log configuration source for debugging
@@ -531,6 +533,14 @@ export const SCHEDULER_JITTER_MAX_MS: number = parseInt(
 
 /** Backoff used when a 429/503 arrives without a usable Retry-After header. */
 export const SCHEDULER_COOLDOWN_DEFAULT_MS: number = 5 * 60 * 1000 // 5 minutes
+
+/**
+ * How long before a TRMNL device's check-in an aligned capture starts, so the
+ * image is rendered, uploaded and stored before the device asks for it. The
+ * `check_in_lead_seconds` option or CHECK_IN_LEAD_SECONDS overrides the 120 s default.
+ */
+export const SCHEDULER_CHECK_IN_LEAD_MS: number =
+  resolveCheckInLeadSeconds(options.check_in_lead_seconds, process.env['CHECK_IN_LEAD_SECONDS']) * 1000
 
 /**
  * Maximum retry attempts for failed schedules

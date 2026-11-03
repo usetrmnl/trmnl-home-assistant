@@ -21,6 +21,7 @@ export interface Options {
   debug_logging?: boolean
   server_port?: number
   navigation_timeout_ms?: number
+  check_in_lead_seconds?: number
 }
 
 /**
@@ -119,6 +120,15 @@ export function resolveNavigationTimeout(
 ): number {
   const raw = fileValue ?? parseInt(envValue || '30000', 10)
   return Number.isFinite(raw) ? raw : 30000
+}
+
+/** Lead before a device check-in for an aligned capture, in seconds; 120 unless set to 30–600. */
+export function resolveCheckInLeadSeconds(
+  fileValue: number | undefined,
+  envValue: string | undefined,
+): number {
+  const raw = fileValue ?? parseInt(envValue || '120', 10)
+  return Number.isInteger(raw) && raw >= 30 && raw <= 600 ? raw : 120
 }
 
 /**

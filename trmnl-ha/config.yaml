@@ -42,6 +42,7 @@ options:
   navigation_timeout_ms: 30000
   timestamp_overlay: false
   timestamp_12h: false
+  check_in_lead_seconds: 120
 
 # Schema for options validation
 schema:
@@ -54,6 +55,7 @@ schema:
   navigation_timeout_ms: "int(10000,180000)?"
   timestamp_overlay: bool?
   timestamp_12h: bool?
+  check_in_lead_seconds: "int(30,600)?"
 
 # Exclude regeneratable data from HA backups
 backup_exclude:

@@ -22,6 +22,7 @@ import {
   isNetworkError,
   parseOptionsFile,
   resolveNavigationTimeout,
+  resolveCheckInLeadSeconds,
   OptionsParseError,
   NETWORK_ERROR_PATTERNS,
 } from '../../lib/config-helpers.js'
@@ -50,6 +51,29 @@ describe('resolveNavigationTimeout', () => {
 
   it('defaults to 30s for an empty environment value', () => {
     expect(resolveNavigationTimeout(undefined, '')).toBe(30000)
+  })
+})
+
+// =============================================================================
+// Check-in lead resolution
+// =============================================================================
+
+describe('resolveCheckInLeadSeconds', () => {
+  it('prefers the options file value', () => {
+    expect(resolveCheckInLeadSeconds(90, '300')).toBe(90)
+  })
+
+  it('falls back to the environment variable', () => {
+    expect(resolveCheckInLeadSeconds(undefined, '300')).toBe(300)
+  })
+
+  it('defaults to 120 s when neither is set', () => {
+    expect(resolveCheckInLeadSeconds(undefined, undefined)).toBe(120)
+  })
+
+  it('defaults to 120 s outside 30 to 600', () => {
+    expect(resolveCheckInLeadSeconds(5, undefined)).toBe(120)
+    expect(resolveCheckInLeadSeconds(undefined, '9000')).toBe(120)
   })
 })
 

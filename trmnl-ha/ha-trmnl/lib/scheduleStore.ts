@@ -103,6 +103,8 @@ function migrateSchedule(schedule: Partial<Schedule>): Schedule {
     ...schedule,
     // Default ha_mode based on whether target_url is set (for existing schedules)
     ha_mode: schedule.ha_mode ?? !schedule.target_url,
+    // Schedules saved before check-in alignment existed get it, like new ones.
+    align_to_check_in: schedule.align_to_check_in ?? true,
     interval_minutes,
     dithering,
   } as Schedule

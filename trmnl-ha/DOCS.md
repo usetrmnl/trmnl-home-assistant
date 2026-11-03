@@ -277,7 +277,9 @@ called.
 
 **Pull mode** generates a fresh screenshot on every request. The browser launches automatically if not already running.
 
-**Push mode** captures on a cron schedule and POSTs the image to your webhook URL.
+**Push mode** captures on a schedule and POSTs the image to your webhook URL.
+
+When the webhook URL is a TRMNL image endpoint, TRMNL answers each upload with the time the device will next ask for this image. The add-on then times the next capture to land `check_in_lead_seconds` (default 120) before that check-in, or earlier when the schedule's recent captures were slow, so the device always picks up a fresh picture, and the schedule's own interval only runs when TRMNL gives no time (a device asleep, or not yet claimed). This is on for every schedule; uncheck **Capture just before the TRMNL device checks in** on a schedule to always run on its interval instead.
 
 Both modes can be used simultaneously on the same schedule — configure a webhook for push delivery while also using the fetch URL for on-demand access.
 
