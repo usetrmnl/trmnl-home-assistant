@@ -41,6 +41,8 @@ export interface ExecutionResult {
   success: boolean
   savedPath: string
   webhook?: WebhookResult
+  /** Capture, save and upload time, so an aligned capture can start early enough */
+  durationMs?: number
 }
 
 /**
@@ -61,8 +63,9 @@ export class ScheduleExecutor {
     log.info`Running: ${schedule.name}`
 
     const result = await this.#executeWithRetry(schedule)
+    result.durationMs = Date.now() - startTime
 
-    this.#logResult(schedule.name, result, Date.now() - startTime)
+    this.#logResult(schedule.name, result, result.durationMs)
     return result
   }
 
@@ -201,6 +204,7 @@ export class ScheduleExecutor {
         success: true,
         statusCode: result.status,
         url: webhookUrl,
+        nextCheckInAt: result.nextCheckInAt,
       }
     } catch (err) {
       const errorMessage = (err as Error).message

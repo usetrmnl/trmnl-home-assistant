@@ -241,6 +241,9 @@ export interface Schedule {
   /** Webhook payload format configuration (null/undefined = 'raw' for backward compat) */
   webhook_format?: WebhookFormatConfig | null
 
+  /** Time captures to the TRMNL device's next check-in when the upload reply names it; undefined = on */
+  align_to_check_in?: boolean
+
   /** Whether to use Home Assistant mode (true) or generic URL mode (false) */
   ha_mode: boolean
 
@@ -320,6 +323,8 @@ export interface WebhookResult {
   error?: string
   /** Webhook URL that was called */
   url?: string
+  /** Epoch ms when a TRMNL device next shows this image (from the upload response) */
+  nextCheckInAt?: number
 }
 
 /** Response from triggering immediate schedule execution */

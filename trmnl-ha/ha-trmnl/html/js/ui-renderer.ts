@@ -239,6 +239,12 @@ export class RenderScheduleContent {
               placeholder="https://your-server.com/upload"
               title="Optional: POST screenshots to this URL when captured" />
             <p class="text-xs text-gray-500 mt-1">Optional: Screenshots will be POSTed to this URL</p>
+            <label class="flex items-center gap-2 mt-2 text-sm text-gray-700">
+              <input type="checkbox" id="s_align_check_in" ${s.align_to_check_in !== false ? 'checked' : ''}
+                onchange="window.app.updateScheduleFromForm()" />
+              Capture just before the TRMNL device checks in
+            </label>
+            <p class="text-xs text-gray-500 mt-1">When TRMNL tells us when the device will next ask for this image, the next capture is timed to land just before it. The schedule above only runs when it does not. Uncheck to always run on the schedule.</p>
             ${
               s.webhook_url
                 ? `

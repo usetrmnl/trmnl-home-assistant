@@ -12,6 +12,7 @@ import type { ImageFormat, WebhookFormatConfig } from '../../types/domain.js'
 import { webhookLogger } from '../logger.js'
 import { getTransformer } from './webhook-formats.js'
 import { getValidAccessToken, getBaseUrl, type TokenResponse } from './byos-auth.js'
+import { parseNextCheckInAt } from './check-in-alignment.js'
 
 const log = webhookLogger()
 
@@ -166,6 +167,8 @@ export interface WebhookDeliveryResult {
   success: boolean
   status: number
   statusText: string
+  /** Epoch ms when a TRMNL device next shows this image, when the server says */
+  nextCheckInAt?: number
 }
 
 /**
@@ -370,7 +373,7 @@ class DeliverWebhook {
       const safeText = redactWebhookUrl(responseText, this.#options.webhookUrl)
       log.debug`Response body: ${safeText.substring(0, SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH)}`
     }
-    return this.#result(response)
+    return { ...this.#result(response), nextCheckInAt: parseNextCheckInAt(responseText) }
   }
 
   #result(response: Response): WebhookDeliveryResult {

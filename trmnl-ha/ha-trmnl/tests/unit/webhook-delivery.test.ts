@@ -26,6 +26,22 @@ function upload(webhookUrl = 'http://byos.local/api/screens') {
   })
 }
 
+describe('uploadToWebhook — next check-in', () => {
+  it('carries the next check-in time the TRMNL image endpoint answers', async () => {
+    mockFetch({ text: async () => '{"data":{"message":"Image upload queued","next_check_in_at":"2026-11-03T12:10:00Z"}}' })
+
+    const result = await upload('https://trmnl.com/api/plugin_settings/abc/image')
+    expect(result.nextCheckInAt).toBe(Date.parse('2026-11-03T12:10:00Z'))
+  })
+
+  it('leaves it unset when the server answers without one', async () => {
+    mockFetch({ text: async () => '{"message":"ok"}' })
+
+    const result = await upload()
+    expect(result.nextCheckInAt).toBeUndefined()
+  })
+})
+
 describe('uploadToWebhook — connection errors', () => {
   it('names the unreachable host and suggests the DNS fix', async () => {
     globalThis.fetch = mock(async () => {
