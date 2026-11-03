@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-11-03
+
+### Added
+
+- Captures timed to the TRMNL device's check-in. trmnl.com now answers each image upload with the time a device next asks for that image, and the add-on captures again just before it, so the device no longer shows an image from the previous cycle. Cron fires while a timed capture is pending are skipped, so uploads drop to one per device check-in. On for every schedule, with a "Capture just before the TRMNL device checks in" checkbox to turn it off; a reply without a time (Terminus, custom endpoints, an older server) keeps the schedule on its cron (#133)
+- A `check_in_lead_seconds` add-on option (default 120) for how long before the check-in the capture runs. A schedule whose recent captures were slow grows its own lead to twice the slowest of its last five runs plus 30 seconds, capped at 15 minutes (#133)
+
 ## [0.11.1] - 2026-10-16
 
 ### Fixed
@@ -431,4 +438,5 @@ Based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main
 [0.10.2]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.10.1...v0.10.2
 [0.10.3]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.10.2...v0.10.3
 [0.11.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.10.3...v0.11.0
+[0.12.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.11.1...v0.12.0
 [0.2.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.1.0...v0.2.0
