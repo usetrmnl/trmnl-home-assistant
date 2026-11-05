@@ -476,7 +476,7 @@ export class HttpRouter {
         }),
       )
     } catch (err) {
-      log.error`BYOS login failed: ${(err as Error).message}`
+      log.error`BYOS login failed`
       response.writeHead(401)
       response.end(toJson({ error: (err as Error).message }))
     }

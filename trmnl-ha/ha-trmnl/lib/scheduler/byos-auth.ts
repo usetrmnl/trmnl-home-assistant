@@ -119,7 +119,7 @@ export async function login(
   password: string,
 ): Promise<TokenResponse> {
   const loginUrl = `${baseUrl}/login`
-  log.info`BYOS auth: logging in to ${baseUrl}`
+  log.info`BYOS auth: logging in`
 
   const response = await fetch(loginUrl, {
     method: 'POST',
@@ -161,8 +161,7 @@ async function refreshToken(
   })
 
   if (!response.ok) {
-    const body = await response.text().catch(() => '')
-    log.warn`BYOS auth: refresh failed (${response.status}) ${body}`
+    log.warn`BYOS auth: refresh failed (HTTP ${response.status})`
     throw new Error(`BYOS token refresh failed: ${response.status}`)
   }
 
@@ -192,8 +191,8 @@ async function relogin(
     adoptTokens(auth, tokens, onTokenRefresh)
     log.info`BYOS auth: re-authenticated with the stored login`
     return tokens.access_token
-  } catch (err) {
-    log.error`BYOS auth: re-authentication failed: ${(err as Error).message}`
+  } catch {
+    log.error`BYOS auth: re-authentication failed`
     return null
   }
 }
@@ -244,7 +243,7 @@ export async function getValidAccessToken(
     adoptTokens(auth, newTokens, onTokenRefresh)
 
     return newTokens.access_token
-  } catch (err) {
+  } catch {
     // A rejected refresh is not proof the session died: Rodauth rotates
     // refresh tokens on use, so a concurrent refresh (send path vs keepalive,
     // each holding its own copy of the auth config) leaves the loser with an
@@ -256,7 +255,7 @@ export async function getValidAccessToken(
     // live ~100 years where session expiration is off, and where it is on they
     // outlive the refresh window), and a push with a genuinely dead token
     // fails no worse than one with none.
-    log.warn`BYOS auth: refresh failed: ${(err as Error).message}`
+    log.warn`BYOS auth: refresh failed`
     return (
       (await relogin(getBaseUrl(webhookUrl), auth, onTokenRefresh)) ??
       auth.access_token
