@@ -7,7 +7,6 @@
  * @module lib/scheduler/webhook-delivery
  */
 
-import { SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH } from '../../const.js'
 import type { ImageFormat, WebhookFormatConfig } from '../../types/domain.js'
 import { webhookLogger } from '../logger.js'
 import { getTransformer } from './webhook-formats.js'
@@ -92,7 +91,7 @@ async function findExistingByosScreen(
     })
 
     if (!listResponse.ok) {
-      log.error`Failed to list screens: ${listResponse.status} ${listResponse.statusText}`
+      log.error`Failed to list screens: HTTP ${listResponse.status}`
       return null
     }
 
@@ -110,10 +109,10 @@ async function findExistingByosScreen(
       return null
     }
 
-    log.debug`Found existing screen id=${existingScreen.id} with model_id=${modelId} name=${screenName}`
+    log.debug`Found existing screen with model_id=${modelId} name=${screenName}`
     return existingScreen.id
-  } catch (err) {
-    log.error`Error finding screen: ${(err as Error).message}`
+  } catch {
+    log.error`Error finding screen`
     return null
   }
 }
@@ -136,7 +135,7 @@ async function patchByosScreen(
   const baseUrl = getBaseUrl(webhookUrl)
   const patchUrl = `${baseUrl}/api/screens/${screenId}`
 
-  log.info`Updating existing screen id=${screenId} via PATCH`
+  log.info`Updating existing screen via PATCH`
 
   return fetch(patchUrl, {
     method: 'PATCH',
@@ -299,7 +298,7 @@ class DeliverWebhook {
     body: BodyInit,
     headers: Record<string, string>,
   ): Promise<WebhookDeliveryResult> {
-    log.error`Webhook failed: ${response.status} ${response.statusText}`
+    log.error`Webhook failed: HTTP ${response.status}`
 
     const authToken = headers['Authorization']
     if (response.status === 422 && this.#byosConfig && authToken) {
@@ -337,11 +336,11 @@ class DeliverWebhook {
       authToken,
     )
     if (!patchResponse.ok) {
-      log.error`PATCH failed: ${patchResponse.status} ${patchResponse.statusText}`
+      log.error`PATCH failed: HTTP ${patchResponse.status}`
       return null
     }
 
-    log.info`PATCH successful: ${patchResponse.status} ${patchResponse.statusText}`
+    log.info`PATCH successful: HTTP ${patchResponse.status}`
     return this.#result(patchResponse)
   }
 
@@ -350,8 +349,6 @@ class DeliverWebhook {
     if (!responseText) return ''
 
     const safeText = redactWebhookUrl(responseText, this.#options.webhookUrl)
-
-    log.error`Response body: ${safeText.substring(0, SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH)}`
 
     try {
       const parsed = JSON.parse(safeText) as {
@@ -367,12 +364,9 @@ class DeliverWebhook {
     }
   }
 
+  // Response bodies and status text can echo credentials; never log them.
   #successResult(response: Response, responseText: string): WebhookDeliveryResult {
-    log.info`Webhook success: ${response.status} ${response.statusText}`
-    if (responseText) {
-      const safeText = redactWebhookUrl(responseText, this.#options.webhookUrl)
-      log.debug`Response body: ${safeText.substring(0, SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH)}`
-    }
+    log.info`Webhook success: HTTP ${response.status}`
     return { ...this.#result(response), nextCheckInAt: parseNextCheckInAt(responseText) }
   }
 

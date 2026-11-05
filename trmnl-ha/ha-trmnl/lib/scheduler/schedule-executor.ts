@@ -82,7 +82,7 @@ export class ScheduleExecutor {
     return result
   }
 
-  /** Logs execution result with full details */
+  /** Logs execution status without credential-bearing URLs or remote details. */
   #logResult(name: string, result: ExecutionResult, durationMs: number): void {
     const webhookStatus = this.#formatWebhookStatus(result.webhook)
     log.info`Completed: ${name} in ${durationMs}ms | saved: ${result.savedPath} | webhook: ${webhookStatus}`
@@ -91,8 +91,8 @@ export class ScheduleExecutor {
   /** Formats webhook status for logging */
   #formatWebhookStatus(webhook: WebhookResult | undefined): string {
     if (!webhook) return 'not configured'
-    if (webhook.success) return `${webhook.statusCode} OK → ${webhook.url}`
-    return `FAILED (${webhook.error}) → ${webhook.url}`
+    if (webhook.success) return `${webhook.statusCode} OK`
+    return `FAILED (HTTP ${webhook.statusCode ?? 'unknown'})`
   }
 
   /** Retry wrapper for network failures */
@@ -210,7 +210,7 @@ export class ScheduleExecutor {
         }),
       )
 
-      log.info`Schedule "${schedule.name}" webhook success: ${result.status} ${result.statusText}`
+      log.info`Schedule "${schedule.name}" webhook success: HTTP ${result.status}`
       void this.#notifier.clearUploadRefused(schedule)
 
       return {
@@ -222,7 +222,6 @@ export class ScheduleExecutor {
       }
     } catch (err) {
       const errorMessage = (err as Error).message
-      log.error`Schedule "${schedule.name}" webhook failed: ${errorMessage}`
 
       // Network errors carry no status, so fall back to scraping the message.
       let statusCode: number | undefined
@@ -234,6 +233,10 @@ export class ScheduleExecutor {
         const statusMatch = errorMessage.match(/HTTP (\d+):/)
         statusCode = statusMatch?.[1] ? parseInt(statusMatch[1], 10) : undefined
       }
+
+      // Remote errors can echo credentials, including only part of a URL.
+      // Keep details for the UI, but log only the numeric status.
+      log.error`Schedule "${schedule.name}" webhook failed: HTTP ${statusCode ?? 'unknown'}`
 
       if (this.#isRefusal(schedule, statusCode)) void this.#notifier.notifyUploadRefused(schedule, errorMessage)
 

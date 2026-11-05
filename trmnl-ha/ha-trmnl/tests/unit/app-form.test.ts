@@ -1,10 +1,11 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from 'bun:test'
 import presetsJson from '../../devices.json'
 import type { PresetsConfig, Schedule, TimestampPosition } from '../../types/domain.js'
 import { buildSchedule } from '../helpers/schedule-fixtures.js'
 
 const presets = presetsJson as PresetsConfig
 interface FormApp {
+  sendNow(scheduleId: string, event: Event): Promise<void>
   init(): Promise<void>
   updateScheduleFromForm(): Promise<void>
   applyDevicePreset(): Promise<void>
@@ -271,3 +272,42 @@ describe('send to local server', () => {
     expect(saves[0]!.webhook_format?.byosConfig?.model_id).toBe('1')
   })
 })
+
+for (const outcome of ['success', 'webhook failure', 'capture failure']) {
+  it(`keeps Send Now ${outcome} console logs credential-free`, async () => {
+    const success = outcome === 'success'
+    const credential = 'SYNTHETIC-CONSOLE-CREDENTIAL'
+    const url = `https://example.invalid/api/${credential}`
+    const detail = `Rejected ${credential}`
+    globalThis.fetch = (async () => Response.json({
+      success: outcome !== 'capture failure', error: detail, savedPath: '/output/test.png',
+      webhook: { attempted: true, success, statusCode: success ? 200 : 503, url, error: detail },
+    })) as unknown as typeof fetch
+    const modalModule = '../../html/js/confirm-modal.js'
+    const { ConfirmModal } = await import(modalModule)
+    const alert = spyOn(ConfirmModal.prototype, 'alert').mockResolvedValue(undefined)
+    const info = spyOn(console, 'log').mockImplementation(() => {})
+    const error = spyOn(console, 'error').mockImplementation(() => {})
+    // Avoid form/render side effects; exercise the actual public Send Now path.
+    const save = spyOn(app, 'updateScheduleFromForm').mockResolvedValue(undefined)
+    const documentBody = Object.getOwnPropertyDescriptor(globals.document, 'body')
+    Object.defineProperty(globals.document, 'body', { configurable: true, value: { contains: () => false } })
+    try {
+      const button = { textContent: 'Send', style: {}, disabled: false }
+      await app.sendNow('schedule-1', { target: button } as unknown as Event)
+      const messages = [...info.mock.calls, ...error.mock.calls].map((args) => args.join(' ')).join('\n')
+      expect(messages).toContain(outcome === 'capture failure'
+        ? 'Screenshot capture failed'
+        : success ? 'Webhook success: HTTP 200' : 'Webhook failed: HTTP 503')
+      expect(messages).not.toContain(credential)
+      expect(alert).toHaveBeenCalledTimes(1)
+      const feedback = alert.mock.calls[0]![0] as { message: string }
+      if (outcome !== 'capture failure') expect(feedback.message).toContain(url)
+      if (!success) expect(feedback.message).toContain(detail)
+    } finally {
+      alert.mockRestore(); info.mockRestore(); error.mockRestore(); save.mockRestore()
+      if (documentBody) Object.defineProperty(globals.document, 'body', documentBody)
+      else Reflect.deleteProperty(globals.document, 'body')
+    }
+  })
+}
