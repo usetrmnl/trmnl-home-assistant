@@ -569,11 +569,6 @@ export const SCHEDULER_IMAGE_FILE_PATTERN: RegExp = /\.(png|jpeg|jpg|bmp)$/i
 export const SCHEDULER_OUTPUT_DIR_NAME: string = 'output'
 
 /**
- * Maximum length for truncating response bodies in logs
- */
-export const SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH: number = 200
-
-/**
  * Network error detection patterns
  * Re-exported from config-helpers for backward compatibility
  */

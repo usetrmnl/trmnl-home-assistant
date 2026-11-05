@@ -234,8 +234,8 @@ export class Scheduler {
           })
         })
       }
-    } catch (err) {
-      log.error`BYOS token keepalive failed: ${(err as Error).message}`
+    } catch {
+      log.error`BYOS token keepalive failed`
     } finally {
       this.#refreshingTokens = false
     }

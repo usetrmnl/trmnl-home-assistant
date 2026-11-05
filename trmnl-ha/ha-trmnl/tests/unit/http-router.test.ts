@@ -9,6 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test'
+import { captureLogs } from '../helpers/log-capture.js'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -1050,6 +1051,27 @@ describe('HttpRouter', () => {
 
       expect(body.access_token).toBe('test-access')
       expect(body.refresh_token).toBe('test-refresh')
+    })
+
+    it('keeps echoed login errors out of logs while preserving UI feedback', async () => {
+      const logs = await captureLogs()
+      const detail = 'Rejected SYNTHETIC-LOGIN-CREDENTIAL'
+      try {
+        mockByosLogin.mockImplementationOnce(async () => { throw new Error(detail) })
+        mockRequest = createRequestWithBody('POST', JSON.stringify({
+          webhookUrl: 'https://example.invalid/api/screens',
+          login: 'user@example.invalid', password: 'SYNTHETIC-LOGIN-CREDENTIAL',
+        }))
+        await router.route(
+          mockRequest as unknown as IncomingMessage,
+          mockResponse as unknown as ServerResponse,
+          new URL('http://localhost/api/byos/login'),
+        )
+        expect(mockResponse.statusCode).toBe(401)
+        expect(JSON.parse(mockResponse.body as string).error).toBe(detail)
+        expect(logs.contains('BYOS login failed', 'error')).toBe(true)
+        expect(logs.contains('SYNTHETIC-LOGIN-CREDENTIAL')).toBe(false)
+      } finally { await logs.stop() }
     })
 
     it('returns 401 when login fails', async () => {

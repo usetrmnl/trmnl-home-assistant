@@ -288,7 +288,7 @@ class App {
     const sendCommand = new SendSchedule()
     const result = await sendCommand.call(scheduleId)
 
-    // Log detailed result to browser console
+    // Log status without credential-bearing webhook URLs or errors
     this.#logSendResult(result)
 
     // Determine overall status based on screenshot + webhook results
@@ -316,7 +316,7 @@ class App {
     const logPrefix = '[Send Now]'
 
     if (!result.success) {
-      console.error(`${logPrefix} Screenshot capture failed:`, result.error)
+      console.error(`${logPrefix} Screenshot capture failed`)
       return
     }
 
@@ -330,11 +330,11 @@ class App {
     const { webhook } = result
     if (webhook.success) {
       console.log(
-        `${logPrefix} Webhook success: ${webhook.statusCode} → ${webhook.url}`,
+        `${logPrefix} Webhook success: HTTP ${webhook.statusCode}`,
       )
     } else {
       console.error(
-        `${logPrefix} Webhook failed: ${webhook.error} → ${webhook.url}`,
+        `${logPrefix} Webhook failed: HTTP ${webhook.statusCode ?? 'unknown'}`,
       )
     }
   }
