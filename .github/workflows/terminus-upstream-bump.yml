@@ -3,9 +3,9 @@ name: Terminus upstream bump
 # Opens a pull request when usetrmnl/terminus tags a release newer than the one
 # trmnl-terminus pins, and merges it once CI passes.
 #
-# Set a RELEASE_PAT secret (repo scope) to have CI run on the pull requests this
-# opens. Without it the GITHUB_TOKEN opens them, and GitHub deliberately does not
-# trigger workflows from token-authored events, so the bump arrives unverified.
+# The trmy-bot app (TRMY_BOT_APP_ID, TRMY_BOT_PRIVATE_KEY) opens the pull
+# requests, so CI runs on them. Without it GITHUB_TOKEN opens them, and GitHub
+# does not trigger workflows from those events, so the bump arrives unverified.
 
 on:
   schedule:
@@ -95,22 +95,30 @@ jobs:
 
           git diff --stat
 
+      - name: Create the trmy-bot token
+        id: bot-token
+        if: steps.upstream.outputs.changed == 'true' && vars.TRMY_BOT_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.TRMY_BOT_APP_ID }}
+          private-key: ${{ secrets.TRMY_BOT_PRIVATE_KEY }}
+
       - name: Open the pull request
         if: steps.upstream.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
-          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+          GH_TOKEN: ${{ steps.bot-token.outputs.token || secrets.GITHUB_TOKEN }}
+          BOT_TOKEN: ${{ steps.bot-token.outputs.token }}
           CURRENT: ${{ steps.upstream.outputs.current }}
           LATEST: ${{ steps.upstream.outputs.latest }}
         run: |
           set -euo pipefail
 
-          # An unset or empty RELEASE_PAT falls back silently, and the fallback
+          # A missing trmy-bot token falls back silently, and the fallback
           # produces a pull request with no checks on it at all.
-          if [ -n "${RELEASE_PAT:-}" ]; then
-            echo "RELEASE_PAT in use - CI will run on the pull request"
+          if [ -n "${BOT_TOKEN:-}" ]; then
+            echo "trmy-bot token in use - CI will run on the pull request"
           else
-            echo "::warning::RELEASE_PAT is unset or empty; using GITHUB_TOKEN, so the pull request will have no checks"
+            echo "::warning::no trmy-bot token; using GITHUB_TOKEN, so the pull request will have no checks"
           fi
 
           branch="terminus-bump/${LATEST}"
