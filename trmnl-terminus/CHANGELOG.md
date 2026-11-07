@@ -13,6 +13,11 @@ between upstream releases takes a `-1`, `-2` suffix.
 
 - Updated Terminus to 0.80.0
 
+### Fixed
+
+- Terminus failing to start because Chromium could not write its profile
+  under `/root`
+
 ## [0.79.0] - 2026-11-02
 
 ### Changed

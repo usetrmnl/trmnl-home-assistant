@@ -57,6 +57,11 @@ assert_resolves "a set option reaches the services" \
 assert_resolves "an option turned off survives as false" \
     "{$BASE,\"session_expiration_enabled\":false}" SESSION_EXPIRATION_ENABLED false
 
+# The services drop to the app user, and Chromium exits at once when HOME
+# is a directory that user cannot write.
+assert_resolves "the services run with the app user's home" \
+    "{$BASE}" HOME /home/app
+
 # Options are not a way to rewire the container: the vars the add-on manages
 # are absent from PASSTHROUGH_OPTIONS, so naming one changes nothing.
 assert_resolves "add-on config cannot rewrite the API URI" \

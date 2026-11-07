@@ -1,4 +1,6 @@
 #!/bin/bash
+# The services run as app, and Chromium exits when HOME is not writable.
+export HOME=/home/app
 export DATABASE_URL="postgres://postgres@localhost/terminus"
 export KEYVALUE_URL="unix:///var/run/valkey/valkey.sock"
 [ -f /data/.app_secret ] && export APP_SECRET=$(cat /data/.app_secret)
