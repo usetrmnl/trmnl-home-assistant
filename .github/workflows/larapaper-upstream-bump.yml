@@ -1,7 +1,7 @@
 name: LaraPaper upstream bump
 
 # Opens a pull request when usetrmnl/larapaper tags a release newer than the one
-# trmnl-larapaper pins.
+# trmnl-larapaper pins, and merges it once CI passes.
 #
 # Set a RELEASE_PAT secret (repo scope) to have CI run on the pull requests this
 # opens. Without it the GITHUB_TOKEN opens them, and GitHub deliberately does not
@@ -9,7 +9,7 @@ name: LaraPaper upstream bump
 
 on:
   schedule:
-    - cron: "0 7 * * 1"
+    - cron: "0 7 * * *"
   workflow_dispatch:
 
 permissions:
@@ -149,12 +149,15 @@ jobs:
             printf -- '- bumps `config.yaml` to `%s`, which the add-on version mirrors\n' "$LATEST"
             printf -- '- adds a CHANGELOG entry with LaraPaper'"'"'s release notes\n\n'
             printf 'Upstream changes: https://github.com/usetrmnl/larapaper/compare/%s...%s\n\n' "$CURRENT" "$LATEST"
-            printf 'Publishing needs a `larapaper-v%s` release once this merges - the Supervisor pulls `image:version` from `config.yaml`, so merging alone ships nothing.\n' "$LATEST"
+            printf 'Merges itself once CI passes; larapaper-release.yml then publishes `larapaper-v%s`.\n' "$LATEST"
           } > /tmp/pr-body.md
 
           gh pr create --base main --head "$branch" \
             --title "Updated LaraPaper to ${LATEST}" \
             --body-file /tmp/pr-body.md
+
+          # The main ruleset's required checks hold the merge until CI passes.
+          gh pr merge "$branch" --auto --rebase --delete-branch
 
       - name: Report when already current
         if: steps.upstream.outputs.changed == 'false'
