@@ -1,7 +1,7 @@
 name: Terminus upstream bump
 
 # Opens a pull request when usetrmnl/terminus tags a release newer than the one
-# trmnl-terminus pins.
+# trmnl-terminus pins, and merges it once CI passes.
 #
 # Set a RELEASE_PAT secret (repo scope) to have CI run on the pull requests this
 # opens. Without it the GITHUB_TOKEN opens them, and GitHub deliberately does not
@@ -9,7 +9,7 @@ name: Terminus upstream bump
 
 on:
   schedule:
-    - cron: "0 6 * * 1"
+    - cron: "0 6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -137,12 +137,15 @@ jobs:
             printf -- '- bumps `config.yaml` to `%s`, which the add-on version mirrors\n' "$LATEST"
             printf -- '- adds a CHANGELOG entry\n\n'
             printf 'Upstream changes: https://github.com/usetrmnl/terminus/compare/%s...%s\n\n' "$CURRENT" "$LATEST"
-            printf 'Publishing needs a `terminus-v%s` release once this merges - the Supervisor pulls `image:version` from `config.yaml`, so merging alone ships nothing.\n' "$LATEST"
+            printf 'Merges itself once CI passes; terminus-release.yml then publishes `terminus-v%s`.\n' "$LATEST"
           } > /tmp/pr-body.md
 
           gh pr create --base main --head "$branch" \
             --title "Updated Terminus to ${LATEST}" \
             --body-file /tmp/pr-body.md
+
+          # The main ruleset's required checks hold the merge until CI passes.
+          gh pr merge "$branch" --auto --rebase --delete-branch
 
       - name: Report when already current
         if: steps.upstream.outputs.changed == 'false'
