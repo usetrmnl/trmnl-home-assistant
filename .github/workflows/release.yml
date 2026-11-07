@@ -3,7 +3,7 @@ name: Release
 on:
   release:
     types: [published]
-  # terminus-release.yml sends this when RELEASE_PAT is unset. A release
+  # terminus-release.yml sends this when there is no trmy-bot token. A release
   # created with GITHUB_TOKEN does not trigger the release event above.
   # github.ref on this event is the default branch, so the tag comes from
   # the payload and is checked before any image is pushed.

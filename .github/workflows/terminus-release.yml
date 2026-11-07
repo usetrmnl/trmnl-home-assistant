@@ -4,10 +4,10 @@ name: Terminus release
 # image:version from config.yaml, so merging a bump ships nothing on its own -
 # release.yml only builds once a terminus-v* release exists.
 #
-# Upstream keeps a RELEASE_PAT secret (repo scope). A release created with that
+# Upstream creates a trmy-bot app token. A release created with that
 # token fires the release event, which starts release.yml.
 #
-# Forks do not inherit that secret. A release created with GITHUB_TOKEN does
+# Forks do not inherit the app's variable and secret. A release created with GITHUB_TOKEN does
 # not fire workflows, so this workflow then sends an addon-release dispatch,
 # which release.yml accepts and builds from. The dispatch is explicit, so it
 # cannot loop.
@@ -57,14 +57,22 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # RELEASE_PAT keeps the upstream path: the release event starts release.yml.
+      - name: Create the trmy-bot token
+        id: bot-token
+        if: steps.existing.outputs.exists == 'false' && vars.TRMY_BOT_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.TRMY_BOT_APP_ID }}
+          private-key: ${{ secrets.TRMY_BOT_PRIVATE_KEY }}
+
+      # The trmy-bot token keeps the upstream path: the release event starts release.yml.
       # Without it, publish with GITHUB_TOKEN and dispatch the build. Failing
       # here used to strand forks, because they cannot see the upstream secret.
       - name: Publish the release
         if: steps.existing.outputs.exists == 'false'
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
-          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+          GH_TOKEN: ${{ steps.bot-token.outputs.token || secrets.GITHUB_TOKEN }}
+          BOT_TOKEN: ${{ steps.bot-token.outputs.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
@@ -89,8 +97,8 @@ jobs:
             --title "$title" \
             --notes-file /tmp/notes.md
 
-          if [ -n "${RELEASE_PAT:-}" ]; then
-            echo "Published ${tag} with RELEASE_PAT - release.yml runs from the release event"
+          if [ -n "${BOT_TOKEN:-}" ]; then
+            echo "Published ${tag} with the trmy-bot token - release.yml runs from the release event"
             exit 0
           fi
 
