@@ -23,6 +23,7 @@ import {
 } from '../../const.js'
 import { loadSchedules, updateSchedule } from '../scheduleStore.js'
 import { buildRefreshedAuthUpdate } from './byos-auth.js'
+import { notifyUploadRefused, clearUploadRefused } from '../ha-notify.js'
 import type {
   Schedule,
   ScreenshotParams,
@@ -45,16 +46,28 @@ export interface ExecutionResult {
   durationMs?: number
 }
 
+/** Home Assistant notices for an image the server refused */
+interface UploadRefusalNotifier {
+  notifyUploadRefused(schedule: Schedule, reason: string): Promise<void>
+  clearUploadRefused(schedule: Schedule): Promise<void>
+}
+
 /**
  * Orchestrates schedule execution with retry logic.
  */
 export class ScheduleExecutor {
   #screenshotFn: ScreenshotFunction
   #outputDir: string
+  #notifier: UploadRefusalNotifier
 
-  constructor(screenshotFn: ScreenshotFunction, outputDir: string) {
+  constructor(
+    screenshotFn: ScreenshotFunction,
+    outputDir: string,
+    notifier: UploadRefusalNotifier = { notifyUploadRefused, clearUploadRefused },
+  ) {
     this.#screenshotFn = screenshotFn
     this.#outputDir = outputDir
+    this.#notifier = notifier
   }
 
   /** Executes schedule with automatic retry on network failures */
@@ -198,6 +211,7 @@ export class ScheduleExecutor {
       )
 
       log.info`Schedule "${schedule.name}" webhook success: ${result.status} ${result.statusText}`
+      void this.#notifier.clearUploadRefused(schedule)
 
       return {
         attempted: true,
@@ -221,6 +235,8 @@ export class ScheduleExecutor {
         statusCode = statusMatch?.[1] ? parseInt(statusMatch[1], 10) : undefined
       }
 
+      if (this.#isRefusal(statusCode)) void this.#notifier.notifyUploadRefused(schedule, errorMessage)
+
       return {
         attempted: true,
         success: false,
@@ -230,6 +246,11 @@ export class ScheduleExecutor {
         url: webhookUrl,
       }
     }
+  }
+
+  /** A 4xx other than a rate limit: sending the same image again will not help. */
+  #isRefusal(statusCode: number | undefined): boolean {
+    return statusCode !== undefined && statusCode >= 400 && statusCode < 500 && statusCode !== 429
   }
 
   #shouldRetry(error: Error, attempt: number): boolean {
