@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-11-12
+
+### Added
+
+- A Home Assistant notification when the server refuses a screen, quoting the server's reason (for example the wrong bit depth for the device). Before this, a refused upload only reached the add-on log, and the device kept showing an old screen. One notification per schedule, cleared when a screen is delivered again. An expired BYOS login keeps its own sign-in notification (#142)
+
+### Removed
+
+- BMP output. TRMNL has refused BMP uploads since July, so the default "TRMNL OG" preset never reached the device. Schedules saved as BMP now send PNG with no action needed, and a fetch URL asking for BMP gets PNG (#142)
+- The "TRMNL RGB", "TRMNL OG (1-bit)" and "Classic Macintosh" presets. Schedules saved with them keep their settings and show as custom (#142)
+
 ## [0.12.0] - 2026-11-03
 
 ### Added
