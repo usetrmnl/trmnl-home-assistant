@@ -22,29 +22,6 @@
     "createdAt": "2025-11-19T00:00:00.000Z",
     "updatedAt": "2025-11-19T00:00:00.000Z"
   },
-  "schedule_trmnl_og_1bit": {
-    "name": "TRMNL OG (1-bit)",
-    "cron": "0 * * * *",
-    "dashboard_path": "/lovelace/0",
-    "viewport": {
-      "width": 800,
-      "height": 480
-    },
-    "webhook_url": "",
-    "format": "png",
-    "rotate": 0,
-    "dithering": {
-      "enabled": true,
-      "method": "floyd-steinberg",
-      "bitDepth": 1,
-      "gammaCorrection": true,
-      "blackLevel": 4,
-      "whiteLevel": 81
-    },
-    "id": "schedule_trmnl_og_1bit",
-    "createdAt": "2025-11-19T00:00:00.000Z",
-    "updatedAt": "2025-11-19T00:00:00.000Z"
-  },
   "schedule_trmnl_og_2bit": {
     "name": "TRMNL OG (2-bit)",
     "cron": "0 * * * *",
