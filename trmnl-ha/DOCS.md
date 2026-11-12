@@ -443,6 +443,10 @@ Symptoms: the add-on page loads blank, scheduled captures stop, and the log repe
 3. If it persists, copy your schedules from the UI (they also live in `/data/schedules.json`), reinstall the add-on, and re-import them.
 4. Still stuck? Open an issue with the add-on log and the `timings` block from `GET /health`.
 
+### "TRMNL: screen not delivered" Notification
+
+The server refused the image, so retrying the same settings will not help. The notification quotes the server's reason, for example the wrong bit depth for your device. Change the schedule or the device setting it names; the notification clears itself on the next delivered screen.
+
 ### HA Connection Issues
 
 **Most common cause:** Using `homeassistant.local:8123` instead of the IP address.

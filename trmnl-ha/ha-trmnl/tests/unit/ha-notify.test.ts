@@ -6,7 +6,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterAll } from 'bun:test'
-import { notifyReauthRequired } from '../../lib/ha-notify.js'
+import {
+  notifyReauthRequired,
+  notifyUploadRefused,
+  clearUploadRefused,
+} from '../../lib/ha-notify.js'
 import { captureFetch, mockFetch, restoreFetch } from '../helpers/fetch-mock.js'
 
 afterAll(restoreFetch)
@@ -66,6 +70,35 @@ describe('ha-notify', () => {
       }) as unknown as typeof fetch
 
       expect(await notifyReauthRequired(schedule, ha)).toBeUndefined()
+    })
+  })
+
+  describe('#notifyUploadRefused', () => {
+    it("shows the server's reason under one id per schedule", async () => {
+      const requests = captureFetch()
+
+      await notifyUploadRefused(schedule, 'HTTP 422: Unprocessable Entity - BMP images are no longer supported.', ha)
+
+      const body = JSON.parse(requests[0]!.init?.body as string)
+      expect(body).toMatchObject({
+        notification_id: 'trmnl_upload_refused_abc123',
+        message: expect.stringContaining('BMP images are no longer supported.'),
+      })
+    })
+  })
+
+  describe('#clearUploadRefused', () => {
+    it('dismisses the refusal notification for the schedule', async () => {
+      const requests = captureFetch()
+
+      await clearUploadRefused(schedule, ha)
+
+      expect(requests[0]!.url).toBe(
+        'http://homeassistant:8123/api/services/persistent_notification/dismiss',
+      )
+      expect(JSON.parse(requests[0]!.init?.body as string)).toEqual({
+        notification_id: 'trmnl_upload_refused_abc123',
+      })
     })
   })
 })

@@ -36,6 +36,7 @@ import {
   buildSchedule,
   buildByosSchedule,
 } from '../helpers/schedule-fixtures.js'
+import type { Schedule } from '../../types/domain.js'
 
 afterAll(restoreFetch)
 
@@ -173,5 +174,50 @@ describe('ScheduleExecutor — webhook failure reporting', () => {
       statusCode: 503,
     })
     expect(result.webhook!.retryAfterMs).toBeUndefined()
+  })
+})
+
+describe('ScheduleExecutor — refused upload notification', () => {
+  const webhookSchedule = () =>
+    buildSchedule({ webhook_url: 'https://trmnl.com/api/plugin_settings/uuid/image' })
+
+  function createNotifyingExecutor() {
+    const notifier = {
+      refused: mock(async (_schedule: Schedule, _reason: string) => {}),
+      cleared: mock(async (_schedule: Schedule) => {}),
+    }
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trmnl-executor-'))
+    const executor = new ScheduleExecutor(async () => Buffer.from('fake-png'), outputDir, {
+      notifyUploadRefused: notifier.refused,
+      clearUploadRefused: notifier.cleared,
+    })
+    return { executor, notifier }
+  }
+
+  it('notifies Home Assistant when the server refuses the image', async () => {
+    mockFetch({ ok: false, status: 422, statusText: 'Unprocessable Entity', text: async () => '{"error":"BMP images are no longer supported."}' })
+    const { executor, notifier } = createNotifyingExecutor()
+
+    await executor.call(webhookSchedule())
+
+    expect(notifier.refused.mock.calls[0]![1]).toContain('BMP images are no longer supported.')
+  })
+
+  it('stays quiet on a rate limit, which clears by itself', async () => {
+    mockFetch({ ok: false, status: 429, statusText: 'Too Many Requests' })
+    const { executor, notifier } = createNotifyingExecutor()
+
+    await executor.call(webhookSchedule())
+
+    expect(notifier.refused).not.toHaveBeenCalled()
+  })
+
+  it('clears the notification when an upload succeeds', async () => {
+    mockFetch({ ok: true, status: 200 })
+    const { executor, notifier } = createNotifyingExecutor()
+
+    await executor.call(webhookSchedule())
+
+    expect(notifier.cleared).toHaveBeenCalledTimes(1)
   })
 })
