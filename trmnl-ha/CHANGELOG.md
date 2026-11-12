@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-11-12
+
+### Added
+
+- Send to local server. When the Terminus or LaraPaper add-on from this repository runs on the same Home Assistant, the schedule editor offers a button for each. For LaraPaper, paste the UUID of an Image Webhook plugin; for Terminus, sign in once. The add-on fills in the webhook address, the Add-on URL and the Terminus model ID, so screens stay on your own network (#144)
+
 ## [0.13.0] - 2026-11-12
 
 ### Added
