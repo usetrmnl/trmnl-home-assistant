@@ -28,7 +28,8 @@ official LaraPaper image with these additions:
    firmware and can be ignored; the device picks up its playlist at the next refresh. A
    TRMNL OG on firmware older than 1.4.6 has no **Custom Server** option and needs a
    firmware update first.
-4. Add recipes under **Plugins**, for example from LaraPaper's OSS catalog or the TRMNL
+4. To show a Home Assistant dashboard, create an **Image Webhook** plugin, add it to the device's playlist, and send to it from the TRMNL HA add-on with **Send to local server** ([how](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/docs/webhook-formats.md#send-to-a-local-server)).
+5. Add recipes under **Plugins**, for example from LaraPaper's OSS catalog or the TRMNL
    catalog.
 
 ## Configuration

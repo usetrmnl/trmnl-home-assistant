@@ -400,6 +400,8 @@ A schedule can send its screenshot in one of two shapes:
 
 For Terminus, the add-on sends a short message naming the screen, and Terminus fetches the image from the add-on. That means **Add-on URL** has to be an address **Terminus** can reach — often *not* `localhost`.
 
+To keep screens on your own network, install the **Terminus** or **LaraPaper** add-on from this repository: the schedule editor then offers **Send to local server** and fills in the addresses for you ([details](docs/webhook-formats.md#send-to-a-local-server)).
+
 See **[Sending screenshots to a server](docs/webhook-formats.md)** for:
 - What to put in each field
 - Signing in, and what to do when sessions expire
