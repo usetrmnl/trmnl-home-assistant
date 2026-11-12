@@ -39,6 +39,8 @@ import type {
   WebhookFormatConfig,
   ByosAuthConfig,
   ByosDeliveryMode,
+  LocalServer,
+  LocalServers,
 } from '../../types/domain.js'
 import { BYOS_DEFAULT_DELIVERY_MODE } from '../shared/byos-constants.js'
 
@@ -932,6 +934,60 @@ class App {
     }
   }
 
+  #localServers(): LocalServers | undefined {
+    // @ts-expect-error window.uiConfig is injected by server
+    return window.uiConfig?.localServers ?? undefined
+  }
+
+  #localServerUrl(kind: LocalServer['kind']): string | undefined {
+    return this.#localServers()?.servers.find((server) => server.kind === kind)
+      ?.url
+  }
+
+  /**
+   * Points the active schedule at a Terminus or LaraPaper add-on beside this one.
+   */
+  async useLocalServer(kind: LocalServer['kind']): Promise<void> {
+    const schedule = this.#scheduleManager.activeSchedule
+    const serverUrl = this.#localServerUrl(kind)
+    if (!schedule || !serverUrl) return
+
+    if (kind === 'terminus') {
+      const updates = this.#buildByosAuthUpdate(
+        schedule,
+        schedule.webhook_format?.byosConfig?.auth ?? {},
+      )
+      updates.webhook_url = `${serverUrl}/api/screens`
+      updates.webhook_format!.byosConfig = {
+        ...updates.webhook_format!.byosConfig!,
+        delivery_mode: 'uri',
+        addon_base_url: this.#localServers()!.addonUrl,
+      }
+      await this.#scheduleManager.update(schedule.id, updates)
+      this.renderUI()
+      return
+    }
+
+    const uuid = (
+      document.getElementById('s_larapaper_uuid') as HTMLInputElement | null
+    )?.value?.trim()
+    if (!uuid) {
+      await this.#confirmModal.alert({
+        title: 'Error',
+        message: 'Please enter the UUID of the LaraPaper Image Webhook plugin.',
+        type: 'error',
+      })
+      return
+    }
+
+    await this.#scheduleManager.update(schedule.id, {
+      ...schedule,
+      webhook_url: `${serverUrl}/api/plugin_settings/${uuid}/image`,
+      webhook_format: { format: 'raw' },
+    })
+    this.renderUI()
+  }
+
   /**
    * Toggles between webhook formats and shows/hides format-specific config.
    */
@@ -1033,6 +1089,14 @@ class App {
         login_email: remember ? login : undefined,
         login_password: remember ? password : undefined,
       })
+      const localTerminusUrl = this.#localServerUrl('terminus')
+      if (
+        result.model_id &&
+        localTerminusUrl &&
+        schedule.webhook_url.startsWith(localTerminusUrl)
+      ) {
+        updates.webhook_format!.byosConfig!.model_id = result.model_id
+      }
 
       await this.#scheduleManager.update(schedule.id, updates)
       this.renderUI()

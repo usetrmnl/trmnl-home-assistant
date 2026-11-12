@@ -15,7 +15,7 @@
  * @module html/js/ui-renderer
  */
 
-import type { Schedule } from '../../types/domain.js'
+import type { LocalServer, Schedule } from '../../types/domain.js'
 import { TIMESTAMP_POSITIONS } from '../shared/timestamp-position.js'
 import { deliveryModeFor } from '../shared/byos-constants.js'
 import type { PaletteOption } from './palette-options.js'
@@ -230,6 +230,8 @@ export class RenderScheduleContent {
 
           ${this.#renderTiming(s)}
 
+          ${this.#renderLocalServers()}
+
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
             <input type="url" id="s_webhook" value="${s.webhook_url || ''}"
@@ -261,6 +263,48 @@ export class RenderScheduleContent {
 
           ${this.#renderWebhookFormatSettings()}
         </div>
+      </div>
+    `
+  }
+
+  #renderLocalServers(): string {
+    // @ts-expect-error window.uiConfig is injected by server
+    const servers: LocalServer[] = window.uiConfig?.localServers?.servers ?? []
+    if (servers.length === 0) return ''
+
+    const has = (kind: LocalServer['kind']) =>
+      servers.some((server) => server.kind === kind)
+    const buttonClass =
+      'px-3 py-2 text-sm text-white rounded-md transition hover:opacity-90 whitespace-nowrap'
+
+    return `
+      <div class="p-3 rounded-md" style="background-color: #f9fafb; border: 1px solid #e5e7eb">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Send to local server</label>
+        ${
+          has('terminus')
+            ? `
+        <button type="button" onclick="window.app.useLocalServer('terminus')"
+          class="${buttonClass}" style="background-color: var(--primary)">
+          Use the Terminus add-on
+        </button>
+        <p class="text-xs text-gray-500 mt-1">Fills in the webhook for you. Then sign in under JWT Authentication below.</p>`
+            : ''
+        }
+        ${
+          has('larapaper')
+            ? `
+        <div class="flex gap-2 mt-2">
+          <input type="text" id="s_larapaper_uuid"
+            class="w-full px-2 py-1 text-sm border rounded-md font-mono" style="border-color: var(--primary-light)"
+            placeholder="Image Webhook plugin UUID" />
+          <button type="button" onclick="window.app.useLocalServer('larapaper')"
+            class="${buttonClass}" style="background-color: var(--primary)">
+            Use the LaraPaper add-on
+          </button>
+        </div>
+        <p class="text-xs text-gray-500 mt-1">Copy the UUID from an Image Webhook plugin in LaraPaper.</p>`
+            : ''
+        }
       </div>
     `
   }

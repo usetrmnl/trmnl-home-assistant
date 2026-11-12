@@ -200,6 +200,18 @@ export interface ByosAuthConfig {
   login_password?: string
 }
 
+/** A Terminus or LaraPaper add-on reachable from this add-on */
+export interface LocalServer {
+  kind: 'terminus' | 'larapaper'
+  url: string
+}
+
+/** Sibling add-ons that answered, and the URL they reach this add-on on */
+export interface LocalServers {
+  addonUrl: string
+  servers: LocalServer[]
+}
+
 /** Webhook format configuration */
 export interface WebhookFormatConfig {
   format: WebhookFormat

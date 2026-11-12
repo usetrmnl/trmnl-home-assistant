@@ -26,6 +26,7 @@ import {
   login as defaultByosLogin,
   getBaseUrl as defaultGetBaseUrl,
 } from './scheduler/byos-auth.js'
+import { readTerminusModelId as defaultReadTerminusModelId } from './local-servers.js'
 import { loadPresets } from '../devices.js'
 import {
   DATA_DIR,
@@ -87,6 +88,10 @@ export interface HttpRouterDeps {
     password: string,
   ) => Promise<TokenResponse>
   getBaseUrl: (webhookUrl: string) => string
+  readTerminusModelId: (
+    baseUrl: string,
+    accessToken: string,
+  ) => Promise<string | undefined>
   /** Directory holding saved scheduler captures, served at /output/ */
   outputDir: string
 }
@@ -99,6 +104,7 @@ const defaultDeps: HttpRouterDeps = {
   replaceAllSchedules: defaultReplaceAllSchedules,
   byosLogin: defaultByosLogin,
   getBaseUrl: defaultGetBaseUrl,
+  readTerminusModelId: defaultReadTerminusModelId,
   outputDir: join(DATA_DIR, SCHEDULER_OUTPUT_DIR_NAME),
 }
 
@@ -472,6 +478,10 @@ export class HttpRouter {
           access_token: tokens.access_token,
           refresh_token: tokens.refresh_token,
           obtained_at: Date.now(),
+          model_id: await this.#deps.readTerminusModelId(
+            baseUrl,
+            tokens.access_token,
+          ),
         }),
       )
     } catch (err) {
