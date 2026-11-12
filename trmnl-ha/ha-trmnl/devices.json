@@ -325,29 +325,6 @@
     "createdAt": "2025-11-19T00:00:00.000Z",
     "updatedAt": "2025-11-19T00:00:00.000Z"
   },
-  "schedule_classic_mac": {
-    "name": "Classic Macintosh",
-    "cron": "0 * * * *",
-    "dashboard_path": "/lovelace/0",
-    "viewport": {
-      "width": 512,
-      "height": 342
-    },
-    "webhook_url": "",
-    "format": "png",
-    "rotate": 0,
-    "dithering": {
-      "enabled": true,
-      "method": "floyd-steinberg",
-      "bitDepth": 1,
-      "gammaCorrection": true,
-      "blackLevel": 4,
-      "whiteLevel": 81
-    },
-    "id": "schedule_classic_mac",
-    "createdAt": "2025-11-19T00:00:00.000Z",
-    "updatedAt": "2025-11-19T00:00:00.000Z"
-  },
   "schedule_ed133ut2": {
     "name": "ED133UT2 Active Matrix",
     "cron": "0 * * * *",
