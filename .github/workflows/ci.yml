@@ -38,7 +38,8 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
+    # ImageMagick is copied from a Debian image, whose libraries Ubuntu 26.04 no longer carries.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
