@@ -54,6 +54,22 @@ export async function findLocalServers(
   }
 }
 
+const LOCAL_SERVER_CACHE_MS = 5 * 60_000
+
+/** Reuses one probe for five minutes, so a page load does not wait on add-ons that are not installed. */
+export function createLocalServerCache(
+  find: () => Promise<LocalServers | null> = findLocalServers,
+  now: () => number = Date.now,
+): () => Promise<LocalServers | null> {
+  let cached: { at: number; result: Promise<LocalServers | null> } | null = null
+  return () => {
+    if (!cached || now() - cached.at > LOCAL_SERVER_CACHE_MS) cached = { at: now(), result: find() }
+    return cached.result
+  }
+}
+
+export const cachedLocalServers = createLocalServerCache()
+
 /**
  * Reads the model id every device on a Terminus server shares.
  *

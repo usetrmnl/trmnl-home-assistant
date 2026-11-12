@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import {
+  createLocalServerCache,
   findLocalServers,
   readTerminusModelId,
 } from '../../lib/local-servers.js'
@@ -82,5 +83,37 @@ describe('readTerminusModelId', () => {
     }) as unknown as typeof fetch
 
     expect(await readTerminusModelId('http://t:2300', 'token')).toBeUndefined()
+  })
+})
+
+describe('createLocalServerCache', () => {
+  function countingFinder() {
+    const finder = async () => ({ addonUrl: `http://x-trmnl-ha:10000`, servers: [], call: ++finder.calls })
+    finder.calls = 0
+    return finder
+  }
+
+  it('probes once within five minutes', async () => {
+    const finder = countingFinder()
+    let now = 0
+    const cached = createLocalServerCache(finder, () => now)
+
+    await cached()
+    now += 4 * 60_000
+    await cached()
+
+    expect(finder.calls).toBe(1)
+  })
+
+  it('probes again after five minutes, so a new add-on appears', async () => {
+    const finder = countingFinder()
+    let now = 0
+    const cached = createLocalServerCache(finder, () => now)
+
+    await cached()
+    now += 5 * 60_000 + 1
+    await cached()
+
+    expect(finder.calls).toBe(2)
   })
 })
