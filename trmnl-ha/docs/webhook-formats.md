@@ -18,7 +18,7 @@ You pick this in the schedule editor, under **Webhook Format**.
 If the **Terminus** or **LaraPaper** add-on from this repository runs on the same Home Assistant, a schedule can send to it without anything leaving your network. The schedule editor then shows **Send to local server**, with a **Use the Terminus add-on** or **Use the LaraPaper add-on** button for each server it finds.
 
 - **LaraPaper:** create an **Image Webhook** plugin in LaraPaper and add it to your device's playlist. Paste the plugin's UUID into the box and press **Use the LaraPaper add-on**. The add-on fills in the webhook address and uses Raw Image.
-- **Terminus:** press **Use the Terminus add-on**, then sign in under **JWT Authentication**. The add-on fills in the webhook address, the Add-on URL and, when all your Terminus devices share one model, the Model ID.
+- **Terminus:** press **Use the Terminus add-on**, then sign in under **JWT Authentication**. The add-on fills in the webhook address, the Add-on URL and, when all your Terminus devices share one model, the Model ID. If they don't, the sign-in message says so and you enter the Model ID yourself.
 
 Your TRMNL still needs to point at that server: see each server add-on's setup steps. The box only appears when the add-ons come from the same repository, and the add-on looks for them again every five minutes, so a server you install shows up shortly after it starts.
 
