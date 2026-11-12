@@ -235,7 +235,7 @@ export class ScheduleExecutor {
         statusCode = statusMatch?.[1] ? parseInt(statusMatch[1], 10) : undefined
       }
 
-      if (this.#isRefusal(statusCode)) void this.#notifier.notifyUploadRefused(schedule, errorMessage)
+      if (this.#isRefusal(schedule, statusCode)) void this.#notifier.notifyUploadRefused(schedule, errorMessage)
 
       return {
         attempted: true,
@@ -248,8 +248,9 @@ export class ScheduleExecutor {
     }
   }
 
-  /** A 4xx other than a rate limit: sending the same image again will not help. */
-  #isRefusal(statusCode: number | undefined): boolean {
+  /** A 4xx other than a rate limit: sending the same image again will not help. A lapsed BYOS login has its own sign-in notice. */
+  #isRefusal(schedule: Schedule, statusCode: number | undefined): boolean {
+    if (statusCode === 401 && schedule.webhook_format?.byosConfig?.auth?.enabled) return false
     return statusCode !== undefined && statusCode >= 400 && statusCode < 500 && statusCode !== 429
   }
 

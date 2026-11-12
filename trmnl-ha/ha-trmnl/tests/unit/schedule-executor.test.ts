@@ -212,6 +212,15 @@ describe('ScheduleExecutor — refused upload notification', () => {
     expect(notifier.refused).not.toHaveBeenCalled()
   })
 
+  it('leaves an expired BYOS login to the sign-in notice', async () => {
+    mockFetch({ ok: false, status: 401, statusText: 'Unauthorized' })
+    const { executor, notifier } = createNotifyingExecutor()
+
+    await executor.call(buildByosSchedule())
+
+    expect(notifier.refused).not.toHaveBeenCalled()
+  })
+
   it('clears the notification when an upload succeeds', async () => {
     mockFetch({ ok: true, status: 200 })
     const { executor, notifier } = createNotifyingExecutor()
