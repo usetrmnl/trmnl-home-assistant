@@ -57,6 +57,7 @@ const mockDeps = {
   replaceAllSchedules: mockReplaceAllSchedules,
   byosLogin: mockByosLogin,
   getBaseUrl: (url: string) => new URL(url).origin,
+  readTerminusModelId: async () => '11',
 } as unknown as HttpRouterDeps
 import type { BrowserFacade } from '../../lib/browserFacade.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -1050,6 +1051,26 @@ describe('HttpRouter', () => {
 
       expect(body.access_token).toBe('test-access')
       expect(body.refresh_token).toBe('test-refresh')
+    })
+
+    it('includes the model id read from the server', async () => {
+      mockRequest = createRequestWithBody(
+        'POST',
+        JSON.stringify({
+          webhookUrl: 'https://byos.example.com/api/screens',
+          login: 'user@test.com',
+          password: 'secret',
+        }),
+      )
+      const url = new URL('http://localhost/api/byos/login')
+
+      await router.route(
+        mockRequest as unknown as IncomingMessage,
+        mockResponse as unknown as ServerResponse,
+        url,
+      )
+
+      expect(JSON.parse(mockResponse.body as string).model_id).toBe('11')
     })
 
     it('returns 401 when login fails', async () => {

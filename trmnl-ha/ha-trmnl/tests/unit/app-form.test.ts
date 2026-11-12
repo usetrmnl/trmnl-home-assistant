@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, it } from 'bun:test'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
 import presetsJson from '../../devices.json'
 import type { PresetsConfig, Schedule, TimestampPosition } from '../../types/domain.js'
 import { buildSchedule } from '../helpers/schedule-fixtures.js'
@@ -8,9 +8,11 @@ interface FormApp {
   init(): Promise<void>
   updateScheduleFromForm(): Promise<void>
   applyDevicePreset(): Promise<void>
+  useLocalServer(kind: string): Promise<void>
+  byosLogin(): Promise<void>
 }
 const globals = globalThis as unknown as {
-  window: { app: FormApp }
+  window: { app: FormApp; uiConfig?: unknown }
   document: Document
   localStorage: Storage
 }
@@ -62,6 +64,9 @@ beforeEach(async () => {
     }
     if (String(url).endsWith('/schedules')) return Response.json([schedule])
     if (String(url).endsWith('/presets')) return Response.json(presets)
+    if (String(url).endsWith('/byos/login')) {
+      return Response.json({ success: true, access_token: 'a', refresh_token: 'r', model_id: '11' })
+    }
     return Response.json([])
   }) as typeof fetch
   app = new App()
@@ -170,4 +175,82 @@ it('loads bottom-right for a schedule without a timestamp corner', async () => {
   await app.init()
   const select = content.innerHTML.match(/<select[^>]*id="s_timestamp_position"[^>]*>([\s\S]*?)<\/select>/)?.[1]
   expect(select).toContain('value="bottom-right" selected')
+})
+
+describe('send to local server', () => {
+  const localServers = {
+    addonUrl: 'http://local-trmnl-ha:10000',
+    servers: [
+      { kind: 'terminus', url: 'http://local-trmnl-terminus:2300' },
+      { kind: 'larapaper', url: 'http://local-trmnl-larapaper:8080' },
+    ],
+  }
+  const renderedForm = async () => {
+    const content = { innerHTML: '' }
+    inputs.set('tabContent', content)
+    await app.init()
+    return content.innerHTML
+  }
+
+  beforeEach(() => {
+    globals.window.uiConfig = { serverPort: 10000, localServers }
+    for (const id of ['confirmModal', 'confirmOverlay', 'confirmTitle', 'confirmMessage', 'confirmBtn', 'cancelBtn']) {
+      inputs.set(id, { classList: { add() {}, remove() {} } })
+    }
+  })
+
+  afterEach(() => {
+    delete globals.window.uiConfig
+  })
+
+  it('hides the choice outside Home Assistant', async () => {
+    delete globals.window.uiConfig
+    expect(await renderedForm()).not.toContain('Send to local server')
+  })
+
+  it('offers each local server that answered', async () => {
+    const html = await renderedForm()
+    expect(html).toContain('window.app.useLocalServer(\'terminus\')')
+    expect(html).toContain('window.app.useLocalServer(\'larapaper\')')
+  })
+
+  it('points the schedule at the LaraPaper plugin as a raw image', async () => {
+    inputs.set('s_larapaper_uuid', { value: ' 0f1e-uuid ' })
+    await app.useLocalServer('larapaper')
+    expect(saves.at(-1)).toMatchObject({
+      webhook_url: 'http://local-trmnl-larapaper:8080/api/plugin_settings/0f1e-uuid/image',
+      webhook_format: { format: 'raw' },
+    })
+  })
+
+  it('points the schedule at Terminus with this add-on as the image source', async () => {
+    await app.useLocalServer('terminus')
+    expect(saves.at(-1)).toMatchObject({
+      webhook_url: 'http://local-trmnl-terminus:2300/api/screens',
+      webhook_format: {
+        format: 'byos-hanami',
+        byosConfig: { delivery_mode: 'uri', addon_base_url: 'http://local-trmnl-ha:10000', auth: { enabled: true } },
+      },
+    })
+  })
+
+  it('takes the model id from the local Terminus after login', async () => {
+    schedule = buildSchedule({ webhook_url: 'http://local-trmnl-terminus:2300/api/screens' })
+    await app.init()
+    inputs.set('s_byos_auth_login', { value: 'me@example.com' })
+    inputs.set('s_byos_auth_password', { value: 'secret' })
+    void app.byosLogin()
+    while (saves.length === 0) await Bun.sleep(1)
+    expect(saves[0]!.webhook_format?.byosConfig?.model_id).toBe('11')
+  })
+
+  it('keeps the model id for a Terminus elsewhere', async () => {
+    schedule = buildSchedule({ webhook_url: 'https://terminus.example.com/api/screens' })
+    await app.init()
+    inputs.set('s_byos_auth_login', { value: 'me@example.com' })
+    inputs.set('s_byos_auth_password', { value: 'secret' })
+    void app.byosLogin()
+    while (saves.length === 0) await Bun.sleep(1)
+    expect(saves[0]!.webhook_format?.byosConfig?.model_id).toBe('1')
+  })
 })

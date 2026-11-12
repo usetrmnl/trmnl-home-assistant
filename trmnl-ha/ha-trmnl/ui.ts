@@ -27,7 +27,8 @@ import { atLeastHaVersion } from 'home-assistant-js-websocket/dist/util.js'
 import WebSocket from 'ws'
 import { hassUrl, hassToken, SERVER_PORT } from './const.js'
 import { loadPresets } from './devices.js'
-import type { PresetsConfig } from './types/domain.js'
+import type { LocalServers, PresetsConfig } from './types/domain.js'
+import { findLocalServers } from './lib/local-servers.js'
 import { uiLogger } from './lib/logger.js'
 
 const log = uiLogger()
@@ -94,6 +95,8 @@ interface UIConfig {
   cachedAt: number | null
   /** Server port for constructing Fetch URLs (10000 for add-on, configurable for standalone) */
   serverPort: number
+  /** Terminus and LaraPaper add-ons beside this one; null outside Home Assistant */
+  localServers: LocalServers | null
 }
 
 // =============================================================================
@@ -605,6 +608,7 @@ export async function handleUIRequest(
       connectionStatus,
       cachedAt,
       serverPort: SERVER_PORT,
+      localServers: await findLocalServers(),
     }
 
     const htmlPath = join(HTML_DIR, 'index.html')

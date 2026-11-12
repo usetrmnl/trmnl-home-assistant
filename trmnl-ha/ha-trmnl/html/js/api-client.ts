@@ -231,6 +231,8 @@ export interface ByosLoginResponse {
   access_token?: string
   refresh_token?: string
   obtained_at?: number
+  /** Model id all devices on the server share, when they share one */
+  model_id?: string
   error?: string
 }
 
