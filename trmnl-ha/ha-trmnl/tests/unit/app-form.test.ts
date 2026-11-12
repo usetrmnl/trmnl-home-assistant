@@ -244,6 +244,23 @@ describe('send to local server', () => {
     expect(saves[0]!.webhook_format?.byosConfig?.model_id).toBe('11')
   })
 
+  it('says why the model id stayed when the local Terminus names none', async () => {
+    const message = { textContent: '' }
+    inputs.set('confirmMessage', message)
+    const answer = globalThis.fetch
+    globalThis.fetch = (async (url: unknown, init?: RequestInit) =>
+      String(url).endsWith('/byos/login')
+        ? Response.json({ success: true, access_token: 'a', refresh_token: 'r' })
+        : answer(url as string, init)) as typeof fetch
+    schedule = buildSchedule({ webhook_url: 'http://local-trmnl-terminus:2300/api/screens' })
+    await app.init()
+    inputs.set('s_byos_auth_login', { value: 'me@example.com' })
+    inputs.set('s_byos_auth_password', { value: 'secret' })
+    void app.byosLogin()
+    while (!message.textContent) await Bun.sleep(1)
+    expect(message.textContent).toContain('more than one model')
+  })
+
   it('keeps the model id for a Terminus elsewhere', async () => {
     schedule = buildSchedule({ webhook_url: 'https://terminus.example.com/api/screens' })
     await app.init()

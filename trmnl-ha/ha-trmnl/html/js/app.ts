@@ -1090,11 +1090,9 @@ class App {
         login_password: remember ? password : undefined,
       })
       const localTerminusUrl = this.#localServerUrl('terminus')
-      if (
-        result.model_id &&
-        localTerminusUrl &&
-        schedule.webhook_url.startsWith(localTerminusUrl)
-      ) {
+      const isLocalTerminus =
+        !!localTerminusUrl && schedule.webhook_url.startsWith(localTerminusUrl)
+      if (isLocalTerminus && result.model_id) {
         updates.webhook_format!.byosConfig!.model_id = result.model_id
       }
 
@@ -1103,7 +1101,10 @@ class App {
 
       await this.#confirmModal.alert({
         title: 'Success',
-        message: 'Successfully authenticated with BYOS server.',
+        message:
+          isLocalTerminus && !result.model_id
+            ? 'Signed in. The Model ID was not filled in because your Terminus devices use more than one model, or none has connected yet. Enter the model ID of the device this screen is for.'
+            : 'Successfully authenticated with BYOS server.',
         type: 'success',
       })
     } catch (err) {
