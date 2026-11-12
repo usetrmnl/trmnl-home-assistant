@@ -4,6 +4,8 @@
 
 This is a Home Assistant add-on that runs a [TRMNL Terminus Server](https://github.com/usetrmnl/terminus) on your instance to enable self-hosted local management of TRMNL devices (BYOS). The server is exposed to port `2300` by default.
 
+To show a Home Assistant dashboard on a device, use **Send to local server** in the TRMNL HA add-on: it finds this add-on and fills in the addresses ([how](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/docs/webhook-formats.md#send-to-a-local-server)).
+
 ## Configuration
 
 ### Home Assistant IP (required)
