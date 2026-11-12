@@ -28,7 +28,7 @@ import WebSocket from 'ws'
 import { hassUrl, hassToken, SERVER_PORT } from './const.js'
 import { loadPresets } from './devices.js'
 import type { LocalServers, PresetsConfig } from './types/domain.js'
-import { findLocalServers } from './lib/local-servers.js'
+import { cachedLocalServers } from './lib/local-servers.js'
 import { uiLogger } from './lib/logger.js'
 
 const log = uiLogger()
@@ -608,7 +608,7 @@ export async function handleUIRequest(
       connectionStatus,
       cachedAt,
       serverPort: SERVER_PORT,
-      localServers: await findLocalServers(),
+      localServers: await cachedLocalServers(),
     }
 
     const htmlPath = join(HTML_DIR, 'index.html')
