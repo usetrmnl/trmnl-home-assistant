@@ -124,7 +124,7 @@ export class ScheduleExecutor {
       outputDir: this.#outputDir,
       scheduleName: schedule.name,
       imageBuffer,
-      format: format as 'png' | 'jpeg' | 'bmp',
+      format: format as 'png' | 'jpeg',
     })
     log.info`Saved: ${outputPath}`
 
@@ -183,7 +183,7 @@ export class ScheduleExecutor {
           webhookUrl,
           webhookHeaders: schedule.webhook_headers,
           imageBuffer,
-          format: format as 'png' | 'jpeg' | 'bmp',
+          format: format as 'png' | 'jpeg',
           webhookFormat: schedule.webhook_format,
           screenshotUrl,
         onTokenRefresh: (newTokens) => {

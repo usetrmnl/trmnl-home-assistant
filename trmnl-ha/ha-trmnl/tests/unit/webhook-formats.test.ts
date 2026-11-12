@@ -39,13 +39,6 @@ describe('RawFormatTransformer', () => {
 
     expect(result.contentType).toBe('image/jpeg')
   })
-
-  it('sets correct Content-Type for BMP', () => {
-    const imageBuffer = Buffer.from('test')
-    const result = transformer.transform(imageBuffer, 'bmp')
-
-    expect(result.contentType).toBe('image/bmp')
-  })
 })
 
 describe('ByosHanamiFormatTransformer', () => {
@@ -131,13 +124,6 @@ describe('ByosHanamiFormatTransformer', () => {
       const payload = JSON.parse(result.body as string)
 
       expect(payload.screen.file_name).toBe('ha-dashboard.jpeg')
-    })
-
-    it('sets correct file_name extension for BMP', () => {
-      const result = transformer.transform(imageBuffer, 'bmp', validConfig)
-      const payload = JSON.parse(result.body as string)
-
-      expect(payload.screen.file_name).toBe('ha-dashboard.bmp')
     })
   })
 

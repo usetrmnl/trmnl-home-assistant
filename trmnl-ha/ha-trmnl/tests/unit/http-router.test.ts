@@ -1191,14 +1191,6 @@ describe('HttpRouter', () => {
       expect(Buffer.from(mockResponse.body)).toEqual(bytes)
     })
 
-    it('serves bmp captures with image/bmp', async () => {
-      fs.writeFileSync(path.join(outputDir, 'Screen_1.bmp'), Buffer.from([1]))
-
-      await routeTo('/output/Screen_1.bmp')
-
-      expect(mockResponse.headers['content-type']).toBe('image/bmp')
-    })
-
     it('returns 404 for a missing file', async () => {
       await routeTo('/output/nope.png')
 

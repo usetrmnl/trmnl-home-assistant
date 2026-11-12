@@ -365,7 +365,6 @@ class RequestHandler {
    */
   #getContentType(format: ImageFormat): string {
     if (format === 'jpeg') return 'image/jpeg'
-    if (format === 'bmp') return 'image/bmp'
     return 'image/png'
   }
 

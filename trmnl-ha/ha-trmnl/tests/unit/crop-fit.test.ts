@@ -57,17 +57,17 @@ for (const [path, build] of Object.entries(builders)) {
       expect(await getImageInfo(image)).toMatchObject({ width: 1072, height: 1448 })
     })
 
-    it('fits before the dithering rotation and BMP conversion', async () => {
+    it('fits before the dithering rotation and format conversion', async () => {
       const { image } = await capture({
         rotate: 90,
-        format: 'bmp',
+        format: 'jpeg',
         dithering: {
           enabled: true, method: 'threshold', palette: 'bw',
           gammaCorrection: true, blackLevel: 0, whiteLevel: 100,
           normalize: false, saturationBoost: false,
         },
       })
-      expect(await getImageInfo(image)).toEqual({ width: 1072, height: 1448, format: 'bmp3' })
+      expect(await getImageInfo(image)).toEqual({ width: 1072, height: 1448, format: 'jpeg' })
     })
 
     it('uniformly scales a square and centers it on white padding', async () => {

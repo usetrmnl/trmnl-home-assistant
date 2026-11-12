@@ -720,9 +720,6 @@ export class RenderScheduleContent {
             <option value="jpeg" ${
               s.format === 'jpeg' ? 'selected' : ''
             }>JPEG</option>
-            <option value="bmp" ${
-              s.format === 'bmp' ? 'selected' : ''
-            }>BMP</option>
           </select>
         </div>
         <div>
@@ -741,7 +738,7 @@ export class RenderScheduleContent {
           </select>
         </div>
       </div>
-      <p class="text-xs text-gray-500 mt-1">PNG (lossless), JPEG (smaller files), or BMP (raw) | Rotate for portrait/landscape displays</p>
+      <p class="text-xs text-gray-500 mt-1">PNG (lossless) or JPEG (smaller files) | Rotate for portrait/landscape displays</p>
     `
   }
 

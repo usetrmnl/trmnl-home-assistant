@@ -724,14 +724,6 @@ describeDithering('Dithering Module', () => {
       expect(result[0]).toBe(0xff)
       expect(result[1]).toBe(0xd8)
     })
-
-    it('converts to BMP format', async () => {
-      const result = await convertToFormat(testImageBuffer, 'bmp')
-
-      // Check BMP magic number ('BM')
-      expect(result[0]).toBe(0x42) // 'B'
-      expect(result[1]).toBe(0x4d) // 'M'
-    })
   })
 
   // ==========================================================================
@@ -854,21 +846,6 @@ describeDithering('Dithering Module', () => {
       expect(bwResult.length / 1024).toBeLessThan(100)
       expect(gray4Result.length / 1024).toBeLessThan(100)
       expect(gray16Result.length / 1024).toBeLessThan(100)
-    })
-
-    it('BMP format works for 1-bit images', async () => {
-      const result = await applyDithering(largeTestImage, {
-        method: 'floyd-steinberg',
-        palette: 'bw',
-        format: 'bmp',
-      })
-
-      const sizeKB = result.length / 1024
-      // BMP 1-bit is very efficient for e-ink
-      expect(sizeKB).toBeLessThan(60)
-      // Check BMP magic number
-      expect(result[0]).toBe(0x42) // 'B'
-      expect(result[1]).toBe(0x4d) // 'M'
     })
   })
 

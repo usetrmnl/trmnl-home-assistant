@@ -389,7 +389,6 @@ export const MAX_NEXT_REQUESTS: number = 100
 export const VALID_FORMATS: readonly ImageFormat[] = [
   'png',
   'jpeg',
-  'bmp',
 ] as const
 
 /**
@@ -508,7 +507,6 @@ export const COLD_START_EXTRA_WAIT: number = 2500
  */
 export const CONTENT_TYPES: ContentTypeMap = {
   jpeg: 'image/jpeg',
-  bmp: 'image/bmp',
   png: 'image/png',
 }
 

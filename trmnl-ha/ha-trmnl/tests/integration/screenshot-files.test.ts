@@ -79,17 +79,6 @@ describe('Screenshot File Operations', () => {
       expect(result.filename).toMatch(/\.jpeg$/)
     })
 
-    it('uses correct file extension for bmp', () => {
-      const result = saveScreenshot({
-        outputDir: TEST_OUTPUT_DIR,
-        scheduleName: 'Test',
-        imageBuffer: createPNGBuffer(),
-        format: 'bmp',
-      })
-
-      expect(result.filename).toMatch(/\.bmp$/)
-    })
-
     it('sanitizes schedule name for filename', () => {
       const result = saveScreenshot({
         outputDir: TEST_OUTPUT_DIR,

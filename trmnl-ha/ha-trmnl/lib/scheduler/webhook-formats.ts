@@ -19,7 +19,6 @@ import type {
 const CONTENT_TYPES: Record<ImageFormat, string> = {
   png: 'image/png',
   jpeg: 'image/jpeg',
-  bmp: 'image/bmp',
 }
 
 /** Transformed webhook payload ready for HTTP POST */
@@ -36,7 +35,7 @@ export interface FormatTransformer {
    * Transforms image buffer into format-specific webhook payload.
    *
    * @param imageBuffer - Raw image data
-   * @param format - Image format (png, jpeg, bmp)
+   * @param format - Image format (png, jpeg)
    * @param config - Optional format-specific configuration
    * @param screenshotUrl - Optional screenshot URL for URI mode
    * @returns Payload with body and content type
