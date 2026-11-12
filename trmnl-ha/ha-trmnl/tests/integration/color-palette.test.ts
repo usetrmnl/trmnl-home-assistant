@@ -238,18 +238,6 @@ describe('Color Palette Dithering', () => {
       expect(result[0]).toBe(0xff)
       expect(result[1]).toBe(0xd8)
     }, 30000)
-
-    it('produces valid BMP with color palette', async () => {
-      const result = await applyDithering(colorfulImage, {
-        method: 'floyd-steinberg',
-        palette: 'color-6a',
-        format: 'bmp',
-      })
-
-      // BMP magic number
-      expect(result[0]).toBe(0x42) // 'B'
-      expect(result[1]).toBe(0x4d) // 'M'
-    }, 30000)
   })
 
   describe('dithering quality options', () => {

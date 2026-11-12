@@ -62,7 +62,6 @@ const MIME_TYPES: Record<string, string> = {
   gif: 'image/gif',
   svg: 'image/svg+xml',
   ico: 'image/x-icon',
-  bmp: 'image/bmp',
 }
 
 /** Scheduler interface for manual execution */

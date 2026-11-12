@@ -12,7 +12,7 @@ import gmLib from 'gm'
 const gm = gmLib.subClass({ imageMagick: true })
 
 /** Supported image format types */
-type ImageFormat = 'png' | 'jpeg' | 'bmp' | 'unknown'
+type ImageFormat = 'png' | 'jpeg' | 'unknown'
 
 // =============================================================================
 // IMAGEMAGICK-BASED TEST IMAGES (for integration tests)
@@ -229,79 +229,6 @@ export function createJPEGBuffer(): Buffer {
 }
 
 /**
- * Creates a minimal valid BMP buffer
- * Uses BMP file format specification
- */
-export function createBMPBuffer(): Buffer {
-  // Minimal 1x1 black BMP (58 bytes)
-  const bmpData = Buffer.from([
-    // BMP Header
-    0x42,
-    0x4d, // 'BM' signature
-    0x3a,
-    0x00,
-    0x00,
-    0x00, // File size: 58 bytes
-    0x00,
-    0x00, // Reserved
-    0x00,
-    0x00, // Reserved
-    0x36,
-    0x00,
-    0x00,
-    0x00, // Offset to pixel data: 54 bytes
-    // DIB Header (BITMAPINFOHEADER)
-    0x28,
-    0x00,
-    0x00,
-    0x00, // Header size: 40 bytes
-    0x01,
-    0x00,
-    0x00,
-    0x00, // Width: 1
-    0x01,
-    0x00,
-    0x00,
-    0x00, // Height: 1
-    0x01,
-    0x00, // Color planes: 1
-    0x18,
-    0x00, // Bits per pixel: 24
-    0x00,
-    0x00,
-    0x00,
-    0x00, // Compression: none
-    0x04,
-    0x00,
-    0x00,
-    0x00, // Image size: 4 bytes (including padding)
-    0x00,
-    0x00,
-    0x00,
-    0x00, // X pixels per meter
-    0x00,
-    0x00,
-    0x00,
-    0x00, // Y pixels per meter
-    0x00,
-    0x00,
-    0x00,
-    0x00, // Colors in palette
-    0x00,
-    0x00,
-    0x00,
-    0x00, // Important colors
-    // Pixel data (1 pixel, black, with 1 byte padding)
-    0x00,
-    0x00,
-    0x00,
-    0x00, // BGR + padding
-  ])
-
-  return bmpData
-}
-
-/**
  * Validates image buffer magic number matches expected format
  */
 export function validateImageMagic(buffer: Buffer, format: string): boolean {
@@ -322,12 +249,6 @@ export function validateImageMagic(buffer: Buffer, format: string): boolean {
     case 'jpg':
       return buffer[0] === 0xff && buffer[1] === 0xd8
 
-    case 'bmp':
-      return (
-        buffer[0] === 0x42 && // 'B'
-        buffer[1] === 0x4d
-      ) // 'M'
-
     default:
       return false
   }
@@ -339,7 +260,6 @@ export function validateImageMagic(buffer: Buffer, format: string): boolean {
 export function getImageFormat(buffer: Buffer): ImageFormat {
   if (validateImageMagic(buffer, 'png')) return 'png'
   if (validateImageMagic(buffer, 'jpeg')) return 'jpeg'
-  if (validateImageMagic(buffer, 'bmp')) return 'bmp'
   return 'unknown'
 }
 

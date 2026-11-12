@@ -107,6 +107,8 @@ function migrateSchedule(schedule: Partial<Schedule>): Schedule {
     align_to_check_in: schedule.align_to_check_in ?? true,
     interval_minutes,
     dithering,
+    // TRMNL refuses BMP, so a schedule saved with it would never reach the device.
+    format: (schedule.format as string) === 'bmp' ? 'png' : schedule.format,
   } as Schedule
 }
 

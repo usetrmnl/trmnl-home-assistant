@@ -60,3 +60,19 @@ describe('migrateSchedule (via loadSchedules)', () => {
     expect(schedule!.interval_minutes).toBeNull()
   })
 })
+
+describe('migrateSchedule format', () => {
+  it('converts a saved BMP schedule to PNG', async () => {
+    const file = await writeSchedules([{ id: '1', name: 'A', format: 'bmp' }])
+    const [schedule] = await loadSchedules(file)
+
+    expect(schedule!.format).toBe('png')
+  })
+
+  it('keeps a JPEG schedule as JPEG', async () => {
+    const file = await writeSchedules([{ id: '1', name: 'A', format: 'jpeg' }])
+    const [schedule] = await loadSchedules(file)
+
+    expect(schedule!.format).toBe('jpeg')
+  })
+})

@@ -288,14 +288,7 @@ function configureOutputFormat(
 ): { image: State; outputFormat: string } {
   let outputFormat: string = format
 
-  if (format === 'bmp') {
-    outputFormat = 'bmp3'
-    if (bitDepth === 1) {
-      image = image.out('-monochrome')
-    } else if (bitDepth !== null && bitDepth !== undefined) {
-      image = image.out('-depth', String(bitDepth))
-    }
-  } else if (format === 'jpeg') {
+  if (format === 'jpeg') {
     outputFormat = 'jpeg'
     image = image.quality(60).interlace('Line')
   } else if (format === 'png') {
@@ -645,7 +638,7 @@ interface GrayscaleDitheringOptions {
 
 /**
  * Calculate bit depth from number of colors.
- * Used for PNG/BMP compression optimization.
+ * Used for PNG compression optimization.
  */
 function getBitDepth(colors: number): number {
   // 2 colors = 1-bit, 4 = 2-bit, 16 = 4-bit, 256 = 8-bit

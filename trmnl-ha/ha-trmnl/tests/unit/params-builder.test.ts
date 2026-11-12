@@ -90,14 +90,6 @@ describe('params-builder', () => {
       expect(params.format).toBe('jpeg')
     })
 
-    it('uses bmp format', () => {
-      const schedule = buildSchedule({ format: 'bmp' })
-
-      const params = buildParams(schedule)
-
-      expect(params.format).toBe('bmp')
-    })
-
     it('defaults to png when undefined', () => {
       const schedule = buildSchedule({ format: undefined })
 

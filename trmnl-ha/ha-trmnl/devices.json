@@ -8,7 +8,7 @@
       "height": 480
     },
     "webhook_url": "",
-    "format": "bmp",
+    "format": "png",
     "rotate": 0,
     "dithering": {
       "enabled": true,
@@ -380,7 +380,7 @@
       "height": 342
     },
     "webhook_url": "",
-    "format": "bmp",
+    "format": "png",
     "rotate": 0,
     "dithering": {
       "enabled": true,

@@ -26,7 +26,6 @@ import { WebhookTestServer } from '../helpers/webhook-server.js'
 import {
   createPNGBuffer,
   createJPEGBuffer,
-  createBMPBuffer,
   validateImageMagic,
 } from '../helpers/image-helper.js'
 import {
@@ -82,8 +81,6 @@ describe('Webhook Integration', () => {
 
     if (format === 'jpeg') {
       buffer = createJPEGBuffer()
-    } else if (format === 'bmp') {
-      buffer = createBMPBuffer()
     } else {
       buffer = createPNGBuffer()
     }
@@ -229,16 +226,6 @@ describe('Webhook Integration', () => {
 
       const requests = webhookServer.getRequests()
       expect(requests[0]!.headers['content-type']).toBe('image/jpeg')
-    })
-
-    it('sends image/bmp for BMP format', async () => {
-      const schedule = asSchedule(
-        createWebhookSchedule('http://localhost:10002/bmp'),
-      )
-      await uploadToWebhook(schedule, createBMPBuffer(), 'bmp')
-
-      const requests = webhookServer.getRequests()
-      expect(requests[0]!.headers['content-type']).toBe('image/bmp')
     })
 
     it('does not allow webhook_headers to override Content-Type', async () => {
@@ -499,26 +486,6 @@ describe('Webhook Integration', () => {
 
       expect(requests).toHaveLength(1)
       expect(validateImageMagic(requests[0]!.body, 'jpeg')).toBe(true)
-    })
-
-    it('sends BMP format through webhook', async () => {
-      webhookServer.clearRequests()
-      const schedule = asSchedule(
-        createTestSchedule({
-          name: 'Test BMP',
-          format: 'bmp',
-          webhook_url: 'http://localhost:10002/format-test',
-          enabled: false,
-        }),
-      )
-
-      await executor.call(schedule)
-      await waitFor(() => webhookServer.getRequests().length > 0, 2000)
-
-      const requests = webhookServer.getRequests()
-
-      expect(requests).toHaveLength(1)
-      expect(validateImageMagic(requests[0]!.body, 'bmp')).toBe(true)
     })
 
     it('sends dithered images through webhook', async () => {

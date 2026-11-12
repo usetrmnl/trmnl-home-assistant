@@ -491,7 +491,7 @@ class App {
           schedule.viewport.height,
         ),
       },
-      format: (select('s_format') as 'png' | 'jpeg' | 'bmp') || schedule.format,
+      format: (select('s_format') as 'png' | 'jpeg') || schedule.format,
       rotate: this.#parseRotation(select('s_rotate')),
       zoom: parseFloatOrDefault(input('s_zoom'), 1),
       wait: this.#parseWait(input('s_wait')),
