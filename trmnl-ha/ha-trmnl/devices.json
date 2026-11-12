@@ -93,29 +93,6 @@
     "createdAt": "2025-11-19T00:00:00.000Z",
     "updatedAt": "2025-11-19T00:00:00.000Z"
   },
-  "schedule_trmnl_rgb": {
-    "name": "TRMNL RGB",
-    "cron": "0 * * * *",
-    "dashboard_path": "/lovelace/0",
-    "viewport": {
-      "width": 2560,
-      "height": 1440
-    },
-    "webhook_url": "",
-    "format": "png",
-    "rotate": 0,
-    "dithering": {
-      "enabled": true,
-      "method": "floyd-steinberg",
-      "bitDepth": 1,
-      "gammaCorrection": true,
-      "blackLevel": 4,
-      "whiteLevel": 81
-    },
-    "id": "schedule_trmnl_rgb",
-    "createdAt": "2025-11-19T00:00:00.000Z",
-    "updatedAt": "2025-11-19T00:00:00.000Z"
-  },
   "schedule_trmnl_x": {
     "name": "TRMNL X",
     "cron": "0 * * * *",
