@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.2] - 2026-11-13
+
+### Fixed
+
+- New Home Assistant OS installs serve Home Assistant on port 80, where the add-on's default address (port 8123) was refused, so every capture failed until the address was changed by hand. With the address left at its default, the add-on now asks Home Assistant which port it uses. An address you typed is kept (#147)
+
 ## [0.14.1] - 2026-11-13
 
 ### Fixed
