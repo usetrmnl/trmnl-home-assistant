@@ -31,6 +31,7 @@ import {
   isRefreshable,
 } from './lib/scheduler/byos-auth.js'
 import { notifyReauthRequired } from './lib/ha-notify.js'
+import { errorKind } from './lib/error-kind.js'
 import { sleep } from './lib/sleep.js'
 import {
   SCHEDULER_RELOAD_INTERVAL_MS,
@@ -234,8 +235,8 @@ export class Scheduler {
           })
         })
       }
-    } catch {
-      log.error`BYOS token keepalive failed`
+    } catch (err) {
+      log.error`BYOS token keepalive failed: ${errorKind(err)}`
     } finally {
       this.#refreshingTokens = false
     }

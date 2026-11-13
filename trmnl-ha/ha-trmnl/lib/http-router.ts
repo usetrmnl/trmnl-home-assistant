@@ -43,6 +43,7 @@ import type { Schedule } from '../types/domain.js'
 import type { TokenResponse } from './scheduler/byos-auth.js'
 import { toJson } from './json.js'
 import { httpLogger } from './logger.js'
+import { errorKind } from './error-kind.js'
 import { metricsSummary } from './metrics.js'
 import { transpileTypeScript } from './transpile-ts.js'
 
@@ -485,7 +486,7 @@ export class HttpRouter {
         }),
       )
     } catch (err) {
-      log.error`BYOS login failed`
+      log.error`BYOS login failed: ${errorKind(err)}`
       response.writeHead(401)
       response.end(toJson({ error: (err as Error).message }))
     }

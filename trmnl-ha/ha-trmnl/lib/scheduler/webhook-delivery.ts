@@ -9,6 +9,7 @@
 
 import type { ImageFormat, WebhookFormatConfig } from '../../types/domain.js'
 import { webhookLogger } from '../logger.js'
+import { errorKind } from '../error-kind.js'
 import { getTransformer } from './webhook-formats.js'
 import { getValidAccessToken, getBaseUrl, type TokenResponse } from './byos-auth.js'
 import { parseNextCheckInAt } from './check-in-alignment.js'
@@ -111,8 +112,8 @@ async function findExistingByosScreen(
 
     log.debug`Found existing screen with model_id=${modelId} name=${screenName}`
     return existingScreen.id
-  } catch {
-    log.error`Error finding screen`
+  } catch (err) {
+    log.error`Error finding screen: ${errorKind(err)}`
     return null
   }
 }
@@ -274,6 +275,7 @@ class DeliverWebhook {
       throw new Error(
         `Could not reach ${host}: ${detail}. ` +
           `If ${host} is a local hostname, it may not resolve inside the add-on container — try the server's IP address instead.`,
+        { cause: err },
       )
     }
   }

@@ -13,6 +13,7 @@ import type {
   ScheduleUpdate,
 } from '../../types/domain.js'
 import { webhookLogger } from '../logger.js'
+import { errorKind } from '../error-kind.js'
 
 const log = webhookLogger()
 
@@ -191,8 +192,8 @@ async function relogin(
     adoptTokens(auth, tokens, onTokenRefresh)
     log.info`BYOS auth: re-authenticated with the stored login`
     return tokens.access_token
-  } catch {
-    log.error`BYOS auth: re-authentication failed`
+  } catch (err) {
+    log.error`BYOS auth: re-authentication failed: ${errorKind(err)}`
     return null
   }
 }
@@ -243,7 +244,7 @@ export async function getValidAccessToken(
     adoptTokens(auth, newTokens, onTokenRefresh)
 
     return newTokens.access_token
-  } catch {
+  } catch (err) {
     // A rejected refresh is not proof the session died: Rodauth rotates
     // refresh tokens on use, so a concurrent refresh (send path vs keepalive,
     // each holding its own copy of the auth config) leaves the loser with an
@@ -255,7 +256,7 @@ export async function getValidAccessToken(
     // live ~100 years where session expiration is off, and where it is on they
     // outlive the refresh window), and a push with a genuinely dead token
     // fails no worse than one with none.
-    log.warn`BYOS auth: refresh failed`
+    log.warn`BYOS auth: refresh failed: ${errorKind(err)}`
     return (
       (await relogin(getBaseUrl(webhookUrl), auth, onTokenRefresh)) ??
       auth.access_token

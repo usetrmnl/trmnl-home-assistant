@@ -83,7 +83,7 @@ describe('credential-safe webhook logs', () => {
       expect(result.webhook?.success).toBe(false)
       expect(result.webhook?.error).toContain(credential)
       expectSafeLogs()
-      expect(logs!.contains('webhook failed: HTTP unknown', 'error')).toBe(true)
+      expect(logs!.contains('webhook failed: Error', 'error')).toBe(true)
       expect(logs!.contains('FAILED (HTTP unknown)')).toBe(true)
     })
   }
@@ -112,7 +112,7 @@ describe('credential-safe webhook logs', () => {
       const expectedLog = {
         'list error': 'Error finding screen',
         'list failure': 'Failed to list screens: HTTP 503',
-        'patch error': 'webhook failed: HTTP unknown',
+        'patch error': 'webhook failed: Error',
         'patch failure': 'PATCH failed: HTTP 503',
         'patch success': 'PATCH successful: HTTP 200',
       }[stage]!
