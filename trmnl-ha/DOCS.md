@@ -156,7 +156,7 @@ bun run dev
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `access_token` | string | *required* | HA long-lived access token |
-| `home_assistant_url` | string | `http://homeassistant:8123` | Base URL (works with any website) |
+| `home_assistant_url` | string | `http://homeassistant:8123` | Base URL (works with any website). Left at the default, the add-on asks Home Assistant which port it serves on, since new installs use port 80. |
 | `timezone` | string | (system) | Timezone for scheduled captures (e.g., `America/New_York`) |
 | `keep_browser_open` | bool | `false` | Keep browser alive between requests (faster, more memory) |
 | `timestamp_overlay` | bool | `false` | Stamp the capture time in the bottom-right corner of every screenshot. Can also be enabled per schedule ("Show Capture Time") or per request with the `timestamp` URL parameter. |

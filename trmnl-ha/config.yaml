@@ -7,6 +7,8 @@ image: ghcr.io/usetrmnl/trmnl-ha-{arch}
 # NOTE: Uncomment after setting up Codenotary signing in CI
 # codenotary: dev@usetrmnl.com
 homeassistant_api: true
+# Reads Core's port from Supervisor: new installs serve Core on 80, not 8123.
+hassio_api: true
 init: false # Image ships its own init (tini) to reap orphaned Chromium children (#72)
 apparmor: true
 watchdog: "http://[HOST]:10000/health"

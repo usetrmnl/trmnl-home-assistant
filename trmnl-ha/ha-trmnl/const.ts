@@ -35,6 +35,7 @@ export {
   type PaletteOption,
 } from './html/js/palette-options.js'
 import { PALETTE_OPTIONS } from './html/js/palette-options.js'
+import { resolveAddonHassUrl } from './lib/core-url.js'
 
 /** Lookup label from palette-options (single source of truth) */
 const label = (value: string): string =>
@@ -243,7 +244,7 @@ if (useMockHA) {
 const rawHassUrl: string = useMockHA
   ? 'http://localhost:8123' // Mock HA server
   : isAddOn
-    ? options.home_assistant_url || 'http://homeassistant:8123'
+    ? await resolveAddonHassUrl(options.home_assistant_url, process.env['SUPERVISOR_TOKEN'])
     : options.home_assistant_url || 'http://localhost:8123'
 
 export const hassUrl: string = rawHassUrl.replace(/\/+$/, '')
