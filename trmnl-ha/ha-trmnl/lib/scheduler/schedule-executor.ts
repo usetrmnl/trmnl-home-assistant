@@ -23,6 +23,7 @@ import {
 } from '../../const.js'
 import { loadSchedules, updateSchedule } from '../scheduleStore.js'
 import { buildRefreshedAuthUpdate } from './byos-auth.js'
+import { errorKind } from '../error-kind.js'
 import { notifyUploadRefused, clearUploadRefused } from '../ha-notify.js'
 import type {
   Schedule,
@@ -236,7 +237,7 @@ export class ScheduleExecutor {
 
       // Remote errors can echo credentials, including only part of a URL.
       // Keep details for the UI, but log only the numeric status.
-      log.error`Schedule "${schedule.name}" webhook failed: HTTP ${statusCode ?? 'unknown'}`
+      log.error`Schedule "${schedule.name}" webhook failed: ${statusCode ? `HTTP ${statusCode}` : errorKind(err)}`
 
       if (this.#isRefusal(schedule, statusCode)) void this.#notifier.notifyUploadRefused(schedule, errorMessage)
 
