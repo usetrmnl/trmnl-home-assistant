@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.3] - 2026-11-13
+
+### Fixed
+
+- Webhook addresses, server replies and sign-in errors no longer appear in the add-on log, where they could expose upload credentials when a log is shared. The log keeps the HTTP status or the kind of error (for example ECONNREFUSED), and the add-on page still shows the full detail. Thanks to @lunaroja (#135)
+
 ## [0.14.2] - 2026-11-13
 
 ### Fixed
