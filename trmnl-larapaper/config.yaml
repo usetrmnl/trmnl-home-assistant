@@ -1,6 +1,6 @@
 ---
 name: LaraPaper (BYOS)
-version: "0.46.0-1"
+version: "0.46.0-2"
 slug: trmnl-larapaper
 description: >-
   Runs LaraPaper, a self-hosted TRMNL server (BYOS) with recipes, playlists and

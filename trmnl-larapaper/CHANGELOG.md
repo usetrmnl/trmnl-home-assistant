@@ -10,6 +10,15 @@ between upstream releases takes a `-1`, `-2` suffix.
 Each entry starts with the bundled LaraPaper release's own notes (on the version that
 first bundles it), followed by the add-on's own changes under "Home Assistant add-on".
 
+## [0.46.0-2] - 2026-11-14
+
+### Home Assistant add-on
+
+- LaraPaper's queue worker and scheduler run as `www-data`, as in LaraPaper's own image
+  and as the AppArmor profile describes; they ran as root. From LaraPaper 0.47.0 they
+  also run recipes' transform code (with the "Pre-render playlist items" Lab feature on).
+- The smoke test checks both, and that a recipe transform runs (LaraPaper 0.47.0 and up).
+
 ## [0.46.0-1] - 2026-11-14
 
 ### Home Assistant add-on

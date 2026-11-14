@@ -65,6 +65,28 @@ png=$(docker exec -u www-data "$APP" php artisan tinker --execute '
     echo "png=", Illuminate\Support\Facades\Storage::disk("public")->path("images/generated/$id.png");' 2>&1 | sed -n 's/^png=//p')
 check "renders a screen" docker exec "$APP" test -s "${png:-/missing}"
 
+# --- Services ----------------------------------------------------------------------
+# The queue worker and the scheduler run jobs that render screens and, from LaraPaper
+# 0.47.0, recipes' transform code: as www-data, as in LaraPaper's own image
+for service in queue:work schedule:work; do
+    check "$service runs as www-data" sh -c \
+        "docker exec $APP ps -o user,args | grep 'artisan $service' | grep -v grep | grep -q '^www-data'"
+done
+
+# A recipe transform (LaraPaper 0.47.0+) runs: Node under its permission model, so a
+# confined add-on (SMOKE_DOCKER_ARGS) is shown to allow it
+# shellcheck disable=SC2016 # PHP code
+transform=$(docker exec -u www-data "$APP" php artisan tinker --execute '
+    if (! class_exists(App\Services\Plugin\Transform\LocalTransformProvider::class)) { echo "transform=none"; return; }
+    $result = app(App\Services\Plugin\Transform\LocalTransformProvider::class)
+        ->execute("node", "function run(input) { return { count: input.items.length }; }", ["items" => [1, 2, 3], "trmnl" => []]);
+    echo "transform=", json_encode($result->output);' 2>&1 | sed -n 's/^transform=//p')
+if [ "$transform" = none ]; then
+    echo "skip - recipe transforms (LaraPaper before 0.47.0)"
+else
+    check "recipe transforms run" test "$transform" = '{"count":3}'
+fi
+
 # --- Options and /data -------------------------------------------------------------
 check "App URL from the options" docker exec "$APP" grep -qx 'APP_URL=http://localhost:4567' /var/www/html/.env
 check "registration from the options" docker exec "$APP" grep -qx 'MULTIUSER_REGISTRATION_ENABLED=0' /var/www/html/.env

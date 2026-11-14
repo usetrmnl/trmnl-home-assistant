@@ -1,0 +1,6 @@
+#!/command/execlineb -P
+# As www-data, like LaraPaper's own image: the add-on runs as root to take ownership of
+# /data, and s6 would otherwise start this as root too.
+s6-setuidgid www-data
+cd /var/www/html
+php /var/www/html/artisan schedule:work
