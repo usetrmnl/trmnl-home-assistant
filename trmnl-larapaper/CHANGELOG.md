@@ -10,6 +10,17 @@ between upstream releases takes a `-1`, `-2` suffix.
 Each entry starts with the bundled LaraPaper release's own notes (on the version that
 first bundles it), followed by the add-on's own changes under "Home Assistant add-on".
 
+## [0.46.0-1] - 2026-11-14
+
+### Home Assistant add-on
+
+- **Allow registration** is now **Allow more accounts** (off by default), and sets
+  LaraPaper 0.46.0's `MULTIUSER_REGISTRATION_ENABLED`: the old option set
+  `REGISTRATION_ENABLED`, which LaraPaper 0.46.0 no longer reads. The first account can
+  always register. With more accounts allowed, LaraPaper stops rendering Blade recipes.
+- Through ingress, a recipe's rendered image (**Render Image**) now loads from the ingress
+  path instead of the App URL.
+
 ## [0.46.0] - 2026-11-06
 
 ### LaraPaper 0.46.0

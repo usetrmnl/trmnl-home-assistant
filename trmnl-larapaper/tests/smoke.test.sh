@@ -50,7 +50,7 @@ start() {
 
 mkdir -p "$WORK/data"
 
-start '{"app_url": "http://localhost:4567/", "registration_enabled": false}'
+start '{"app_url": "http://localhost:4567/", "multiuser_registration": false}'
 ok "add-on became healthy"
 key="$(cat "$WORK/data/app_key")"
 
@@ -67,7 +67,8 @@ check "renders a screen" docker exec "$APP" test -s "${png:-/missing}"
 
 # --- Options and /data -------------------------------------------------------------
 check "App URL from the options" docker exec "$APP" grep -qx 'APP_URL=http://localhost:4567' /var/www/html/.env
-check "registration from the options" docker exec "$APP" grep -qx 'REGISTRATION_ENABLED=0' /var/www/html/.env
+check "registration from the options" docker exec "$APP" grep -qx 'MULTIUSER_REGISTRATION_ENABLED=0' /var/www/html/.env
+check "no REGISTRATION_ENABLED (gone since LaraPaper 0.46.0)" sh -c "! docker exec $APP grep -q '^REGISTRATION_ENABLED=' /var/www/html/.env"
 check "time zone from Home Assistant" docker exec "$APP" grep -qx 'APP_TIMEZONE=Europe/Amsterdam' /var/www/html/.env
 check "app key in /data" test -s "$WORK/data/app_key"
 check "database in /data" test -s "$WORK/data/database/database.sqlite"
@@ -86,12 +87,16 @@ check "ingress: redirects stay under the prefix" sh -c \
 check "ingress: links carry the prefix" sh -c \
     "curl -s -H 'X-Ingress-Path: /api/hassio_ingress/abc' http://127.0.0.1:8099/login | grep -q '/api/hassio_ingress/abc/'"
 # Screen image links (APP_URL/storage/...) point through ingress, in pages and in JSON
-# with escaped slashes, as LaraPaper writes them; the device API port keeps APP_URL
+# with escaped slashes and in Livewire's snapshot (JSON in JSON), as LaraPaper writes
+# them; the device API port keeps APP_URL
 # shellcheck disable=SC2016 # PHP code
 docker exec -i "$APP" sh -c 'cat > /var/www/html/public/smoke-urls.php' <<'PHP'
 <?php
 $src = 'http://localhost:4567/storage/images/generated/x.png';
-if (isset($_GET['json'])) {
+if (isset($_GET['snapshot'])) {
+    header('Content-Type: application/json');
+    echo json_encode(['snapshot' => json_encode(['src' => $src])]);
+} elseif (isset($_GET['json'])) {
     header('Content-Type: application/json');
     echo json_encode(['src' => $src]);
 } else {
@@ -105,13 +110,14 @@ ingress_has() { curl -s -H 'X-Ingress-Path: /api/hassio_ingress/abc' "http://127
 device_has() { curl -s "http://localhost:4567$1" | grep -qF "$2"; }
 check "ingress: screen images in pages" ingress_has /smoke-urls.php 'src="/api/hassio_ingress/abc/storage/images/generated/x.png"'
 check "ingress: screen images in JSON" ingress_has '/smoke-urls.php?json=1' '"/api/hassio_ingress/abc/storage/images'
+check "ingress: screen images in Livewire snapshots" ingress_has '/smoke-urls.php?snapshot=1' '\"/api/hassio_ingress/abc/storage/images'
 check "device port: screen images keep the App URL" device_has /smoke-urls.php 'src="http://localhost:4567/storage/'
 check "ingress: serves screen images" test "$(code -H 'X-Ingress-Path: /api/hassio_ingress/abc' http://127.0.0.1:8099/storage/images/setup-logo.bmp)" = 200
 docker exec "$APP" rm -f /var/www/html/public/smoke-urls.php
 
 # --- Restart with other options ---------------------------------------------------
-start '{"app_url": "http://localhost:4567/", "registration_enabled": true}'
-check "registration follows the options" docker exec "$APP" grep -qx 'REGISTRATION_ENABLED=1' /var/www/html/.env
+start '{"app_url": "http://localhost:4567/", "multiuser_registration": true}'
+check "registration follows the options" docker exec "$APP" grep -qx 'MULTIUSER_REGISTRATION_ENABLED=1' /var/www/html/.env
 
 # --- Restarts keep the app key ----------------------------------------------------
 check "restarts keep the app key" test "$(cat "$WORK/data/app_key")" = "$key"

@@ -16,8 +16,8 @@ official LaraPaper image with these additions:
 1. Set **App URL** to the address your TRMNL uses to reach this add-on, e.g.
    `http://192.168.1.10:4567`. The device downloads its screen image from there, so use
    an IP address or a name the device can resolve (`.local` names usually don't work).
-2. Start the add-on and click **Open Web UI**. Register your account, then turn off
-   **Allow registration**.
+2. Start the add-on and click **Open Web UI**. Register your account. Only this first
+   account can register unless you turn on **Allow more accounts**.
 3. Point the TRMNL at the server. A new device starts in Wi-Fi pairing mode; to get back
    to it, hold the left and right ends of the touch bar until the screen flashes (TRMNL X)
    or hold the button on the back for 6 to 8 seconds (TRMNL OG). Connect to the **TRMNL**
@@ -37,7 +37,7 @@ official LaraPaper image with these additions:
 | Option | Default | What it does |
 | --- | --- | --- |
 | App URL | empty | The address in the screen links LaraPaper gives the TRMNL (`APP_URL`) |
-| Allow registration | on | Whether anyone reaching the web UI can create an account |
+| Allow more accounts | off | Whether anyone reaching the web UI can create an account after the first (`MULTIUSER_REGISTRATION_ENABLED`); LaraPaper then stops rendering Blade recipes unless you trust every user and set it up otherwise |
 
 ## The web UI
 

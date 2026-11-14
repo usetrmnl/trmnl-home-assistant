@@ -43,6 +43,13 @@ opt() {
             echo is_bool($v) ? ($v ? "1" : "0") : $v;' "$DATA_DIR/options.json" "$1"
 }
 
+unset_env() {
+    tmp="$APP_DIR/.env.tmp"
+    grep -v "^$1=" "$APP_DIR/.env" > "$tmp" || true
+    cat "$tmp" > "$APP_DIR/.env"
+    rm -f "$tmp"
+}
+
 set_env() {
     tmp="$APP_DIR/.env.tmp"
     grep -v "^$1=" "$APP_DIR/.env" > "$tmp" || true
@@ -53,17 +60,20 @@ set_env() {
 
 APP_URL="$(opt app_url)"
 APP_URL="${APP_URL%/}"
-REGISTRATION_ENABLED="$(opt registration_enabled)"
+MULTIUSER_REGISTRATION="$(opt multiuser_registration)"
 
 set_env APP_KEY "$(cat "$DATA_DIR/app_key")"
 set_env APP_ENV production
 set_env APP_DEBUG false
 set_env DB_DATABASE database/storage/database.sqlite
 set_env APP_TIMEZONE "${TZ:-UTC}"
-set_env REGISTRATION_ENABLED "${REGISTRATION_ENABLED:-1}"
+# LaraPaper 0.46.0 replaced REGISTRATION_ENABLED: the first account can always register,
+# further ones only with MULTIUSER_REGISTRATION_ENABLED (which also turns off Blade).
+unset_env REGISTRATION_ENABLED
+set_env MULTIUSER_REGISTRATION_ENABLED "${MULTIUSER_REGISTRATION:-0}"
 [ -n "$APP_URL" ] && set_env APP_URL "$APP_URL"
 
-log "APP_URL=${APP_URL:-<unset>} TZ=${TZ:-UTC} registration=${REGISTRATION_ENABLED:-1}"
+log "APP_URL=${APP_URL:-<unset>} TZ=${TZ:-UTC} multiuser_registration=${MULTIUSER_REGISTRATION:-0}"
 
 # Home Assistant ingress (the sidebar panel and "Open Web UI"): Home Assistant proxies
 # /api/hassio_ingress/<token>/... to this port with the prefix removed and the prefix in
@@ -76,15 +86,19 @@ HA_INGRESS_PROXY="${HA_INGRESS_PROXY:-172.30.32.2}"
 set_env TRUSTED_PROXIES "$HA_INGRESS_PROXY"
 # Screen images link to APP_URL/storage/... (the address the TRMNL uses, LaraPaper #289),
 # which a browser away from home, or on an https Home Assistant, can't load. Through
-# ingress those links point at the ingress path instead, in pages and in Livewire's JSON
-# (where slashes are escaped). nginx's quoted strings take \\ for one backslash.
+# ingress those links point at the ingress path instead, in pages, in Livewire's JSON
+# (where slashes are escaped as \/) and in the component snapshot inside that JSON
+# (JSON in JSON, \\\/), where the recipe page keeps its rendered image. nginx's quoted
+# strings take \\ for one backslash.
 storage_filter=""
 if [ -n "$APP_URL" ]; then
     app_url_json="$(printf '%s' "$APP_URL" | sed 's#/#\\\\/#g')"
+    app_url_snapshot="$(printf '%s' "$APP_URL" | sed 's#/#\\\\\\\\\\\\/#g')"
     storage_filter="sub_filter_types application/json;
         sub_filter_once off;
         sub_filter '$APP_URL/storage/' '\$ha_ingress_path/storage/';
-        sub_filter '$app_url_json\\\\/storage\\\\/' '\$ha_ingress_path/storage/';"
+        sub_filter '$app_url_json\\\\/storage\\\\/' '\$ha_ingress_path/storage/';
+        sub_filter '$app_url_snapshot\\\\\\\\\\\\/storage\\\\\\\\\\\\/' '\$ha_ingress_path/storage/';"
 fi
 cat > "$INGRESS_CONF" <<CONF
 map \$http_x_ingress_path \$ha_ingress_path {
