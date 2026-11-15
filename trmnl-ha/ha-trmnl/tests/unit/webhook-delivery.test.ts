@@ -55,7 +55,7 @@ describe('uploadToWebhook — connection errors', () => {
         format: 'png',
       }),
     ).rejects.toThrow(
-      /Could not reach larapaper\.home\.arpa:.*may not resolve inside the add-on container/,
+      /Could not reach larapaper\.home\.arpa:.*may not resolve inside the app container/,
     )
   })
 

@@ -115,7 +115,7 @@ export class ByosHanamiFormatTransformer implements FormatTransformer {
 
     if (!screenshotUrl) {
       throw new Error(
-        'BYOS Hanami URI mode requires "Add-on URL" to be set in the schedule config.',
+        'BYOS Hanami URI mode requires "App URL" to be set in the schedule config.',
       )
     }
     return 'uri'

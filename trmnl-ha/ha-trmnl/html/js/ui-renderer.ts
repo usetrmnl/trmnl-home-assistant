@@ -285,7 +285,7 @@ export class RenderScheduleContent {
             ? `
         <button type="button" onclick="window.app.useLocalServer('terminus')"
           class="${buttonClass}" style="background-color: var(--primary)">
-          Use the Terminus add-on
+          Use the Terminus app
         </button>
         <p class="text-xs text-gray-500 mt-1">Fills in the webhook for you. Then sign in under JWT Authentication below.</p>`
             : ''
@@ -299,7 +299,7 @@ export class RenderScheduleContent {
             placeholder="Image Webhook plugin UUID" />
           <button type="button" onclick="window.app.useLocalServer('larapaper')"
             class="${buttonClass}" style="background-color: var(--primary)">
-            Use the LaraPaper add-on
+            Use the LaraPaper app
           </button>
         </div>
         <p class="text-xs text-gray-500 mt-1">Copy the UUID from an Image Webhook plugin in LaraPaper.</p>`
@@ -413,12 +413,12 @@ export class RenderScheduleContent {
               <p class="text-xs text-gray-500 mt-1">Terminus stopped accepting base64 in 0.52.0. Stay on URI unless your server is older than that.</p>
             </div>
             <div id="s_byos_addon_url_field" class="${deliveryMode === 'uri' ? '' : 'hidden'}">
-              <label class="block text-xs text-gray-600 mb-1">Add-on URL</label>
+              <label class="block text-xs text-gray-600 mb-1">App URL</label>
               <input type="text" id="s_byos_addon_url" value="${byosConfig?.addon_base_url || ''}"
                 class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
                 onchange="window.app.updateScheduleFromForm()"
                 placeholder="http://192.168.1.100:10000"
-                title="External URL of this add-on (required for Terminus to fetch screenshots)" />
+                title="External URL of this app (required for Terminus to fetch screenshots)" />
               <p class="text-xs text-gray-500 mt-1">Terminus fetches screenshots from this URL</p>
             </div>
           </div>
@@ -449,7 +449,7 @@ export class RenderScheduleContent {
               </div>
               <p class="text-xs text-gray-500 mt-1">${
                 byosConfig?.auth?.login_password
-                  ? 'Tokens auto-refresh, and the add-on signs in again on its own if the session expires.'
+                  ? 'Tokens auto-refresh, and the app signs in again on its own if the session expires.'
                   : 'Tokens auto-refresh. If the server expires the session, sign in again here.'
               }</p>
               `

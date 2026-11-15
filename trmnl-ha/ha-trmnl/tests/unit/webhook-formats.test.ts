@@ -153,7 +153,7 @@ describe('ByosHanamiFormatTransformer', () => {
       const config = { ...validConfig, delivery_mode: 'uri' as const }
 
       expect(() => transformer.transform(imageBuffer, 'png', config)).toThrow(
-        /URI mode requires "Add-on URL"/,
+        /URI mode requires "App URL"/,
       )
     })
 

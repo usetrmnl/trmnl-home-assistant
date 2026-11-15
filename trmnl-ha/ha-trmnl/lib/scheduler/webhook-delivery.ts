@@ -274,7 +274,7 @@ class DeliverWebhook {
       const detail = redactWebhookUrl((err as Error).message, this.#options.webhookUrl)
       throw new Error(
         `Could not reach ${host}: ${detail}. ` +
-          `If ${host} is a local hostname, it may not resolve inside the add-on container — try the server's IP address instead.`,
+          `If ${host} is a local hostname, it may not resolve inside the app container — try the server's IP address instead.`,
         { cause: err },
       )
     }
