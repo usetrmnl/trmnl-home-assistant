@@ -26,6 +26,14 @@ configuration:
     name: Transform runner token
     description: >-
       Bearer token sent to the transform runner, if it requires one.
+  home_assistant_key:
+    name: Home Assistant key for recipes
+    description: >-
+      Lets recipes read Home Assistant at http://127.0.0.1:8124 without a Home
+      Assistant token: enter that as a recipe's Home Assistant URL and this key as its
+      access token. Make up a random key of 24 or more letters, digits, - or _. Recipes
+      can read states, calendars, history and templates and get forecasts and to-do
+      items, but not control anything. Empty turns it off.
   env_vars:
     name: Extra environment variables
     description: >-

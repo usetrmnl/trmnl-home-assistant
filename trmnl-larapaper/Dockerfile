@@ -13,8 +13,13 @@ USER root
 ENV PHP_OPCACHE_ENABLE=1
 
 COPY rootfs /
-RUN chmod +x /etc/entrypoint.d/10-homeassistant.sh \
+RUN chmod +x /usr/local/bin/homeassistant-entrypoint /etc/entrypoint.d/10-homeassistant.sh \
     /etc/s6-overlay/user-bundles.d/laravel-queue/run /etc/s6-overlay/user-bundles.d/laravel-scheduler/run
+
+# Takes the Supervisor token out of the environment before LaraPaper's entrypoint and s6
+# start (see the script). Setting ENTRYPOINT clears the base image's CMD, so it's repeated.
+ENTRYPOINT ["/usr/local/bin/homeassistant-entrypoint"]
+CMD ["/init"]
 
 # Home Assistant's add-on linter wants the native health check rather than a watchdog:
 # healthy once Laravel answers (LaraPaper's /up).
