@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.4] - 2026-11-15
+
+### Changed
+
+- Updated the remaining add-on wording in startup messages
+- Renamed add-on to app in the TRMNL HA web UI and notifications
+- Renamed add-ons to apps in the docs, following Home Assistant 2026.2
 ## [0.14.3] - 2026-11-13
 
 ### Fixed
@@ -474,4 +481,5 @@ Based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main
 [0.10.3]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.10.2...v0.10.3
 [0.11.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.10.3...v0.11.0
 [0.12.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.11.1...v0.12.0
+[0.14.4]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.14.3...v0.14.4
 [0.2.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.1.0...v0.2.0
