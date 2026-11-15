@@ -222,12 +222,12 @@ describe('ScreenshotParamsParser', () => {
       expect(result!.format).toBe('png')
     })
 
-    it('serves png when bmp is requested', () => {
+    it('accepts bmp as a valid output format', () => {
       const url = createUrl('/lovelace/0', { viewport: '800x600', format: 'bmp' })
-
+    
       const result = parser.call(url)
-
-      expect(result!.format).toBe('png')
+    
+      expect(result!.format).toBe('bmp')
     })
 
     it('parses rotate parameter when valid', () => {
