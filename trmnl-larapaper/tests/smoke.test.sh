@@ -14,6 +14,9 @@ IMAGE="${1:-trmnl-larapaper:dev}"
 WORK=$(mktemp -d)
 FAILED=0
 APP=larapaper-smoke
+# Where published ports reach the container from; Docker on a Mac (OrbStack, Docker
+# Desktop) forwards them from a 192.168 address. SMOKE_INGRESS_PROXY overrides it.
+INGRESS_PROXY="${SMOKE_INGRESS_PROXY:-$([ "$(uname)" = Darwin ] && echo 192.168.0.0/16 || echo 172.16.0.0/12)}"
 # The fake Home Assistant, on the host, stands in for the Supervisor's Core API proxy
 FAKE_HA_PORT=18123
 SUPERVISOR_TOKEN_TEST=supervisor-smoke-token
@@ -48,7 +51,7 @@ start() {
     else
         # shellcheck disable=SC2086 # SMOKE_DOCKER_ARGS holds several arguments
         docker run -d --name "$APP" -p 4567:8080 -p 127.0.0.1:8099:8099 -e TZ=Europe/Amsterdam \
-            -e HA_INGRESS_PROXY=172.16.0.0/12 \
+            -e HA_INGRESS_PROXY="$INGRESS_PROXY" \
             -e SUPERVISOR_TOKEN="$SUPERVISOR_TOKEN_TEST" \
             -e HASSIO_TOKEN="$SUPERVISOR_TOKEN_TEST" \
             -e HA_API_URL="http://host.docker.internal:$FAKE_HA_PORT/core/api" \
