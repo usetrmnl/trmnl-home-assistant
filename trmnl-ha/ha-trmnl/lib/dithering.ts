@@ -288,7 +288,11 @@ function configureOutputFormat(
 ): { image: State; outputFormat: string } {
   let outputFormat: string = format
 
-  if (format === 'jpeg') {
+  if (format === 'bmp') {
+    // ESPHome decodes 1, 8 and 24-bit BMP3 only, so anything not 1-bit goes out as 24-bit.
+    outputFormat = 'bmp3'
+    image = bitDepth === 1 ? image.out('-monochrome') : image.out('-type', 'TrueColor')
+  } else if (format === 'jpeg') {
     outputFormat = 'jpeg'
     image = image.quality(60).interlace('Line')
   } else if (format === 'png') {

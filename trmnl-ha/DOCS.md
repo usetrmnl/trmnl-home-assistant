@@ -210,7 +210,7 @@ Access via **Ingress** (recommended) or directly at `http://homeassistant.local:
 | `levels_enabled` | No | flag | Enable black/white level adjustments |
 | `black_level` | No | `0-100` | Black point (requires `levels_enabled`) |
 | `white_level` | No | `0-100` | White point (requires `levels_enabled`) |
-| `format` | No | `png`, `jpeg` | Output format (default: `png`) |
+| `format` | No | `png`, `jpeg`, `bmp` | Output format (default: `png`). `bmp` is for devices that fetch the image, such as ESPHome; TRMNL refuses BMP uploads |
 | `rotate` | No | `90`, `180`, `270` | Rotation degrees |
 | `theme` | No | string | HA theme name (HA mode only) |
 | `wait` | No | ms | Wait after page load (default: `750`) |

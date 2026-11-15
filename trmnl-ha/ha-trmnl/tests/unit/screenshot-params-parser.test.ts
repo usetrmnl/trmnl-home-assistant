@@ -224,9 +224,9 @@ describe('ScreenshotParamsParser', () => {
 
     it('accepts bmp as a valid output format', () => {
       const url = createUrl('/lovelace/0', { viewport: '800x600', format: 'bmp' })
-    
+
       const result = parser.call(url)
-    
+
       expect(result!.format).toBe('bmp')
     })
 
