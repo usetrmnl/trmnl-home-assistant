@@ -50,6 +50,7 @@ start() {
         docker run -d --name "$APP" -p 4567:8080 -p 127.0.0.1:8099:8099 -e TZ=Europe/Amsterdam \
             -e HA_INGRESS_PROXY=172.16.0.0/12 \
             -e SUPERVISOR_TOKEN="$SUPERVISOR_TOKEN_TEST" \
+            -e HASSIO_TOKEN="$SUPERVISOR_TOKEN_TEST" \
             -e HA_API_URL="http://host.docker.internal:$FAKE_HA_PORT/core/api" \
             --add-host host.docker.internal:host-gateway \
             -v "$WORK/data:/data" ${SMOKE_DOCKER_ARGS:-} "$IMAGE" >/dev/null
@@ -217,6 +218,9 @@ check "HA proxy: refuses requests without the key" test "$(ha_code http://127.0.
 check "HA proxy: refuses a wrong key" test "$(ha_code -H 'Authorization: Bearer wrong-key-0123456789abcdefghij' http://127.0.0.1:8124/api/states)" = 401
 check "HA proxy: refuses other service calls" test "$(ha_code "${auth[@]}" -d '{}' http://127.0.0.1:8124/api/services/light/turn_on)" = 404
 check "HA proxy: refuses writing states" test "$(ha_code "${auth[@]}" -d '{}' http://127.0.0.1:8124/api/states/sensor.outside)" = 403
+check "HA proxy: refuses a key in another case" test "$(ha_code -H "Authorization: Bearer ${HA_KEY^^}" http://127.0.0.1:8124/api/states)" = 401
+check "HA proxy: refuses paths that only start like an allowed one" test "$(ha_code "${auth[@]}" http://127.0.0.1:8124/api/logbookx)" = 404
+check "HA proxy: refuses double-encoded paths" test "$(ha_code "${auth[@]}" http://127.0.0.1:8124/api/logbook/%252e%252e/error_log)" = 400
 check "HA proxy: refuses other API paths" test "$(ha_code "${auth[@]}" http://127.0.0.1:8124/api/events)" = 404
 check "HA proxy: refuses browsers (Sec-Fetch-Mode)" test "$(ha_code "${auth[@]}" -H 'Sec-Fetch-Mode: cors' http://127.0.0.1:8124/api/states)" = 403
 check "HA proxy: refuses browsers (Origin)" test "$(ha_code "${auth[@]}" -H 'Origin: null' http://127.0.0.1:8124/api/states)" = 403

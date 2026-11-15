@@ -116,7 +116,7 @@ rm -f "$HA_API_CONF"
 ha_key_suggestion() { head -c 24 /dev/urandom | base64 | tr '+/' '-_'; }
 if [ -z "$HA_KEY" ]; then
     log "Home Assistant for recipes: off. To turn it on, set \"Home Assistant key for recipes\", e.g. to $(ha_key_suggestion)"
-elif ! printf '%s' "$HA_KEY" | grep -Eqx '[A-Za-z0-9_-]{24,}'; then
+elif [ "${#HA_KEY}" -lt 24 ] || case "$HA_KEY" in *[!A-Za-z0-9_-]*) true ;; *) false ;; esac; then
     log "Home Assistant for recipes: off (home_assistant_key must be 24 or more letters, digits, - or _, e.g. $(ha_key_suggestion))"
 elif [ -z "$SUPERVISOR_TOKEN" ]; then
     log "Home Assistant for recipes: off (no SUPERVISOR_TOKEN)"
@@ -137,7 +137,7 @@ LOCATION
     {
         cat <<CONF
 map \$http_authorization \$ha_key_ok {
-    "Bearer ${HA_KEY}" 1;
+    "~^Bearer ${HA_KEY}\$" 1;
     default 0;
 }
 
@@ -149,6 +149,8 @@ server {
     if (\$http_sec_fetch_mode) { return 403 '{"message": "Not for browsers"}'; }
     if (\$http_origin) { return 403 '{"message": "Not for browsers"}'; }
     if (\$ha_key_ok = 0) { return 401 '{"message": "401: Unauthorized"}'; }
+    # A % left after nginx decodes the path means it was encoded twice
+    if (\$uri ~ "%") { return 400 '{"message": "Bad path"}'; }
 
 CONF
         ha_location "= /api/" / GET
@@ -157,8 +159,10 @@ CONF
         ha_location /api/states/ /states/ GET
         ha_location "= /api/calendars" /calendars GET
         ha_location /api/calendars/ /calendars/ GET
-        ha_location /api/history/period /history/period GET
-        ha_location /api/logbook /logbook GET
+        ha_location "= /api/history/period" /history/period GET
+        ha_location /api/history/period/ /history/period/ GET
+        ha_location "= /api/logbook" /logbook GET
+        ha_location /api/logbook/ /logbook/ GET
         ha_location "= /api/template" /template POST
         for service in weather/get_forecasts calendar/get_events todo/get_items; do
             ha_location "= /api/services/$service" "/services/$service" POST

@@ -7,8 +7,10 @@
 # it leaves the environment here and goes to a root-only file, which
 # 10-homeassistant.sh reads into the nginx config of the recipes' proxy and deletes.
 set -e
-if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
-    (umask 077 && printf '%s' "$SUPERVISOR_TOKEN" > /run/supervisor_token)
+# The Supervisor passes the same token as HASSIO_TOKEN too
+token="${SUPERVISOR_TOKEN:-${HASSIO_TOKEN:-}}"
+if [ -n "$token" ]; then
+    (umask 077 && printf '%s' "$token" > /run/supervisor_token)
 fi
-unset SUPERVISOR_TOKEN
+unset SUPERVISOR_TOKEN HASSIO_TOKEN token
 exec docker-php-serversideup-entrypoint "$@"
