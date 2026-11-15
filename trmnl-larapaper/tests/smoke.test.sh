@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Boots the built add-on the way the Supervisor would (a /data with options.json, the
 # ingress proxy's address) and checks what it adds to LaraPaper: the options, /data,
-# ingress and that a restart keeps the app key, plus that it still renders a screen.
+# ingress, the Home Assistant proxy for recipes (against tests/fake-ha.py) and that a
+# restart keeps the app key, plus that it still renders a screen.
 #
-# Needs Docker and curl on the host.
+# Needs Docker, curl and python3 on the host.
 #
 # Usage: trmnl-larapaper/tests/smoke.test.sh [image]
 # Extra docker run arguments (e.g. an AppArmor profile) go in SMOKE_DOCKER_ARGS.
@@ -13,11 +14,16 @@ IMAGE="${1:-trmnl-larapaper:dev}"
 WORK=$(mktemp -d)
 FAILED=0
 APP=larapaper-smoke
+# The fake Home Assistant, on the host, stands in for the Supervisor's Core API proxy
+FAKE_HA_PORT=18123
+SUPERVISOR_TOKEN_TEST=supervisor-smoke-token
+HA_KEY=smoke-key-0123456789abcdefghij
 
 # shellcheck disable=SC2329 # run by the trap
 cleanup() {
     [ "$FAILED" = 0 ] || docker logs "$APP" 2>&1 | tail -80
     docker rm -f "$APP" >/dev/null 2>&1
+    [ -z "${FAKE_HA_PID:-}" ] || kill "$FAKE_HA_PID" 2>/dev/null
     rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -43,12 +49,17 @@ start() {
         # shellcheck disable=SC2086 # SMOKE_DOCKER_ARGS holds several arguments
         docker run -d --name "$APP" -p 4567:8080 -p 127.0.0.1:8099:8099 -e TZ=Europe/Amsterdam \
             -e HA_INGRESS_PROXY=172.16.0.0/12 \
+            -e SUPERVISOR_TOKEN="$SUPERVISOR_TOKEN_TEST" \
+            -e HA_API_URL="http://host.docker.internal:$FAKE_HA_PORT/core/api" \
+            --add-host host.docker.internal:host-gateway \
             -v "$WORK/data:/data" ${SMOKE_DOCKER_ARGS:-} "$IMAGE" >/dev/null
     fi
     wait_up || { fail "add-on became healthy"; exit 1; }
 }
 
 mkdir -p "$WORK/data"
+python3 "$(dirname "$0")/fake-ha.py" "$FAKE_HA_PORT" &
+FAKE_HA_PID=$!
 
 start '{"app_url": "http://localhost:4567/", "multiuser_registration": false}'
 ok "add-on became healthy"
@@ -145,6 +156,9 @@ check "device port: screen images keep the App URL" device_has /smoke-urls.php '
 check "ingress: serves screen images" test "$(code -H 'X-Ingress-Path: /api/hassio_ingress/abc' http://127.0.0.1:8099/storage/images/setup-logo.bmp)" = 200
 docker exec "$APP" rm -f /var/www/html/public/smoke-urls.php
 
+# --- Home Assistant for recipes: off without a key ----------------------------------
+check "HA proxy: off without a key" sh -c "! docker exec $APP curl -s -o /dev/null http://127.0.0.1:8124/api/"
+
 # --- Restart with other options ---------------------------------------------------
 # shellcheck disable=SC2016 # literal $ in a value
 start '{"app_url": "http://localhost:4567/", "multiuser_registration": true, "log_level": "warning",
@@ -164,12 +178,58 @@ check "transform runner, extra variables and log level reach LaraPaper (${settin
     '["http","http:\/\/runner:3000","t0k$n \"x\" #1",20,"my client","error"]'
 check "extra variables don't replace the app key" sh -c "! docker exec $APP grep -q '^APP_KEY=nope' /var/www/html/.env"
 
-start '{"app_url": "http://localhost:4567/", "multiuser_registration": true}'
+start '{"app_url": "http://localhost:4567/", "multiuser_registration": true, "home_assistant_key": "'"$HA_KEY"'"}'
 check "removed extra variables go back to LaraPaper's default" sh -c \
     "! docker exec $APP grep -qE '^(HTTP_CLIENT_TIMEOUT|OIDC_CLIENT_ID)=' /var/www/html/.env"
 check "removed transform runner goes back to LaraPaper's runner" sh -c "! docker exec $APP grep -q '^TRANSFORM_' /var/www/html/.env"
 check "a removed extra variable restores the image's value" docker exec "$APP" grep -qx 'LOG_STACK=single,stderr' /var/www/html/.env
 check "log level back to info" docker exec "$APP" grep -qx 'LOG_LEVEL=info' /var/www/html/.env
+
+# --- Home Assistant for recipes ---------------------------------------------------
+# As recipes call it: from inside the add-on, as www-data, with the key as Bearer token.
+# The fake Home Assistant echoes what reached it.
+# ha <curl arguments...>: the response body (the status code alone with -w)
+ha() { docker exec -u www-data "$APP" curl -s "$@"; }
+ha_code() { ha -o /dev/null -w '%{http_code}' "$@"; }
+auth=(-H "Authorization: Bearer $HA_KEY")
+echoed=$(ha "${auth[@]}" 'http://127.0.0.1:8124/api/states/sensor.outside')
+check "HA proxy: passes reads to Core's API" grep -q '"path": "/core/api/states/sensor.outside"' <<<"$echoed"
+check "HA proxy: with the Supervisor token" grep -q "\"auth\": \"Bearer $SUPERVISOR_TOKEN_TEST\"" <<<"$echoed"
+check "HA proxy: keeps the query" sh -c "docker exec -u www-data $APP curl -s -H 'Authorization: Bearer $HA_KEY' \
+    'http://127.0.0.1:8124/api/calendars/calendar.family?start=2026-11-08&end=2026-12-31' \
+    | grep -qF '\"/core/api/calendars/calendar.family?start=2026-11-08&end=2026-12-31\"'"
+check "HA proxy: keeps history paths" sh -c "docker exec -u www-data $APP curl -s -H 'Authorization: Bearer $HA_KEY' \
+    'http://127.0.0.1:8124/api/history/period/2026-11-15T00:00:00+01:00?filter_entity_id=sensor.outside' \
+    | grep -qF '/core/api/history/period/2026-11-15T00:00:00+01:00?filter_entity_id=sensor.outside'"
+echoed=$(ha "${auth[@]}" -H 'Content-Type: application/json' -d '{"entity_id": "weather.home", "type": "daily"}' \
+    'http://127.0.0.1:8124/api/services/weather/get_forecasts?return_response')
+check "HA proxy: passes forecast service calls" grep -q '"method": "POST", "path": "/core/api/services/weather/get_forecasts?return_response"' <<<"$echoed"
+check "HA proxy: ... with their body" grep -qF '"body": "{\"entity_id\": \"weather.home\", \"type\": \"daily\"}"' <<<"$echoed"
+for path in /api/ /api/config /api/states /api/calendars /api/logbook; do
+    check "HA proxy: GET $path" test "$(ha_code "${auth[@]}" "http://127.0.0.1:8124$path")" = 200
+done
+for path in /api/template /api/services/calendar/get_events /api/services/todo/get_items; do
+    check "HA proxy: POST $path" test "$(ha_code "${auth[@]}" -d '{}' "http://127.0.0.1:8124$path")" = 200
+done
+check "HA proxy: refuses requests without the key" test "$(ha_code http://127.0.0.1:8124/api/states)" = 401
+check "HA proxy: refuses a wrong key" test "$(ha_code -H 'Authorization: Bearer wrong-key-0123456789abcdefghij' http://127.0.0.1:8124/api/states)" = 401
+check "HA proxy: refuses other service calls" test "$(ha_code "${auth[@]}" -d '{}' http://127.0.0.1:8124/api/services/light/turn_on)" = 404
+check "HA proxy: refuses writing states" test "$(ha_code "${auth[@]}" -d '{}' http://127.0.0.1:8124/api/states/sensor.outside)" = 403
+check "HA proxy: refuses other API paths" test "$(ha_code "${auth[@]}" http://127.0.0.1:8124/api/events)" = 404
+check "HA proxy: refuses browsers (Sec-Fetch-Mode)" test "$(ha_code "${auth[@]}" -H 'Sec-Fetch-Mode: cors' http://127.0.0.1:8124/api/states)" = 403
+check "HA proxy: refuses browsers (Origin)" test "$(ha_code "${auth[@]}" -H 'Origin: null' http://127.0.0.1:8124/api/states)" = 403
+check "HA proxy: only on the loopback interface" sh -c \
+    "! docker exec $APP sh -c 'curl -s -o /dev/null http://\$(hostname -i | cut -d\" \" -f1):8124/api/'"
+# The Supervisor token is an administrator's: www-data (LaraPaper, its queue worker and
+# recipes) must not be able to read it, in files or in a process's environment (read
+# from an unconfined container, as the AppArmor profile denies /proc/<pid>/environ).
+check "HA proxy: www-data can't read the Supervisor token" sh -c \
+    "! docker exec -u www-data $APP sh -c 'grep -rqs $SUPERVISOR_TOKEN_TEST /etc /run /var/www/html/.env /data /proc/1/environ'"
+# As www-data, which can read its own processes' environment (the queue worker, the
+# scheduler, PHP-FPM's workers, Chromium, transforms):
+holders=$(docker run --rm --pid "container:$APP" --security-opt apparmor=unconfined -u www-data --entrypoint sh "$IMAGE" -c \
+    "for f in /proc/[0-9]*/environ; do grep -qs $SUPERVISOR_TOKEN_TEST \$f && echo \${f%/environ}; done")
+check "HA proxy: no www-data process holds the Supervisor token${holders:+ ($holders)}" test -z "$holders"
 
 # --- Restarts keep the app key ----------------------------------------------------
 check "restarts keep the app key" test "$(cat "$WORK/data/app_key")" = "$key"

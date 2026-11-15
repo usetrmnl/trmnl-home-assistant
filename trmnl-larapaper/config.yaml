@@ -1,6 +1,6 @@
 ---
 name: LaraPaper (BYOS)
-version: "0.47.0-2"
+version: "0.47.0-3"
 slug: trmnl-larapaper
 description: >-
   Runs LaraPaper, a self-hosted TRMNL server (BYOS) with recipes, playlists and
@@ -12,6 +12,9 @@ arch:
   - amd64
 init: false
 startup: services
+# The Supervisor token reaches Home Assistant's API, for the read-only proxy recipes can
+# use (home_assistant_key); the token stays root-only, out of LaraPaper's reach
+homeassistant_api: true
 stage: experimental
 # The web UI through Home Assistant (sidebar, Open Web UI), also away from home;
 # ingress_port is left at its default, 8099
@@ -27,6 +30,7 @@ options:
   app_url: ""
   multiuser_registration: false
   log_level: info
+  home_assistant_key: ""
   env_vars: []
 schema:
   app_url: url
@@ -34,6 +38,8 @@ schema:
   log_level: list(debug|info|notice|warning|error|critical)
   transform_runner_url: url?
   transform_runner_token: password?
+  # masked in the UI; the entrypoint checks its format (it goes into nginx config)
+  home_assistant_key: password?
   env_vars:
     - name: match(^[A-Z][A-Z0-9_]*$)
       value: str

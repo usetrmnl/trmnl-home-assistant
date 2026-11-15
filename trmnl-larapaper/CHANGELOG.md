@@ -10,6 +10,24 @@ between upstream releases takes a `-1`, `-2` suffix.
 Each entry starts with the bundled LaraPaper release's own notes (on the version that
 first bundles it), followed by the add-on's own changes under "Home Assistant add-on".
 
+## [0.47.0-3] - 2026-11-15
+
+### Home Assistant add-on
+
+- Recipes can read Home Assistant without a Home Assistant token: set the new **Home
+  Assistant key for recipes** option, then enter `http://127.0.0.1:8124` as a recipe's
+  Home Assistant URL and the key as its access token. The add-on passes on reads
+  (states, calendars, history, logbook, templates) and the forecast, calendar event and
+  to-do item service calls with its own Home Assistant access, and refuses everything
+  else, requests without the key and requests from browsers. Off until a key is set.
+  For this the add-on now has Home Assistant API access.
+- The add-on's Supervisor token no longer reaches LaraPaper: it used to be in the
+  environment of the queue worker and the scheduler, and readable by them in s6's copy
+  of the environment, where a Blade recipe could have read it. It now only goes into
+  the proxy's root-only config.
+- The smoke test checks the proxy against a fake Home Assistant, and that no `www-data`
+  process or file holds the token.
+
 ## [0.47.0-2] - 2026-11-15
 
 ### Home Assistant add-on

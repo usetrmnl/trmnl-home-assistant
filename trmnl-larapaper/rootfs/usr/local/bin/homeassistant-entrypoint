@@ -1,0 +1,14 @@
+#!/bin/sh
+# Runs before LaraPaper's own entrypoint (/etc/entrypoint.d/*, then s6's /init). The
+# Supervisor token can reach Home Assistant's API as an administrator
+# (homeassistant_api), but everything started from here inherits the environment, and
+# s6 keeps a world-readable copy of it in /run/s6/basedir/env: LaraPaper's queue worker,
+# the scheduler and the recipes they run (Blade recipes are PHP) would all see it. So
+# it leaves the environment here and goes to a root-only file, which
+# 10-homeassistant.sh reads into the nginx config of the recipes' proxy and deletes.
+set -e
+if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+    (umask 077 && printf '%s' "$SUPERVISOR_TOKEN" > /run/supervisor_token)
+fi
+unset SUPERVISOR_TOKEN
+exec docker-php-serversideup-entrypoint "$@"

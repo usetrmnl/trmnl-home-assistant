@@ -10,6 +10,8 @@ official LaraPaper image with these additions:
   updates and are part of Home Assistant backups.
 - **The web UI opens inside Home Assistant** (ingress), wherever Home Assistant is
   reachable.
+- **Recipes can read Home Assistant without a Home Assistant token**, if you set a key
+  for them (see [Home Assistant in recipes](#home-assistant-in-recipes)).
 
 ## Setup
 
@@ -37,6 +39,7 @@ official LaraPaper image with these additions:
 | Option | Default | What it does |
 | --- | --- | --- |
 | App URL | empty | The address in the screen links LaraPaper gives the TRMNL (`APP_URL`) |
+| Home Assistant key for recipes | empty | Turns on read-only Home Assistant access for recipes that are given this key, see below |
 | Allow more accounts | off | Whether anyone reaching the web UI can create an account after the first (`MULTIUSER_REGISTRATION_ENABLED`); LaraPaper then stops rendering Blade recipes unless you trust every user and set it up otherwise |
 | Log level | info | How much LaraPaper writes to the add-on's log (`LOG_LEVEL`) |
 | Transform runner URL | empty | Where recipe [transforms](https://usetrmnl.github.io/larapaper/usage/transform) run. Empty: LaraPaper's own JavaScript runner, inside the add-on. A URL: an external runner (`TRANSFORM_PROVIDER=http`, `TRANSFORM_RUNNER_URL`) |
@@ -61,6 +64,52 @@ once removed from the list. `APP_KEY`, `DB_CONNECTION`, `DB_DATABASE` and
 `TRUSTED_PROXIES` stay the add-on's and are ignored there. OpenID Connect sends you back
 to the App URL, so it signs you in there, not through **Open Web UI**.
 
+## Home Assistant in recipes
+
+Recipes that show Home Assistant data (made for TRMNL.com or LaraPaper) ask for your
+Home Assistant URL and an access token. In this add-on there are two ways to fill those
+in:
+
+1. **The add-on's key (recommended).** Set **Home Assistant key for recipes** to a random
+   string of 24 or more letters, digits, `-` or `_` (a password manager can make one) and
+   restart the add-on. In a recipe, enter `http://127.0.0.1:8124` as the Home Assistant
+   URL and the key as its access token.
+2. **A Home Assistant token.** Enter `http://homeassistant:8123` and a
+   [long-lived access token](https://www.home-assistant.io/docs/authentication/#your-account-profile)
+   from your Home Assistant profile. Use this for a recipe that needs more than the list
+   below, or if you run transforms in an external transform runner.
+
+With the key, recipes can only read. The add-on passes on just these requests and
+refuses the rest:
+
+| Request | For |
+| --- | --- |
+| `GET /api/`, `/api/config` | checking the connection, units and time zone |
+| `GET /api/states`, `/api/states/<entity>` | entity states |
+| `GET /api/calendars`, `/api/calendars/<entity>` | calendar events |
+| `GET /api/history/period...`, `/api/logbook...` | history and recent activity |
+| `POST /api/template` | rendering a template |
+| `POST /api/services/weather/get_forecasts`, `.../calendar/get_events`, `.../todo/get_items` | forecasts, events and to-do items (service calls that only return data) |
+
+Only recipes you give the key can use it, and it only works from inside the add-on:
+`127.0.0.1:8124` isn't reachable from your network, and the key is no use anywhere else.
+Requests from a browser, including a recipe's own page while it is rendered, are refused.
+
+To do this the add-on has **Home Assistant API access** (shown on its page): Home
+Assistant gives it a token that can do anything an administrator can. That token stays
+with the add-on's own web server; LaraPaper and its recipes never see it. Without a key,
+nothing uses it.
+
+### For recipe authors
+
+A recipe works here unchanged if it takes Home Assistant's URL and token from its form
+fields, polls Home Assistant's REST API paths under that URL, sends the token as
+`Authorization: Bearer <token>`, and asks for forecasts, calendar events or to-do items
+with a POST to `/api/services/<domain>/<service>?return_response` (with
+`polling_verb: post` or from its `transform.js`). Don't build `127.0.0.1:8124` into a
+recipe; a hint in the URL field's description helps users find it, e.g. "In LaraPaper's
+Home Assistant add-on: `http://127.0.0.1:8124` and the add-on's key".
+
 ## The web UI
 
 **Open Web UI** (and **Show in sidebar** on the app's page) shows LaraPaper inside
@@ -81,7 +130,8 @@ At home, the web UI is also at the App URL (port 4567), next to the TRMNL's devi
 
 This app is meant for trusted home networks. Port 4567 serves the TRMNL device API
 and the web UI; don't expose it to the internet (use **Open Web UI** from outside).
-Ingress on port 8099 only answers Home Assistant's own proxy.
+Ingress on port 8099 only answers Home Assistant's own proxy, and the Home Assistant
+access for recipes on port 8124 only answers from inside the add-on, with the key.
 
 The container itself is confined by an AppArmor profile (`apparmor.txt`): it is denied
 access to Home Assistant's `/config`, `/ssl`, `/backup`, `/share` and `/media`
