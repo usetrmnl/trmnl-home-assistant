@@ -205,7 +205,7 @@ if (isAddOn) {
   const detectedBy = process.env['SUPERVISOR_TOKEN']
     ? 'SUPERVISOR_TOKEN'
     : 'options file'
-  console.log(`[Config] Running as HA add-on (detected via ${detectedBy})`)
+  console.log(`[Config] Running as HA app (detected via ${detectedBy})`)
 } else {
   console.log('[Config] Running in standalone mode')
 }
@@ -339,7 +339,7 @@ if (
   options.server_port !== DEFAULT_SERVER_PORT
 ) {
   console.warn(
-    `[Config] ⚠️ server_port=${options.server_port} ignored in add-on mode (must be ${DEFAULT_SERVER_PORT} for HA ingress)`,
+    `[Config] ⚠️ server_port=${options.server_port} ignored in app mode (must be ${DEFAULT_SERVER_PORT} for HA ingress)`,
   )
 }
 
