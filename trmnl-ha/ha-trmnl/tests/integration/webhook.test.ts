@@ -16,12 +16,7 @@ import {
   beforeEach,
   afterEach,
 } from 'bun:test'
-import {
-  setupTestEnvironment,
-  teardownTestEnvironment,
-  waitFor,
-  type TestEnvironment,
-} from '../helpers/mock-helper.js'
+import { waitFor } from '../helpers/mock-helper.js'
 import { WebhookTestServer } from '../helpers/webhook-server.js'
 import {
   createPNGBuffer,
@@ -67,7 +62,6 @@ const asSchedule = (
 ): Schedule => testSchedule as unknown as Schedule
 
 describe('Webhook Integration', () => {
-  let testEnv: TestEnvironment
   let webhookServer: WebhookTestServer
   let executor: ScheduleExecutor
   let mockScreenshots: MockScreenshot[] = []
@@ -112,9 +106,6 @@ describe('Webhook Integration', () => {
   }
 
   beforeAll(async () => {
-    testEnv = await setupTestEnvironment()
-
-    // Start webhook test server
     webhookServer = new WebhookTestServer(10002)
     await webhookServer.start()
   }, 30000)
@@ -124,7 +115,6 @@ describe('Webhook Integration', () => {
       await webhookServer.stop()
     }
     cleanupScheduleFile(testScheduleFile)
-    await teardownTestEnvironment(testEnv)
   })
 
   beforeEach(() => {
