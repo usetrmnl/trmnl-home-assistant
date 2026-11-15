@@ -10,6 +10,16 @@ between upstream releases takes a `-1`, `-2` suffix.
 Each entry starts with the bundled LaraPaper release's own notes (on the version that
 first bundles it), followed by the add-on's own changes under "Home Assistant add-on".
 
+## [0.47.0-1] - 2026-11-15
+
+### Home Assistant add-on
+
+- Screens rendered in LaraPaper's queue worker work again: since 0.46.0-2 the worker
+  and the scheduler ran as `www-data` with root's home directory, where Chromium can't
+  start, so every queued render failed (the "Pre-render playlist items" Lab feature,
+  playlist item cache warm/refresh). They now use `www-data`'s own.
+- The smoke test checks both have a home directory they can write.
+
 ## [0.47.0] - 2026-11-15
 
 ### LaraPaper 0.47.0
