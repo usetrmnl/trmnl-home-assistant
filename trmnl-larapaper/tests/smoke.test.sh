@@ -71,8 +71,10 @@ check "renders a screen" docker exec "$APP" test -s "${png:-/missing}"
 for service in queue:work schedule:work; do
     check "$service runs as www-data" sh -c \
         "docker exec $APP ps -o user,args | grep 'artisan $service' | grep -v grep | grep -q '^www-data'"
-    # with a HOME it can write: Chromium (every render in a queued job) fails without one
-    home=$(docker exec -u www-data "$APP" sh -c "pid=\$(pgrep -f '[a]rtisan $service' | head -1);
+    # with a HOME it can write: Chromium (every render in a queued job) fails without one.
+    # Read from an unconfined container: the add-on's AppArmor profile denies the ptrace /proc/<pid>/environ needs
+    home=$(docker run --rm --pid "container:$APP" --security-opt apparmor=unconfined -u www-data \
+        --entrypoint sh "$IMAGE" -c "pid=\$(pgrep -f '[a]rtisan $service' | head -1);
         tr '\\0' '\\n' < /proc/\$pid/environ | sed -n 's/^HOME=//p'")
     check "$service has a writable HOME (${home:-none})" docker exec -u www-data "$APP" test -w "${home:-/missing}"
 done
