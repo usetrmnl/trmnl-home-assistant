@@ -31,7 +31,8 @@ configuration:
     description: >-
       Lets recipes read Home Assistant at http://127.0.0.1:8124 without a Home
       Assistant token: enter that as a recipe's Home Assistant URL and this key as its
-      access token. Make up a random key of 24 or more letters, digits, - or _. Recipes
+      access token. Use 24 or more letters, digits, - or _; the add-on's log suggests a
+      random one while this is empty. Recipes
       can read states, calendars, history and templates and get forecasts and to-do
       items, but not control anything. Empty turns it off.
   env_vars:

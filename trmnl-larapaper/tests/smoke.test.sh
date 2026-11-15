@@ -158,6 +158,8 @@ docker exec "$APP" rm -f /var/www/html/public/smoke-urls.php
 
 # --- Home Assistant for recipes: off without a key ----------------------------------
 check "HA proxy: off without a key" sh -c "! docker exec $APP curl -s -o /dev/null http://127.0.0.1:8124/api/"
+check "HA proxy: the log suggests a key" sh -c \
+    "docker logs $APP 2>&1 | grep -Eq 'Home Assistant for recipes: off.*e\\.g\\. to [A-Za-z0-9_-]{32}\$'"
 
 # --- Restart with other options ---------------------------------------------------
 # shellcheck disable=SC2016 # literal $ in a value

@@ -71,8 +71,10 @@ Home Assistant URL and an access token. In this add-on there are two ways to fil
 in:
 
 1. **The add-on's key (recommended).** Set **Home Assistant key for recipes** to a random
-   string of 24 or more letters, digits, `-` or `_` (a password manager can make one) and
-   restart the add-on. In a recipe, enter `http://127.0.0.1:8124` as the Home Assistant
+   string of 24 or more letters, digits, `-` or `_` and restart the add-on. While it is
+   empty, the add-on's **Log** tab suggests a freshly generated one on each start; copy
+   that. The option is masked like a password, and its eye icon shows it again when you
+   need it for another recipe. In a recipe, enter `http://127.0.0.1:8124` as the Home Assistant
    URL and the key as its access token.
 2. **A Home Assistant token.** Enter `http://homeassistant:8123` and a
    [long-lived access token](https://www.home-assistant.io/docs/authentication/#your-account-profile)
