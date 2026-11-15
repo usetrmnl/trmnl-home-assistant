@@ -38,6 +38,28 @@ official LaraPaper image with these additions:
 | --- | --- | --- |
 | App URL | empty | The address in the screen links LaraPaper gives the TRMNL (`APP_URL`) |
 | Allow more accounts | off | Whether anyone reaching the web UI can create an account after the first (`MULTIUSER_REGISTRATION_ENABLED`); LaraPaper then stops rendering Blade recipes unless you trust every user and set it up otherwise |
+| Log level | info | How much LaraPaper writes to the add-on's log (`LOG_LEVEL`) |
+| Transform runner URL | empty | Where recipe [transforms](https://usetrmnl.github.io/larapaper/usage/transform) run. Empty: LaraPaper's own JavaScript runner, inside the add-on. A URL: an external runner (`TRANSFORM_PROVIDER=http`, `TRANSFORM_RUNNER_URL`) |
+| Transform runner token | empty | Bearer token for that runner (`TRANSFORM_RUNNER_TOKEN`) |
+| Extra environment variables | none | Any other [LaraPaper environment variable](https://usetrmnl.github.io/larapaper/getting-started/environment-variables), as a name and a value |
+
+### Transforms in other languages
+
+LaraPaper runs JavaScript transforms itself. For PHP, Python or Ruby, or to isolate
+transforms from LaraPaper, run [byos-transform-runner](https://github.com/bnussbau/byos-transform-runner)
+somewhere LaraPaper can reach (it sandboxes each run with bubblewrap, which needs user
+namespaces, so it doesn't fit in an add-on) and set **Transform runner URL** to it, e.g.
+`http://192.168.1.20:3000`. Set its `TRANSFORM_API_KEY` and the same value as
+**Transform runner token** if others can reach it.
+
+### Extra environment variables
+
+For LaraPaper settings without an option of their own, such as `HTTP_CLIENT_TIMEOUT` or
+OpenID Connect sign-in (`OIDC_*`), add them under **Extra environment variables**. They
+override the options above, apply on the next start, and go back to LaraPaper's default
+once removed from the list. `APP_KEY`, `DB_CONNECTION`, `DB_DATABASE` and
+`TRUSTED_PROXIES` stay the add-on's and are ignored there. OpenID Connect sends you back
+to the App URL, so it signs you in there, not through **Open Web UI**.
 
 ## The web UI
 

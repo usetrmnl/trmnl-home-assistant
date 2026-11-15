@@ -1,6 +1,6 @@
 ---
 name: LaraPaper (BYOS)
-version: "0.47.0-1"
+version: "0.47.0-2"
 slug: trmnl-larapaper
 description: >-
   Runs LaraPaper, a self-hosted TRMNL server (BYOS) with recipes, playlists and
@@ -26,6 +26,14 @@ ports_description:
 options:
   app_url: ""
   multiuser_registration: false
+  log_level: info
+  env_vars: []
 schema:
   app_url: url
   multiuser_registration: bool
+  log_level: list(debug|info|notice|warning|error|critical)
+  transform_runner_url: url?
+  transform_runner_token: password?
+  env_vars:
+    - name: match(^[A-Z][A-Z0-9_]*$)
+      value: str

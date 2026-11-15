@@ -11,3 +11,24 @@ configuration:
     description: >-
       The first account can always be created. Turn on to let anyone reaching the web
       UI create further accounts; LaraPaper then stops rendering Blade recipes.
+  log_level:
+    name: Log level
+    description: >-
+      How much LaraPaper writes to the add-on's log (LOG_LEVEL). Debug is LaraPaper's
+      own default; use it to troubleshoot.
+  transform_runner_url:
+    name: Transform runner URL
+    description: >-
+      Leave empty to run recipe transforms in JavaScript inside the add-on. Set it to an
+      external transform runner, such as byos-transform-runner, for PHP, Python and Ruby
+      transforms and a stronger sandbox.
+  transform_runner_token:
+    name: Transform runner token
+    description: >-
+      Bearer token sent to the transform runner, if it requires one.
+  env_vars:
+    name: Extra environment variables
+    description: >-
+      Other LaraPaper settings from its environment variables list, e.g.
+      HTTP_CLIENT_TIMEOUT or OIDC_ENABLED. They override the options above. Takes effect
+      on restart.

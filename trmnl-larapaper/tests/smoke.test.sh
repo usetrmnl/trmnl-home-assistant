@@ -97,6 +97,8 @@ fi
 check "App URL from the options" docker exec "$APP" grep -qx 'APP_URL=http://localhost:4567' /var/www/html/.env
 check "registration from the options" docker exec "$APP" grep -qx 'MULTIUSER_REGISTRATION_ENABLED=0' /var/www/html/.env
 check "no REGISTRATION_ENABLED (gone since LaraPaper 0.46.0)" sh -c "! docker exec $APP grep -q '^REGISTRATION_ENABLED=' /var/www/html/.env"
+check "log level defaults to info" docker exec "$APP" grep -qx 'LOG_LEVEL=info' /var/www/html/.env
+check "transforms run in LaraPaper by default" sh -c "! docker exec $APP grep -q '^TRANSFORM_PROVIDER=' /var/www/html/.env"
 check "time zone from Home Assistant" docker exec "$APP" grep -qx 'APP_TIMEZONE=Europe/Amsterdam' /var/www/html/.env
 check "app key in /data" test -s "$WORK/data/app_key"
 check "database in /data" test -s "$WORK/data/database/database.sqlite"
@@ -144,8 +146,28 @@ check "ingress: serves screen images" test "$(code -H 'X-Ingress-Path: /api/hass
 docker exec "$APP" rm -f /var/www/html/public/smoke-urls.php
 
 # --- Restart with other options ---------------------------------------------------
-start '{"app_url": "http://localhost:4567/", "multiuser_registration": true}'
+# shellcheck disable=SC2016 # literal $ in a value
+start '{"app_url": "http://localhost:4567/", "multiuser_registration": true, "log_level": "warning",
+    "transform_runner_url": "http://runner:3000/", "transform_runner_token": "t0k$n \"x\" #1",
+    "env_vars": [{"name": "HTTP_CLIENT_TIMEOUT", "value": "20"}, {"name": "OIDC_CLIENT_ID", "value": "my client"},
+                 {"name": "LOG_LEVEL", "value": "error"}, {"name": "APP_KEY", "value": "nope"}]}'
 check "registration follows the options" docker exec "$APP" grep -qx 'MULTIUSER_REGISTRATION_ENABLED=1' /var/www/html/.env
+# What LaraPaper itself reads, after the add-on wrote .env and Laravel cached its config
+# shellcheck disable=SC2016 # PHP code
+settings=$(docker exec -u www-data "$APP" php artisan tinker --execute '
+    echo "settings=", json_encode([config("services.transform.provider"), config("services.transform.runner_url"),
+        config("services.transform.runner_token"), config("app.http_client_timeout"), config("services.oidc.client_id"),
+        config("logging.channels.stderr.level")]);' 2>&1 | sed -n 's/^settings=//p')
+# shellcheck disable=SC2016 # literal $ in the token
+check "transform runner, extra variables and log level reach LaraPaper (${settings:-none})" test "$settings" = \
+    '["http","http:\/\/runner:3000","t0k$n \"x\" #1",20,"my client","error"]'
+check "extra variables don't replace the app key" sh -c "! docker exec $APP grep -q '^APP_KEY=nope' /var/www/html/.env"
+
+start '{"app_url": "http://localhost:4567/", "multiuser_registration": true}'
+check "removed extra variables go back to LaraPaper's default" sh -c \
+    "! docker exec $APP grep -qE '^(HTTP_CLIENT_TIMEOUT|OIDC_CLIENT_ID)=' /var/www/html/.env"
+check "removed transform runner goes back to LaraPaper's runner" sh -c "! docker exec $APP grep -q '^TRANSFORM_' /var/www/html/.env"
+check "log level back to info" docker exec "$APP" grep -qx 'LOG_LEVEL=info' /var/www/html/.env
 
 # --- Restarts keep the app key ----------------------------------------------------
 check "restarts keep the app key" test "$(cat "$WORK/data/app_key")" = "$key"
