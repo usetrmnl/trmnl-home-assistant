@@ -71,6 +71,10 @@ check "renders a screen" docker exec "$APP" test -s "${png:-/missing}"
 for service in queue:work schedule:work; do
     check "$service runs as www-data" sh -c \
         "docker exec $APP ps -o user,args | grep 'artisan $service' | grep -v grep | grep -q '^www-data'"
+    # with a HOME it can write: Chromium (every render in a queued job) fails without one
+    home=$(docker exec -u www-data "$APP" sh -c "pid=\$(pgrep -f '[a]rtisan $service' | head -1);
+        tr '\\0' '\\n' < /proc/\$pid/environ | sed -n 's/^HOME=//p'")
+    check "$service has a writable HOME (${home:-none})" docker exec -u www-data "$APP" test -w "${home:-/missing}"
 done
 
 # A recipe transform (LaraPaper 0.47.0+) runs: Node under its permission model, so a
