@@ -10,6 +10,42 @@ between upstream releases takes a `-1`, `-2` suffix.
 Each entry starts with the bundled LaraPaper release's own notes (on the version that
 first bundles it), followed by the add-on's own changes under "Home Assistant add-on".
 
+## [0.47.0] - 2026-11-15
+
+### LaraPaper 0.47.0
+
+From the [LaraPaper 0.47.0 release](https://github.com/usetrmnl/larapaper/releases/tag/0.47.0):
+
+LaraPaper 0.47 introduces Transform, allowing recipes to pass through a transformation step before rendering. JavaScript transforms are supported out of the box. To support additional languages, you can deploy [byos-transform-runner](https://usetrmnl.github.io/larapaper/usage/transform) as a sidecar or [build your own transform provider](https://usetrmnl.github.io/larapaper/usage/transform-provider). See the [Docker Compose example](https://github.com/usetrmnl/larapaper/blob/main/docker/prod-transform/docker-compose.yml) for reference.
+
+This release also adds a new Lab feature that refreshes the cache for the next playlist item before the device requests it, API-based cache control for playlist items, the ability to modify mashup configurations in playlists, cloud proxy support with a custom API key, more reliable web mirroring, and more.
+
+#### What's Changed
+* feat: add initial implementation of transform
+* feat(#317): added cache control for playlist items via API
+* feat(#317): add lab feature to pre-refresh the next playlist item's cache before the device fetches it
+* feat(#326): playlist items / mashup can be edited
+* feat(api): return the full user shape from /api/me by [@ikraamg](https://github.com/ikraamg) in [#325](https://github.com/usetrmnl/larapaper/pull/325)
+* feat(framework): inject palette screen class into template
+* feat: enhance Mirror WebUI by [@gablau](https://github.com/gablau) in [#323](https://github.com/usetrmnl/larapaper/pull/323)
+* feat: update Device models and palettes
+* feat: add proxy_cloud_api to device edit modal
+* feat: allow cloud proxy with custom api key; validate connection on toggle
+* feat: enhance device logs management with search and clear functionality
+* feat: harmonize the device action menu
+* feat: bump laravel-liquid to 0.7.0
+* fix(#324): update image resolution logic to return null when images are missing, preventing 404 URLs
+* docs: add security note to multi-user accounts
+
+#### New Contributors
+* [@ikraamg](https://github.com/ikraamg) made their first contribution in [#325](https://github.com/usetrmnl/larapaper/pull/325)
+
+**Full Changelog**: [0.46.0...0.47.0](https://github.com/usetrmnl/larapaper/compare/0.46.0...0.47.0)
+
+### Home Assistant add-on
+
+- Updated LaraPaper to 0.47.0
+
 ## [0.46.0-2] - 2026-11-14
 
 ### Home Assistant add-on
