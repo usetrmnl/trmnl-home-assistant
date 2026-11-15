@@ -36,6 +36,10 @@ jobs:
         working-directory: trmnl-ha/ha-trmnl
         run: bun run lint
 
+      - name: Typecheck
+        working-directory: trmnl-ha/ha-trmnl
+        run: bun run typecheck
+
   test:
     name: Test
     # ImageMagick is copied from a Debian image, whose libraries Ubuntu 26.04 no longer carries.
