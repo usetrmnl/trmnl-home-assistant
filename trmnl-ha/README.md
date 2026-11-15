@@ -8,7 +8,7 @@ Send Home Assistant dashboard screenshots to your TRMNL e-ink display with advan
 
 [![Add repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fusetrmnl%2Ftrmnl-home-assistant)
 
-**Note:** This add-on can capture screenshots from **any website**, not just Home Assistant dashboards. See [Standalone Mode](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#standalone-mode) for detailed setup.
+**Note:** This app can capture screenshots from **any website**, not just Home Assistant dashboards. See [Standalone Mode](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#standalone-mode) for detailed setup.
 
 ## Features
 
@@ -25,16 +25,16 @@ Send Home Assistant dashboard screenshots to your TRMNL e-ink display with advan
 ### Home Assistant OS (Recommended)
 
 1. Add this repository to Home Assistant:
-   - Go to **Settings** → **Add-ons** → **Add-on Store** → **⋮** → **Repositories**
+   - Go to **Settings** → **Apps** → **Install app** → **⋮** → **Repositories**
    - Add: `https://github.com/usetrmnl/trmnl-home-assistant`
 
-2. Install the **TRMNL HA** add-on
+2. Install the **TRMNL HA** app
 
 3. Configure your access token:
    - In Home Assistant: **Profile** → **Long-Lived Access Tokens** → **Create Token**
-   - Add to the add-on configuration
+   - Add to the app configuration
 
-4. Start the add-on and open the Web UI
+4. Start the app and open the Web UI
 
 ### Home Assistant Container (Docker)
 
@@ -62,12 +62,12 @@ If running Home Assistant OS in Proxmox, set the VM host type to `host` for Chro
 
 ## Security
 
-**Important:** This add-on is designed for trusted home networks.
+**Important:** This app is designed for trusted home networks.
 
 - The Web UI (port 10000) has **no built-in authentication**
 - **Always use Ingress** (sidebar integration) instead of direct port access
 - **Never expose port 10000** directly to the internet
-- Access tokens are stored securely in Home Assistant's add-on configuration
+- Access tokens are stored securely in Home Assistant's app configuration
 
 ## Documentation
 
@@ -85,7 +85,7 @@ If running Home Assistant OS in Proxmox, set the VM host type to `host` for Chro
 
 ## Attribution
 
-This project is based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main/puppet) Home Assistant add-on by [Paulus Schoutsen](https://github.com/balloob).
+This project is based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main/puppet) Home Assistant app by [Paulus Schoutsen](https://github.com/balloob).
 
 See the [NOTICE](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/NOTICE) file for complete attribution and modification details.
 

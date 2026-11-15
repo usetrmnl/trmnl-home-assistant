@@ -1,5 +1,5 @@
 {
-  "name": "TRMNL HA add-on",
+  "name": "TRMNL HA app",
   "image": "ghcr.io/home-assistant/devcontainer:5-apps",
   "overrideCommand": false,
   "remoteUser": "vscode",
