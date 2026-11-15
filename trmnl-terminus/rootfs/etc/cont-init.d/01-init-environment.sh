@@ -10,7 +10,7 @@ if [ -f /data/options.json ]; then
 fi
 
 if [ -z "$HA_IP" ]; then
-    echo "[terminus] ERROR: ha_ip is required. Set it in the add-on's configuration tab."
+    echo "[terminus] ERROR: ha_ip is required. Set it in the app's Configuration tab."
     exit 1
 fi
 
