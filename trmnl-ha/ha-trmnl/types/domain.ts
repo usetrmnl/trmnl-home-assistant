@@ -32,7 +32,7 @@ export interface CropRegion {
 // =============================================================================
 
 /** Valid output image formats */
-export type ImageFormat = 'png' | 'jpeg'
+export type ImageFormat = 'png' | 'jpeg' | 'bmp'
 
 /** Valid rotation angles in degrees */
 export type RotationAngle = 90 | 180 | 270
