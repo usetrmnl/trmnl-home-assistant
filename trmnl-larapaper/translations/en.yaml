@@ -14,12 +14,12 @@ configuration:
   log_level:
     name: Log level
     description: >-
-      How much LaraPaper writes to the add-on's log (LOG_LEVEL). Debug is LaraPaper's
+      How much LaraPaper writes to the app's log (LOG_LEVEL). Debug is LaraPaper's
       own default; use it to troubleshoot.
   transform_runner_url:
     name: Transform runner URL
     description: >-
-      Leave empty to run recipe transforms in JavaScript inside the add-on. Set it to an
+      Leave empty to run recipe transforms in JavaScript inside the app. Set it to an
       external transform runner, such as byos-transform-runner, for PHP, Python and Ruby
       transforms and a stronger sandbox.
   transform_runner_token:
@@ -31,7 +31,7 @@ configuration:
     description: >-
       Lets recipes read Home Assistant at http://127.0.0.1:8124 without a Home
       Assistant token: enter that as a recipe's Home Assistant URL and this key as its
-      access token. Use 24 or more letters, digits, - or _; the add-on's log suggests a
+      access token. Use 24 or more letters, digits, - or _; the app's log suggests a
       random one while this is empty. Recipes
       can read states, calendars, history and templates and get forecasts and to-do
       items, but not control anything. Empty turns it off.

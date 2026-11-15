@@ -41,8 +41,8 @@ official LaraPaper image with these additions:
 | App URL | empty | The address in the screen links LaraPaper gives the TRMNL (`APP_URL`) |
 | Home Assistant key for recipes | empty | Turns on read-only Home Assistant access for recipes that are given this key, see below |
 | Allow more accounts | off | Whether anyone reaching the web UI can create an account after the first (`MULTIUSER_REGISTRATION_ENABLED`); LaraPaper then stops rendering Blade recipes unless you trust every user and set it up otherwise |
-| Log level | info | How much LaraPaper writes to the add-on's log (`LOG_LEVEL`) |
-| Transform runner URL | empty | Where recipe [transforms](https://usetrmnl.github.io/larapaper/usage/transform) run. Empty: LaraPaper's own JavaScript runner, inside the add-on. A URL: an external runner (`TRANSFORM_PROVIDER=http`, `TRANSFORM_RUNNER_URL`) |
+| Log level | info | How much LaraPaper writes to the app's log (`LOG_LEVEL`) |
+| Transform runner URL | empty | Where recipe [transforms](https://usetrmnl.github.io/larapaper/usage/transform) run. Empty: LaraPaper's own JavaScript runner, inside the app. A URL: an external runner (`TRANSFORM_PROVIDER=http`, `TRANSFORM_RUNNER_URL`) |
 | Transform runner token | empty | Bearer token for that runner (`TRANSFORM_RUNNER_TOKEN`) |
 | Extra environment variables | none | Any other [LaraPaper environment variable](https://usetrmnl.github.io/larapaper/getting-started/environment-variables), as a name and a value |
 
@@ -51,7 +51,7 @@ official LaraPaper image with these additions:
 LaraPaper runs JavaScript transforms itself. For PHP, Python or Ruby, or to isolate
 transforms from LaraPaper, run [byos-transform-runner](https://github.com/bnussbau/byos-transform-runner)
 somewhere LaraPaper can reach (it sandboxes each run with bubblewrap, which needs user
-namespaces, so it doesn't fit in an add-on) and set **Transform runner URL** to it, e.g.
+namespaces, so it doesn't fit in an app) and set **Transform runner URL** to it, e.g.
 `http://192.168.1.20:3000`. Set its `TRANSFORM_API_KEY` and the same value as
 **Transform runner token** if others can reach it.
 
@@ -61,18 +61,18 @@ For LaraPaper settings without an option of their own, such as `HTTP_CLIENT_TIME
 OpenID Connect sign-in (`OIDC_*`), add them under **Extra environment variables**. They
 override the options above, apply on the next start, and go back to LaraPaper's default
 once removed from the list. `APP_KEY`, `DB_CONNECTION`, `DB_DATABASE` and
-`TRUSTED_PROXIES` stay the add-on's and are ignored there. OpenID Connect sends you back
+`TRUSTED_PROXIES` stay the app's and are ignored there. OpenID Connect sends you back
 to the App URL, so it signs you in there, not through **Open Web UI**.
 
 ## Home Assistant in recipes
 
 Recipes that show Home Assistant data (made for TRMNL.com or LaraPaper) ask for your
-Home Assistant URL and an access token. In this add-on there are two ways to fill those
+Home Assistant URL and an access token. In this app there are two ways to fill those
 in:
 
-1. **The add-on's key (recommended).** Set **Home Assistant key for recipes** to a random
-   string of 24 or more letters, digits, `-` or `_` and restart the add-on. While it is
-   empty, the add-on's **Log** tab suggests a freshly generated one on each start; copy
+1. **The app's key (recommended).** Set **Home Assistant key for recipes** to a random
+   string of 24 or more letters, digits, `-` or `_` and restart the app. While it is
+   empty, the app's **Log** tab suggests a freshly generated one on each start; copy
    that. The option is masked like a password, and its eye icon shows it again when you
    need it for another recipe. In a recipe, enter `http://127.0.0.1:8124` as the Home Assistant
    URL and the key as its access token.
@@ -81,7 +81,7 @@ in:
    from your Home Assistant profile. Use this for a recipe that needs more than the list
    below, or if you run transforms in an external transform runner.
 
-With the key, recipes can only read. The add-on passes on just these requests and
+With the key, recipes can only read. The app passes on just these requests and
 refuses the rest:
 
 | Request | For |
@@ -93,13 +93,13 @@ refuses the rest:
 | `POST /api/template` | rendering a template |
 | `POST /api/services/weather/get_forecasts`, `.../calendar/get_events`, `.../todo/get_items` | forecasts, events and to-do items (service calls that only return data) |
 
-Only recipes you give the key can use it, and it only works from inside the add-on:
+Only recipes you give the key can use it, and it only works from inside the app:
 `127.0.0.1:8124` isn't reachable from your network, and the key is no use anywhere else.
 Requests from a browser, including a recipe's own page while it is rendered, are refused.
 
-To do this the add-on has **Home Assistant API access** (shown on its page): Home
+To do this the app has **Home Assistant API access** (shown on its page): Home
 Assistant gives it a token that can do anything an administrator can. That token stays
-with the add-on's own web server; LaraPaper and its recipes never see it. Without a key,
+with the app's own web server; LaraPaper and its recipes never see it. Without a key,
 nothing uses it.
 
 ### For recipe authors
@@ -110,7 +110,7 @@ fields, polls Home Assistant's REST API paths under that URL, sends the token as
 with a POST to `/api/services/<domain>/<service>?return_response` (with
 `polling_verb: post` or from its `transform.js`). Don't build `127.0.0.1:8124` into a
 recipe; a hint in the URL field's description helps users find it, e.g. "In LaraPaper's
-Home Assistant add-on: `http://127.0.0.1:8124` and the add-on's key".
+Home Assistant app: `http://127.0.0.1:8124` and the app's key".
 
 ## The web UI
 
@@ -133,7 +133,7 @@ At home, the web UI is also at the App URL (port 4567), next to the TRMNL's devi
 This app is meant for trusted home networks. Port 4567 serves the TRMNL device API
 and the web UI; don't expose it to the internet (use **Open Web UI** from outside).
 Ingress on port 8099 only answers Home Assistant's own proxy, and the Home Assistant
-access for recipes on port 8124 only answers from inside the add-on, with the key.
+access for recipes on port 8124 only answers from inside the app, with the key.
 
 The container itself is confined by an AppArmor profile (`apparmor.txt`): it is denied
 access to Home Assistant's `/config`, `/ssl`, `/backup`, `/share` and `/media`
