@@ -10,6 +10,18 @@ between upstream releases takes a `-1`, `-2` suffix.
 Each entry starts with the bundled LaraPaper release's own notes (on the version that
 first bundles it), followed by the add-on's own changes under "Home Assistant add-on".
 
+## [0.47.0-2] - 2026-11-15
+
+### Home Assistant add-on
+
+- New option **Log level** (`LOG_LEVEL`), `info` by default: LaraPaper logged at
+  `debug` before.
+- New options **Transform runner URL** and **Transform runner token**: run recipe
+  transforms on an external runner such as byos-transform-runner (PHP, Python, Ruby,
+  bubblewrap sandbox) instead of LaraPaper's own JavaScript runner.
+- New option **Extra environment variables**: any other LaraPaper setting, as a name and
+  a value. Removing one restores LaraPaper's default on the next start.
+
 ## [0.47.0-1] - 2026-11-15
 
 ### Home Assistant add-on

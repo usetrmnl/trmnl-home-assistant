@@ -53,14 +53,36 @@ unset_env() {
 set_env() {
     tmp="$APP_DIR/.env.tmp"
     grep -v "^$1=" "$APP_DIR/.env" > "$tmp" || true
-    printf '%s=%s\n' "$1" "$2" >> "$tmp"
+    printf '%s=%s\n' "$1" "$(env_value "$2")" >> "$tmp"
     cat "$tmp" > "$APP_DIR/.env"
     rm -f "$tmp"
 }
 
+# A value as .env (phpdotenv) reads it back unchanged: plain when it's safe, else
+# double-quoted with \, " and $ escaped (unquoted values can't hold spaces or #).
+env_value() {
+    case "$1" in
+        *[!A-Za-z0-9_./:,@+=-]*) printf '"%s"' "$(printf '%s' "$1" | sed 's/[\\"$]/\\&/g')" ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
+# Drop the extra environment variables (option env_vars) the last start wrote, so one
+# taken off the list falls back to LaraPaper's default (or the option below).
+EXTRA_ENV_LIST="$DATA_DIR/env_vars.list"
+if [ -f "$EXTRA_ENV_LIST" ]; then
+    while IFS= read -r name; do
+        [ -n "$name" ] && unset_env "$name"
+    done < "$EXTRA_ENV_LIST"
+fi
+
 APP_URL="$(opt app_url)"
 APP_URL="${APP_URL%/}"
 MULTIUSER_REGISTRATION="$(opt multiuser_registration)"
+LOG_LEVEL="$(opt log_level)"
+TRANSFORM_RUNNER_URL="$(opt transform_runner_url)"
+TRANSFORM_RUNNER_URL="${TRANSFORM_RUNNER_URL%/}"
+TRANSFORM_RUNNER_TOKEN="$(opt transform_runner_token)"
 
 set_env APP_KEY "$(cat "$DATA_DIR/app_key")"
 set_env APP_ENV production
@@ -72,8 +94,25 @@ set_env APP_TIMEZONE "${TZ:-UTC}"
 unset_env REGISTRATION_ENABLED
 set_env MULTIUSER_REGISTRATION_ENABLED "${MULTIUSER_REGISTRATION:-0}"
 [ -n "$APP_URL" ] && set_env APP_URL "$APP_URL"
+# LaraPaper logs at debug unless told otherwise
+set_env LOG_LEVEL "${LOG_LEVEL:-info}"
+# Recipe transforms: LaraPaper's own JavaScript runner, or an external runner (such as
+# byos-transform-runner) for more languages and a real sandbox
+if [ -n "$TRANSFORM_RUNNER_URL" ]; then
+    set_env TRANSFORM_PROVIDER http
+    set_env TRANSFORM_RUNNER_URL "$TRANSFORM_RUNNER_URL"
+    if [ -n "$TRANSFORM_RUNNER_TOKEN" ]; then
+        set_env TRANSFORM_RUNNER_TOKEN "$TRANSFORM_RUNNER_TOKEN"
+    else
+        unset_env TRANSFORM_RUNNER_TOKEN
+    fi
+else
+    unset_env TRANSFORM_PROVIDER
+    unset_env TRANSFORM_RUNNER_URL
+    unset_env TRANSFORM_RUNNER_TOKEN
+fi
 
-log "APP_URL=${APP_URL:-<unset>} TZ=${TZ:-UTC} multiuser_registration=${MULTIUSER_REGISTRATION:-0}"
+log "APP_URL=${APP_URL:-<unset>} TZ=${TZ:-UTC} multiuser_registration=${MULTIUSER_REGISTRATION:-0} log_level=${LOG_LEVEL:-info} transforms=${TRANSFORM_RUNNER_URL:-local}"
 
 # Home Assistant ingress (the sidebar panel and "Open Web UI"): Home Assistant proxies
 # /api/hassio_ingress/<token>/... to this port with the prefix removed and the prefix in
@@ -139,3 +178,26 @@ server {
 }
 CONF
 log "Home Assistant ingress on port 8099 (from $HA_INGRESS_PROXY)"
+
+# Extra environment variables (option env_vars), last so they can override the above.
+# The ones the add-on can't run without stay its own.
+: > "$EXTRA_ENV_LIST.tmp"
+# shellcheck disable=SC2016 # PHP code, not shell expansions
+php -r '$o = json_decode(@file_get_contents($argv[1]), true) ?: [];
+        foreach ($o["env_vars"] ?? [] as $e) {
+            $v = $e["value"] ?? "";
+            echo $e["name"] ?? "", "\t", is_bool($v) ? ($v ? "true" : "false") : str_replace(["\r", "\n"], " ", (string) $v), "\n";
+        }' "$DATA_DIR/options.json" | while IFS="$(printf '\t')" read -r name value; do
+    case "$name" in
+        "") ;;
+        APP_KEY | DB_CONNECTION | DB_DATABASE | TRUSTED_PROXIES)
+            log "env_vars: $name is managed by the add-on, ignored" ;;
+        *[!A-Z0-9_]* | [!A-Z]*)
+            log "env_vars: $name is not a valid variable name, ignored" ;;
+        *)
+            set_env "$name" "$value"
+            echo "$name" >> "$EXTRA_ENV_LIST.tmp"
+            log "env_vars: set $name" ;;
+    esac
+done
+mv "$EXTRA_ENV_LIST.tmp" "$EXTRA_ENV_LIST"
