@@ -43,13 +43,6 @@ opt() {
             echo is_bool($v) ? ($v ? "1" : "0") : $v;' "$DATA_DIR/options.json" "$1"
 }
 
-unset_env() {
-    tmp="$APP_DIR/.env.tmp"
-    grep -v "^$1=" "$APP_DIR/.env" > "$tmp" || true
-    cat "$tmp" > "$APP_DIR/.env"
-    rm -f "$tmp"
-}
-
 set_env() {
     tmp="$APP_DIR/.env.tmp"
     grep -v "^$1=" "$APP_DIR/.env" > "$tmp" || true
@@ -67,14 +60,10 @@ env_value() {
     esac
 }
 
-# Drop the extra environment variables (option env_vars) the last start wrote, so one
-# taken off the list falls back to LaraPaper's default (or the option below).
-EXTRA_ENV_LIST="$DATA_DIR/env_vars.list"
-if [ -f "$EXTRA_ENV_LIST" ]; then
-    while IFS= read -r name; do
-        [ -n "$name" ] && unset_env "$name"
-    done < "$EXTRA_ENV_LIST"
-fi
+# Every start begins from the image's .env, so an option or extra variable taken off
+# falls back to LaraPaper's default (the container survives a plain restart).
+[ -f "$APP_DIR/.env.image" ] || cp "$APP_DIR/.env" "$APP_DIR/.env.image"
+cp "$APP_DIR/.env.image" "$APP_DIR/.env"
 
 APP_URL="$(opt app_url)"
 APP_URL="${APP_URL%/}"
@@ -91,7 +80,6 @@ set_env DB_DATABASE database/storage/database.sqlite
 set_env APP_TIMEZONE "${TZ:-UTC}"
 # LaraPaper 0.46.0 replaced REGISTRATION_ENABLED: the first account can always register,
 # further ones only with MULTIUSER_REGISTRATION_ENABLED (which also turns off Blade).
-unset_env REGISTRATION_ENABLED
 set_env MULTIUSER_REGISTRATION_ENABLED "${MULTIUSER_REGISTRATION:-0}"
 [ -n "$APP_URL" ] && set_env APP_URL "$APP_URL"
 # LaraPaper logs at debug unless told otherwise
@@ -101,15 +89,7 @@ set_env LOG_LEVEL "${LOG_LEVEL:-info}"
 if [ -n "$TRANSFORM_RUNNER_URL" ]; then
     set_env TRANSFORM_PROVIDER http
     set_env TRANSFORM_RUNNER_URL "$TRANSFORM_RUNNER_URL"
-    if [ -n "$TRANSFORM_RUNNER_TOKEN" ]; then
-        set_env TRANSFORM_RUNNER_TOKEN "$TRANSFORM_RUNNER_TOKEN"
-    else
-        unset_env TRANSFORM_RUNNER_TOKEN
-    fi
-else
-    unset_env TRANSFORM_PROVIDER
-    unset_env TRANSFORM_RUNNER_URL
-    unset_env TRANSFORM_RUNNER_TOKEN
+    [ -n "$TRANSFORM_RUNNER_TOKEN" ] && set_env TRANSFORM_RUNNER_TOKEN "$TRANSFORM_RUNNER_TOKEN"
 fi
 
 log "APP_URL=${APP_URL:-<unset>} TZ=${TZ:-UTC} multiuser_registration=${MULTIUSER_REGISTRATION:-0} log_level=${LOG_LEVEL:-info} transforms=${TRANSFORM_RUNNER_URL:-local}"
@@ -181,7 +161,6 @@ log "Home Assistant ingress on port 8099 (from $HA_INGRESS_PROXY)"
 
 # Extra environment variables (option env_vars), last so they can override the above.
 # The ones the add-on can't run without stay its own.
-: > "$EXTRA_ENV_LIST.tmp"
 # shellcheck disable=SC2016 # PHP code, not shell expansions
 php -r '$o = json_decode(@file_get_contents($argv[1]), true) ?: [];
         foreach ($o["env_vars"] ?? [] as $e) {
@@ -196,8 +175,6 @@ php -r '$o = json_decode(@file_get_contents($argv[1]), true) ?: [];
             log "env_vars: $name is not a valid variable name, ignored" ;;
         *)
             set_env "$name" "$value"
-            echo "$name" >> "$EXTRA_ENV_LIST.tmp"
             log "env_vars: set $name" ;;
     esac
 done
-mv "$EXTRA_ENV_LIST.tmp" "$EXTRA_ENV_LIST"

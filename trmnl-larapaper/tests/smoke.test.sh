@@ -150,7 +150,8 @@ docker exec "$APP" rm -f /var/www/html/public/smoke-urls.php
 start '{"app_url": "http://localhost:4567/", "multiuser_registration": true, "log_level": "warning",
     "transform_runner_url": "http://runner:3000/", "transform_runner_token": "t0k$n \"x\" #1",
     "env_vars": [{"name": "HTTP_CLIENT_TIMEOUT", "value": "20"}, {"name": "OIDC_CLIENT_ID", "value": "my client"},
-                 {"name": "LOG_LEVEL", "value": "error"}, {"name": "APP_KEY", "value": "nope"}]}'
+                 {"name": "LOG_LEVEL", "value": "error"}, {"name": "APP_KEY", "value": "nope"},
+                 {"name": "LOG_STACK", "value": "single"}]}'
 check "registration follows the options" docker exec "$APP" grep -qx 'MULTIUSER_REGISTRATION_ENABLED=1' /var/www/html/.env
 # What LaraPaper itself reads, after the add-on wrote .env and Laravel cached its config
 # shellcheck disable=SC2016 # PHP code
@@ -167,6 +168,7 @@ start '{"app_url": "http://localhost:4567/", "multiuser_registration": true}'
 check "removed extra variables go back to LaraPaper's default" sh -c \
     "! docker exec $APP grep -qE '^(HTTP_CLIENT_TIMEOUT|OIDC_CLIENT_ID)=' /var/www/html/.env"
 check "removed transform runner goes back to LaraPaper's runner" sh -c "! docker exec $APP grep -q '^TRANSFORM_' /var/www/html/.env"
+check "a removed extra variable restores the image's value" docker exec "$APP" grep -qx 'LOG_STACK=single,stderr' /var/www/html/.env
 check "log level back to info" docker exec "$APP" grep -qx 'LOG_LEVEL=info' /var/www/html/.env
 
 # --- Restarts keep the app key ----------------------------------------------------
