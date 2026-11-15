@@ -847,6 +847,23 @@ describeDithering('Dithering Module', () => {
       expect(gray4Result.length / 1024).toBeLessThan(100)
       expect(gray16Result.length / 1024).toBeLessThan(100)
     })
+
+    describe('BMP output for ESPHome', () => {
+      const bitsPerPixel = (bmp: Buffer) => bmp.readUInt16LE(28)
+
+      it('writes a 1-bit BMP3 with black at palette index 0 for bw', async () => {
+        const result = await applyDithering(largeTestImage, { method: 'floyd-steinberg', palette: 'bw', format: 'bmp' })
+
+        expect([result.toString('latin1', 0, 2), result.readUInt32LE(14), bitsPerPixel(result), result.readUInt32LE(54)])
+          .toEqual(['BM', 40, 1, 0])
+      })
+
+      it('writes 24-bit for gray palettes, since ESPHome cannot decode 2 or 4-bit', async () => {
+        const result = await applyDithering(largeTestImage, { method: 'floyd-steinberg', palette: 'gray-4', format: 'bmp' })
+
+        expect(bitsPerPixel(result)).toBe(24)
+      })
+    })
   })
 
   // ==========================================================================

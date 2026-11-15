@@ -19,6 +19,7 @@ import type {
 const CONTENT_TYPES: Record<ImageFormat, string> = {
   png: 'image/png',
   jpeg: 'image/jpeg',
+  bmp: 'image/bmp',
 }
 
 /** Transformed webhook payload ready for HTTP POST */
