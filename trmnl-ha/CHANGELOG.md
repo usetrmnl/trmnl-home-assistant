@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.5] - 2026-11-15
+
+### Fixed
+
+- A fetch URL with `format=bmp` returns a BMP again, for devices such as ESPHome that fetch the image themselves. It is 1-bit for the black and white palette and 24-bit for the others, the depths ESPHome can read. BMP is never chosen by default, and schedules still send PNG because TRMNL does not accept BMP uploads. Thanks to @tschoehuijs (#158)
+
 ## [0.14.4] - 2026-11-15
 
 ### Changed
@@ -482,4 +488,5 @@ Based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main
 [0.11.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.10.3...v0.11.0
 [0.12.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.11.1...v0.12.0
 [0.14.4]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.14.3...v0.14.4
+[0.14.5]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.14.4...v0.14.5
 [0.2.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.1.0...v0.2.0
