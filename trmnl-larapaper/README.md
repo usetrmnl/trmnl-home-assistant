@@ -2,7 +2,7 @@
 
 ![TRMNL Logo](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/logo.png?raw=true)
 
-This Home Assistant add-on runs [LaraPaper](https://github.com/usetrmnl/larapaper), a
+This Home Assistant app runs [LaraPaper](https://github.com/usetrmnl/larapaper), a
 self-hosted TRMNL server (BYOS) with recipes, playlists and mashups, and opens its web
 UI inside Home Assistant. The device API and web UI are on port `4567`.
 
@@ -11,11 +11,11 @@ UI inside Home Assistant. The device API and web UI are on port `4567`.
 ## Installation
 
 1. Add this repository to Home Assistant:
-   - Go to **Settings** → **Add-ons** → **Add-on Store** → **⋮** → **Repositories**
+   - Go to **Settings** → **Apps** → **Install app** → **⋮** → **Repositories**
    - Add: `https://github.com/usetrmnl/trmnl-home-assistant`
-2. Install the **LaraPaper (BYOS)** add-on
+2. Install the **LaraPaper (BYOS)** app
 3. Set **App URL** to the address your TRMNL reaches Home Assistant on, port 4567
-4. Start the add-on and open the Web UI
+4. Start the app and open the Web UI
 
 See the [documentation](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-larapaper/DOCS.md)
 for pointing a TRMNL at it and for each option.

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The add-on runs as a supervised Docker container that:
+The app runs as a supervised Docker container that:
 
 1. **Authenticates** using a Home Assistant long-lived access token
 2. **Navigates** to dashboards using headless Chromium
@@ -16,18 +16,18 @@ Schedules and configuration persist in `/data` (mounted by Home Assistant Superv
 
 ## Quick Start
 
-### Home Assistant Add-on (HA OS)
+### Home Assistant App (HA OS)
 
-1. Install from the add-on store
+1. Install from the app store
 2. Create token: **Profile** → **Long-Lived Access Tokens** → **Create Token**
-3. Add token to add-on configuration
-4. Start add-on and open Web UI
+3. Add token to app configuration
+4. Start app and open Web UI
 
-> **⚠️ Connection Issues?** If you can't connect, check the `home_assistant_url` in your add-on config. Use the default `http://homeassistant:8123` (internal Docker name) — NOT `homeassistant.local:8123` (mDNS name). If that still fails, use your device's IP address: `http://192.168.x.x:8123`
+> **⚠️ Connection Issues?** If you can't connect, check the `home_assistant_url` in your app config. Use the default `http://homeassistant:8123` (internal Docker name) — NOT `homeassistant.local:8123` (mDNS name). If that still fails, use your device's IP address: `http://192.168.x.x:8123`
 
 ### Home Assistant Container (Docker)
 
-> **Note:** HA Container doesn't have an add-on store. Like other add-ons (Mosquitto, Zigbee2MQTT, Node-RED), you run TRMNL HA as a separate container alongside Home Assistant.
+> **Note:** HA Container doesn't have an app store. Like other apps (Mosquitto, Zigbee2MQTT, Node-RED), you run TRMNL HA as a separate container alongside Home Assistant.
 
 > **⚠️ Important: Use IP Address, Not Hostname**
 >
@@ -97,7 +97,7 @@ Schedules and output screenshots are stored in a persistent data directory. Two 
 
 | Mount | Example | Notes |
 |-------|---------|-------|
-| `/data` (recommended) | `-v ./trmnl-data:/data` | Matches docs, used by HA add-on |
+| `/data` (recommended) | `-v ./trmnl-data:/data` | Matches docs, used by HA app |
 | `/app/data` (also works) | `-v ./trmnl-data:/app/data` | Legacy alternative |
 
 Both options work — the app auto-detects which path is available. If you're already using `/app/data`, there's no need to change.
@@ -156,7 +156,7 @@ bun run dev
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `access_token` | string | *required* | HA long-lived access token |
-| `home_assistant_url` | string | `http://homeassistant:8123` | Base URL (works with any website). Left at the default, the add-on asks Home Assistant which port it serves on, since new installs use port 80. |
+| `home_assistant_url` | string | `http://homeassistant:8123` | Base URL (works with any website). Left at the default, the app asks Home Assistant which port it serves on, since new installs use port 80. |
 | `timezone` | string | (system) | Timezone for scheduled captures (e.g., `America/New_York`) |
 | `keep_browser_open` | bool | `false` | Keep browser alive between requests (faster, more memory) |
 | `timestamp_overlay` | bool | `false` | Stamp the capture time in the bottom-right corner of every screenshot. Can also be enabled per schedule ("Show Capture Time") or per request with the `timestamp` URL parameter. |
@@ -253,18 +253,18 @@ rest_command:
     method: POST
 ```
 
-The host is the add-on's hostname on the Supervisor network: `local-trmnl-ha`
-for a locally built add-on, or the store add-on's slug with underscores
+The host is the app's hostname on the Supervisor network: `local-trmnl-ha`
+for a locally built app, or the slug of the app from the app store with underscores
 replaced by dashes. Then in an automation:
 
 ```yaml
 actions:
   - action: rest_command.trmnl_capture
     data:
-      schedule_id: "your_schedule_id"  # from the add-on's schedule list
+      schedule_id: "your_schedule_id"  # from the app's schedule list
 ```
 
-Create a disabled schedule in the add-on UI to capture only on demand — it
+Create a disabled schedule in the app UI to capture only on demand — it
 never runs on its own cron, but the action captures and delivers it whenever
 called.
 
@@ -273,13 +273,13 @@ called.
 | Architecture | Description | Use Case |
 |--------------|-------------|----------|
 | **Pull (Fetch URL)** | Device requests image on-demand via HTTP GET | ESPHome, custom e-ink, Terminus, testing |
-| **Push (Webhook)** | Add-on POSTs to webhook on schedule | TRMNL devices, automated updates |
+| **Push (Webhook)** | App POSTs to webhook on schedule | TRMNL devices, automated updates |
 
 **Pull mode** generates a fresh screenshot on every request. The browser launches automatically if not already running.
 
 **Push mode** captures on a schedule and POSTs the image to your webhook URL.
 
-When the webhook URL is a TRMNL image endpoint, TRMNL answers each upload with the time the device will next ask for this image. The add-on then times the next capture to land `check_in_lead_seconds` (default 120) before that check-in, or earlier when the schedule's recent captures were slow, so the device always picks up a fresh picture, and the schedule's own interval only runs when TRMNL gives no time (a device asleep, or not yet claimed). This is on for every schedule; uncheck **Capture just before the TRMNL device checks in** on a schedule to always run on its interval instead.
+When the webhook URL is a TRMNL image endpoint, TRMNL answers each upload with the time the device will next ask for this image. The app then times the next capture to land `check_in_lead_seconds` (default 120) before that check-in, or earlier when the schedule's recent captures were slow, so the device always picks up a fresh picture, and the schedule's own interval only runs when TRMNL gives no time (a device asleep, or not yet claimed). This is on for every schedule; uncheck **Capture just before the TRMNL device checks in** on a schedule to always run on its interval instead.
 
 Both modes can be used simultaneously on the same schedule — configure a webhook for push delivery while also using the fetch URL for on-demand access.
 
@@ -398,14 +398,14 @@ A schedule can send its screenshot in one of two shapes:
 | **Raw Image** (default) | TRMNL devices, custom endpoints |
 | **Terminus** | Your own [Terminus](https://github.com/usetrmnl/terminus) server |
 
-For Terminus, the add-on sends a short message naming the screen, and Terminus fetches the image from the add-on. That means **Add-on URL** has to be an address **Terminus** can reach — often *not* `localhost`.
+For Terminus, the app sends a short message naming the screen, and Terminus fetches the image from the app. That means **App URL** has to be an address **Terminus** can reach — often *not* `localhost`.
 
-To keep screens on your own network, install the **Terminus** or **LaraPaper** add-on from this repository: the schedule editor then offers **Send to local server** and fills in the addresses for you ([details](docs/webhook-formats.md#send-to-a-local-server)).
+To keep screens on your own network, install the **Terminus** or **LaraPaper** app from this repository: the schedule editor then offers **Send to local server** and fills in the addresses for you ([details](docs/webhook-formats.md#send-to-a-local-server)).
 
 See **[Sending screenshots to a server](docs/webhook-formats.md)** for:
 - What to put in each field
 - Signing in, and what to do when sessions expire
-- Which Add-on URL to use for your setup (Docker, LAN, reverse proxy)
+- Which App URL to use for your setup (Docker, LAN, reverse proxy)
 
 ---
 
@@ -417,7 +417,7 @@ Set VM CPU type to `host` (not `kvm64`) for Chromium sandbox compatibility.
 
 ### Browser Crashes
 
-1. Check add-on logs for errors
+1. Check app logs for errors
 2. Set `keep_browser_open: false` to enable auto-recovery
 3. Ensure 512MB+ memory available
 
@@ -438,12 +438,12 @@ Set VM CPU type to `host` (not `kvm64`) for Chromium sandbox compatibility.
 
 ### Blank UI or Schedules Stop Firing
 
-Symptoms: the add-on page loads blank, scheduled captures stop, and the log repeats `[NODE-CRON] missed execution ... Possible blocking IO or high CPU`.
+Symptoms: the app page loads blank, scheduled captures stop, and the log repeats `[NODE-CRON] missed execution ... Possible blocking IO or high CPU`.
 
 1. Update to 0.8.2 or later — the scheduler used to stop and recreate every cron job on each reload tick, which could kill scheduling entirely. That rework plus further scheduler fixes shipped in 0.8.2–0.9.2.
-2. Restart the add-on. Schedules and settings survive restarts.
-3. If it persists, copy your schedules from the UI (they also live in `/data/schedules.json`), reinstall the add-on, and re-import them.
-4. Still stuck? Open an issue with the add-on log and the `timings` block from `GET /health`.
+2. Restart the app. Schedules and settings survive restarts.
+3. If it persists, copy your schedules from the UI (they also live in `/data/schedules.json`), reinstall the app, and re-import them.
+4. Still stuck? Open an issue with the app log and the `timings` block from `GET /health`.
 
 ### "TRMNL: screen not delivered" Notification
 
@@ -456,7 +456,7 @@ The server refused the image, so retrying the same settings will not help. The n
 | URL Type | Works? | Use Case |
 |----------|--------|----------|
 | `http://192.168.x.x:8123` | ✅ Yes | Always works (recommended) |
-| `http://homeassistant:8123` | ✅ Yes | HA OS add-on only (internal Docker name) |
+| `http://homeassistant:8123` | ✅ Yes | HA OS app only (internal Docker name) |
 | `http://homeassistant.local:8123` | ❌ No | mDNS doesn't resolve inside containers |
 
 **To find your IP:**
@@ -549,15 +549,15 @@ bun install && bun run dev
 ./scripts/docker-build.sh && ./scripts/docker-run.sh
 ```
 
-### Home Assistant devcontainer (test as a real add-on)
+### Home Assistant devcontainer (test as a real app)
 
-Runs the add-on inside a full Home Assistant + Supervisor, so you can verify the add-on lifecycle, options schema, and Ingress — not just the app in isolation.
+Runs the app inside a full Home Assistant + Supervisor, so you can verify the app lifecycle, options schema, and Ingress — not just the server on its own.
 
 1. Open the `trmnl-ha` folder in VS Code and **Reopen in Container** when prompted.
 2. Run the **Start Home Assistant** task (Terminal → Run Task).
-3. Open Home Assistant at [http://localhost:7123](http://localhost:7123); the add-on appears under **Settings → Add-ons** as a local app.
+3. Open Home Assistant at [http://localhost:7123](http://localhost:7123); the app appears under **Settings → Apps** as a local app.
 
-To install your local changes instead of the published image, comment out the `image:` line in `config.yaml` before installing the add-on.
+To install your local changes instead of the published image, comment out the `image:` line in `config.yaml` before installing the app.
 
 ### Scripts
 

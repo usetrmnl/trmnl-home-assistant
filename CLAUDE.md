@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Home Assistant add-on for TRMNL e-ink displays. Captures HA dashboard screenshots with advanced dithering algorithms optimized for e-paper screens.
+Home Assistant app (formerly add-on) for TRMNL e-ink displays. Captures HA dashboard screenshots with advanced dithering algorithms optimized for e-paper screens.
 
 **Runtime:** Bun 1.3.5+ (not Node.js)
 **Language:** TypeScript with strict type checking
