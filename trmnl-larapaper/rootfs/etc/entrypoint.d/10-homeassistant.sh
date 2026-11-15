@@ -112,10 +112,12 @@ HA_API_CONF=/etc/nginx/conf.d/ha-api.conf
 HA_API_URL="${HA_API_URL:-http://supervisor/core/api}"
 HA_API_URL="${HA_API_URL%/}"
 rm -f "$HA_API_CONF"
+# A fresh random key in the right format, for the log, so nobody needs a generator
+ha_key_suggestion() { head -c 24 /dev/urandom | base64 | tr '+/' '-_'; }
 if [ -z "$HA_KEY" ]; then
-    log "Home Assistant for recipes: off (no home_assistant_key)"
+    log "Home Assistant for recipes: off. To turn it on, set \"Home Assistant key for recipes\", e.g. to $(ha_key_suggestion)"
 elif ! printf '%s' "$HA_KEY" | grep -Eqx '[A-Za-z0-9_-]{24,}'; then
-    log "Home Assistant for recipes: off (home_assistant_key must be 24 or more letters, digits, - or _)"
+    log "Home Assistant for recipes: off (home_assistant_key must be 24 or more letters, digits, - or _, e.g. $(ha_key_suggestion))"
 elif [ -z "$SUPERVISOR_TOKEN" ]; then
     log "Home Assistant for recipes: off (no SUPERVISOR_TOKEN)"
 # nginx won't start if the upstream's name doesn't resolve
