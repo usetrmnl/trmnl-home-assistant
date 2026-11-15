@@ -105,7 +105,7 @@ export class MockHAServer {
         await readFile(join(fixturesDir, 'network.json'), 'utf-8')
       )
       this.fixtures.config = JSON.parse(
-        await readFile(join(fixturesDir, 'config.json'), 'utf-8')
+        await readFile(join(fixturesDir, 'ha-config.json'), 'utf-8')
       )
 
       console.log('[MockHA] Fixtures loaded successfully')
