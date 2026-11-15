@@ -99,7 +99,7 @@ function loadOptionsFileSafe(filePath: string): Options {
       console.error(`[Startup] FATAL: ${err.message}`)
       console.error(`[Startup] Error: ${err.cause.message}`)
       console.error(
-        '[Startup] Check your addon configuration in Home Assistant',
+        '[Startup] Check your app configuration in Home Assistant',
       )
     } else {
       const message = err instanceof Error ? err.message : String(err)

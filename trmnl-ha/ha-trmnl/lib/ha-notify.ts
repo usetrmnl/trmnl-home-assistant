@@ -51,8 +51,8 @@ export async function notifyReauthRequired(
     title: 'TRMNL: sign in to your BYOS server',
     message:
       `The saved session for "${schedule.name}" expired, so screens are no longer being sent. ` +
-      'Open the TRMNL add-on, pick the schedule and authenticate again. ' +
-      'Ticking "stay signed in" lets the add-on recover from this on its own.',
+      'Open the TRMNL HA app, pick the schedule and authenticate again. ' +
+      'Ticking "stay signed in" lets the app recover from this on its own.',
     notification_id: `trmnl_byos_reauth_${schedule.id}`,
   }, target)
 }

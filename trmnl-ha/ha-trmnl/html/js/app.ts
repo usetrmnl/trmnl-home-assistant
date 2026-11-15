@@ -1016,7 +1016,7 @@ class App {
 
   /**
    * Toggles BYOS delivery mode (URI vs legacy base64) and shows/hides the
-   * Add-on URL field which is only meaningful for URI mode.
+   * App URL field which is only meaningful for URI mode.
    */
   async toggleByosDeliveryMode(mode: string): Promise<void> {
     const urlField = document.getElementById('s_byos_addon_url_field')
