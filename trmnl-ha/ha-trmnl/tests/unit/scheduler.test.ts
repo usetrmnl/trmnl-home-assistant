@@ -7,13 +7,14 @@
  * @module tests/unit/scheduler
  */
 
-import { describe, it, expect, afterEach, spyOn, mock } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach, spyOn, mock } from 'bun:test'
 import { changedSnapshot, Scheduler } from '../../scheduler.js'
 import {
   buildByosSchedule,
   buildSchedule,
 } from '../helpers/schedule-fixtures.js'
 import * as scheduleStore from '../../lib/scheduleStore.js'
+import * as notifications from '../../lib/ha-notify.js'
 import { captureFetch, restoreFetch } from '../helpers/fetch-mock.js'
 import type { Schedule } from '../../types/domain.js'
 
@@ -80,6 +81,17 @@ describe('changedSnapshot', () => {
 describe('Scheduler BYOS authentication notices', () => {
   let scheduler: Scheduler | undefined
   const spies: { mockRestore(): void }[] = []
+
+  beforeEach(() => {
+    // Exercise real notifications without depending on local HA credentials.
+    const ha = { url: 'http://homeassistant:8123', token: 'test-ha-token' }
+    const notify = notifications.notifyReauthRequired
+    const clear = notifications.clearReauthRequired
+    spies.push(
+      spyOn(notifications, 'notifyReauthRequired').mockImplementation((schedule) => notify(schedule, ha)),
+      spyOn(notifications, 'clearReauthRequired').mockImplementation((schedule) => clear(schedule, ha)),
+    )
+  })
 
   afterEach(() => {
     scheduler?.stop()
