@@ -25,7 +25,7 @@ import type { HaWebSocket as LibHaWebSocket } from 'home-assistant-js-websocket/
 import * as messages from 'home-assistant-js-websocket/dist/messages.js'
 import { atLeastHaVersion } from 'home-assistant-js-websocket/dist/util.js'
 import WebSocket from 'ws'
-import { hassUrl, hassToken, SERVER_PORT } from './const.js'
+import { hassUrl, hassToken, SERVER_PORT, DIRECT_ACCESS_SECRET } from './const.js'
 import { loadPresets } from './devices.js'
 import type { LocalServers, PresetsConfig } from './types/domain.js'
 import { cachedLocalServers } from './lib/local-servers.js'
@@ -95,6 +95,8 @@ interface UIConfig {
   cachedAt: number | null
   /** Server port for constructing Fetch URLs (10000 for add-on, configurable for standalone) */
   serverPort: number
+  /** Added to the Fetch URL; this page is only served through ingress */
+  directAccessSecret: string | null
   /** Terminus and LaraPaper add-ons beside this one; null outside Home Assistant */
   localServers: LocalServers | null
 }
@@ -608,6 +610,7 @@ export async function handleUIRequest(
       connectionStatus,
       cachedAt,
       serverPort: SERVER_PORT,
+      directAccessSecret: DIRECT_ACCESS_SECRET ?? null,
       localServers: await cachedLocalServers(),
     }
 

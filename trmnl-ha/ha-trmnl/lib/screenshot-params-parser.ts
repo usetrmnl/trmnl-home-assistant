@@ -27,6 +27,7 @@ import type {
  * `?kiosk` reach Home Assistant instead of being dropped (#44).
  */
 const SYSTEM_PARAMS = new Set([
+  'secret',
   'viewport',
   'url',
   'wait',

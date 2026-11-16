@@ -148,6 +148,7 @@ const options: Options = {
       : fileOptions.server_port,
   navigation_timeout_ms: fileOptions.navigation_timeout_ms,
   check_in_lead_seconds: fileOptions.check_in_lead_seconds,
+  direct_access_secret: fileOptions.direct_access_secret,
 }
 
 // Log configuration source for debugging
@@ -322,6 +323,9 @@ export const debugLogging: boolean = options.debug_logging ?? true
  * Default HTTP server port (must match ingress_port in config.yaml for add-on mode)
  */
 const DEFAULT_SERVER_PORT = 10000
+
+/** Required on port 10000 for every route but /health when set; empty means unset. */
+export const DIRECT_ACCESS_SECRET: string | undefined = options.direct_access_secret || undefined
 
 /**
  * HTTP server port

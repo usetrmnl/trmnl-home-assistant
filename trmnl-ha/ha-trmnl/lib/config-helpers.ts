@@ -22,6 +22,7 @@ export interface Options {
   server_port?: number
   navigation_timeout_ms?: number
   check_in_lead_seconds?: number
+  direct_access_secret?: string
 }
 
 /**

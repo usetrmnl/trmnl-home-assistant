@@ -321,6 +321,9 @@ export class RenderScheduleContent {
     }
 
     const path = target.isHAMode ? target.path : '/'
+    // @ts-expect-error window.uiConfig is injected by server
+    const secret: string | null = window.uiConfig?.directAccessSecret ?? null
+    if (secret) params.append('secret', secret)
     const queryString = params.toString()
     const fetchPath = queryString ? `${path}?${queryString}` : path
 

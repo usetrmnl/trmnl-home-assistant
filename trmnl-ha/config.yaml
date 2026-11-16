@@ -31,7 +31,7 @@ panel_title: "TRMNL HA"
 ports:
   10000/tcp: 10000
 ports_description:
-  10000/tcp: "Web UI and API (direct access)"
+  10000/tcp: "Fetch URL images; the API needs direct_access_secret"
 
 # Configuration options
 options:
@@ -45,6 +45,7 @@ options:
   timestamp_overlay: false
   timestamp_12h: false
   check_in_lead_seconds: 120
+  direct_access_secret: ""
 
 # Schema for options validation
 schema:
@@ -58,6 +59,7 @@ schema:
   timestamp_overlay: bool?
   timestamp_12h: bool?
   check_in_lead_seconds: "int(30,600)?"
+  direct_access_secret: "password?"
 
 # Exclude regeneratable data from HA backups
 backup_exclude:

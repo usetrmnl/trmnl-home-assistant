@@ -64,8 +64,8 @@ If running Home Assistant OS in Proxmox, set the VM host type to `host` for Chro
 
 **Important:** This app is designed for trusted home networks.
 
-- The Web UI (port 10000) has **no built-in authentication**
-- **Always use Ingress** (sidebar integration) instead of direct port access
+- As an app, the settings page opens only from the sidebar (Ingress). Port 10000 serves dashboard images, and the API only with `direct_access_secret` set
+- In standalone Docker, port 10000 has **no authentication**
 - **Never expose port 10000** directly to the internet
 - Access tokens are stored securely in Home Assistant's app configuration
 
