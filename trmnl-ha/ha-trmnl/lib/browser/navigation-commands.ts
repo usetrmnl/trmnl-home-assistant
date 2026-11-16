@@ -484,10 +484,24 @@ export class WaitForPaintStability {
  * network-idle check cannot see. Watching the frames covers every such card
  * without depending on card internals.
  *
- * `quietMs` must be long enough to span a card's fetch but short enough to fit
- * between the routine state updates that also travel this websocket. `timeout`
- * caps the wait for a dashboard whose updates never pause.
+ * Entity updates are ignored: a busy home sends them without pause, which held
+ * every capture to `timeout` (#128). `quietMs` must span a card's fetch.
  */
+/** True for a frame of only subscribe_entities pushes: `{ type: 'event', event: { a | c | r } }`, alone or coalesced. */
+function isOnlyEntityUpdates(payloadData: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(payloadData)
+    const messages: unknown[] = Array.isArray(parsed) ? parsed : [parsed]
+    return messages.length > 0 && messages.every((message) => {
+      const { type, event } = (message ?? {}) as { type?: unknown; event?: unknown }
+      const keys = type === 'event' && event && typeof event === 'object' ? Object.keys(event) : []
+      return keys.length > 0 && keys.every((key) => key === 'a' || key === 'c' || key === 'r')
+    })
+  } catch {
+    return false
+  }
+}
+
 export class WaitForWebSocketIdle {
   #page: Page
   #quietMs: number
@@ -506,8 +520,8 @@ export class WaitForWebSocketIdle {
       await client.send('Network.enable')
 
       let lastFrameAt = Date.now()
-      const recordFrame = (): void => {
-        lastFrameAt = Date.now()
+      const recordFrame = ({ response }: { response: { payloadData: string } }): void => {
+        if (!isOnlyEntityUpdates(response.payloadData)) lastFrameAt = Date.now()
       }
       client.on('Network.webSocketFrameReceived', recordFrame)
       client.on('Network.webSocketFrameSent', recordFrame)

@@ -720,10 +720,10 @@ describe('WaitForPaintStability', () => {
 /** A CDP session whose websocket frame events a test can drive. */
 function createWebSocketMockPage(options: { cdpUnavailable?: boolean } = {}): {
   page: Page
-  emitFrame: () => void
+  emitFrame: (payloadData?: string) => void
   wasDetached: () => boolean
 } {
-  const handlers: (() => void)[] = []
+  const handlers: ((frame: { response: { payloadData: string } }) => void)[] = []
   let detached = false
 
   const page = {
@@ -731,7 +731,7 @@ function createWebSocketMockPage(options: { cdpUnavailable?: boolean } = {}): {
       if (options.cdpUnavailable) throw new Error('CDP unavailable')
       return {
         send: async () => {},
-        on: (_event: string, handler: () => void) => handlers.push(handler),
+        on: (_event: string, handler: (typeof handlers)[number]) => handlers.push(handler),
         detach: async () => {
           detached = true
         },
@@ -741,10 +741,13 @@ function createWebSocketMockPage(options: { cdpUnavailable?: boolean } = {}): {
 
   return {
     page,
-    emitFrame: () => handlers.forEach((handler) => handler()),
+    emitFrame: (payloadData = '{"id":7,"type":"result","success":true}') =>
+      handlers.forEach((handler) => handler({ response: { payloadData } })),
     wasDetached: () => detached,
   }
 }
+
+const ENTITY_UPDATE = '{"id":3,"type":"event","event":{"c":{"sensor.power":{"+":{"s":"412"}}}}}'
 
 describe('WaitForWebSocketIdle', () => {
   it('resolves once no frame has arrived for the quiet window', async () => {
@@ -778,6 +781,51 @@ describe('WaitForWebSocketIdle', () => {
     const elapsed = Date.now() - start
     expect(elapsed).toBeGreaterThanOrEqual(250)
     expect(elapsed).toBeLessThan(700)
+  })
+
+  it('ignores entity updates, which never stop in a busy home', async () => {
+    const { page, emitFrame } = createWebSocketMockPage()
+    const interval = setInterval(() => emitFrame(ENTITY_UPDATE), 40)
+    const start = Date.now()
+
+    await new WaitForWebSocketIdle(page, 150, 2000).call()
+
+    clearInterval(interval)
+    expect(Date.now() - start).toBeLessThan(400)
+  })
+
+  it('ignores a coalesced batch of entity updates', async () => {
+    const { page, emitFrame } = createWebSocketMockPage()
+    const interval = setInterval(() => emitFrame(`[${ENTITY_UPDATE},${ENTITY_UPDATE}]`), 40)
+    const start = Date.now()
+
+    await new WaitForWebSocketIdle(page, 150, 2000).call()
+
+    clearInterval(interval)
+    expect(Date.now() - start).toBeLessThan(400)
+  })
+
+  it('waits for a coalesced batch that carries a card reply', async () => {
+    const { page, emitFrame } = createWebSocketMockPage()
+    const batch = `[${ENTITY_UPDATE},{"id":12,"type":"result","success":true,"result":{}}]`
+    const interval = setInterval(() => emitFrame(batch), 50)
+    setTimeout(() => clearInterval(interval), 250)
+    const start = Date.now()
+
+    await new WaitForWebSocketIdle(page, 150, 2000).call()
+
+    expect(Date.now() - start).toBeGreaterThanOrEqual(400)
+  })
+
+  it('waits while events other than entity updates arrive', async () => {
+    const { page, emitFrame } = createWebSocketMockPage()
+    const interval = setInterval(() => emitFrame('{"id":9,"type":"event","event":{"states":{}}}'), 50)
+    setTimeout(() => clearInterval(interval), 250)
+    const start = Date.now()
+
+    await new WaitForWebSocketIdle(page, 150, 2000).call()
+
+    expect(Date.now() - start).toBeGreaterThanOrEqual(400)
   })
 
   it('detaches the CDP session when done', async () => {
