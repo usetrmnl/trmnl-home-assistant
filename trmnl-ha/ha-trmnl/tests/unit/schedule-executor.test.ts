@@ -185,11 +185,15 @@ describe('ScheduleExecutor — refused upload notification', () => {
     const notifier = {
       refused: mock(async (_schedule: Schedule, _reason: string) => {}),
       cleared: mock(async (_schedule: Schedule) => {}),
+      reauth: mock(async (_schedule: Schedule) => {}),
+      reauthCleared: mock(async (_schedule: Schedule) => {}),
     }
     const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trmnl-executor-'))
     const executor = new ScheduleExecutor(async () => Buffer.from('fake-png'), outputDir, {
       notifyUploadRefused: notifier.refused,
       clearUploadRefused: notifier.cleared,
+      notifyReauthRequired: notifier.reauth,
+      clearReauthRequired: notifier.reauthCleared,
     })
     return { executor, notifier }
   }
@@ -212,13 +216,16 @@ describe('ScheduleExecutor — refused upload notification', () => {
     expect(notifier.refused).not.toHaveBeenCalled()
   })
 
-  it('leaves an expired BYOS login to the sign-in notice', async () => {
+  it('creates a sign-in notice when BYOS rejects authentication', async () => {
     mockFetch({ ok: false, status: 401, statusText: 'Unauthorized' })
     const { executor, notifier } = createNotifyingExecutor()
 
-    await executor.call(buildByosSchedule())
+    const schedule = buildByosSchedule()
+    await executor.call(schedule)
 
     expect(notifier.refused).not.toHaveBeenCalled()
+    expect(notifier.reauth).toHaveBeenCalledWith(schedule)
+    expect(notifier.reauthCleared).not.toHaveBeenCalled()
   })
 
   it('clears the notification when an upload succeeds', async () => {
@@ -228,5 +235,44 @@ describe('ScheduleExecutor — refused upload notification', () => {
     await executor.call(webhookSchedule())
 
     expect(notifier.cleared).toHaveBeenCalledTimes(1)
+    expect(notifier.reauthCleared).not.toHaveBeenCalled()
+  })
+
+  it('clears a persisted sign-in notice after authenticated BYOS delivery', async () => {
+    mockFetch({ ok: true, status: 200 })
+    const { executor, notifier } = createNotifyingExecutor()
+    const schedule = buildByosSchedule()
+
+    await executor.call(schedule)
+
+    expect(notifier.reauthCleared).toHaveBeenCalledWith(schedule)
+    expect(notifier.reauth).not.toHaveBeenCalled()
+  })
+
+  it('clears a sign-in notice after token renewal even if image delivery fails', async () => {
+    globalThis.fetch = mock(async (url: unknown) =>
+      String(url).endsWith('/api/jwt')
+        ? Response.json({ access_token: 'renewed', refresh_token: 'renewed-refresh' })
+        : new Response('', { status: 503 }),
+    ) as unknown as typeof fetch
+    const { executor, notifier } = createNotifyingExecutor()
+    const schedule = buildByosSchedule()
+    schedule.webhook_format!.byosConfig!.auth!.obtained_at = Date.now() - 11 * 60_000
+
+    const result = await executor.call(schedule)
+
+    expect(result.webhook?.success).toBe(false)
+    expect(notifier.reauthCleared).toHaveBeenCalledTimes(1)
+    expect(notifier.reauth).not.toHaveBeenCalled()
+  })
+
+  it('keeps a sign-in notice when delivery has a network failure', async () => {
+    globalThis.fetch = mock(async () => { throw new Error('ECONNREFUSED') }) as unknown as typeof fetch
+    const { executor, notifier } = createNotifyingExecutor()
+
+    await executor.call(buildByosSchedule())
+
+    expect(notifier.reauthCleared).not.toHaveBeenCalled()
+    expect(notifier.reauth).not.toHaveBeenCalled()
   })
 })

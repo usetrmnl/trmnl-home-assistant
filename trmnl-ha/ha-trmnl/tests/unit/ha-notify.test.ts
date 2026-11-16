@@ -11,6 +11,7 @@ import {
   notifyUploadRefused,
   clearUploadRefused,
 } from '../../lib/ha-notify.js'
+import * as notifications from '../../lib/ha-notify.js'
 import { captureFetch, mockFetch, restoreFetch } from '../helpers/fetch-mock.js'
 
 afterAll(restoreFetch)
@@ -99,6 +100,21 @@ describe('ha-notify', () => {
       expect(JSON.parse(requests[0]!.init?.body as string)).toEqual({
         notification_id: 'trmnl_upload_refused_abc123',
       })
+    })
+  })
+})
+
+
+describe('clearing recovered BYOS authentication', () => {
+  it('dismisses the same persistent notification created for the schedule', async () => {
+    const requests = captureFetch()
+    expect(notifications).toHaveProperty('clearReauthRequired')
+    await notifications.clearReauthRequired(schedule, ha)
+    expect(requests[0]!.url).toBe(
+      'http://homeassistant:8123/api/services/persistent_notification/dismiss',
+    )
+    expect(JSON.parse(requests[0]!.init?.body as string)).toEqual({
+      notification_id: 'trmnl_byos_reauth_abc123',
     })
   })
 })

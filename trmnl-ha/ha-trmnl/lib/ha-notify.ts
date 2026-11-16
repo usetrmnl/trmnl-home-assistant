@@ -50,9 +50,19 @@ export async function notifyReauthRequired(
   await callNotificationService('create', {
     title: 'TRMNL: sign in to your BYOS server',
     message:
-      `The saved session for "${schedule.name}" expired, so screens are no longer being sent. ` +
+      `The saved authentication for "${schedule.name}" has expired or was rejected by the BYOS server. ` +
       'Open the TRMNL HA app, pick the schedule and authenticate again. ' +
       'Ticking "stay signed in" lets the app recover from this on its own.',
+    notification_id: `trmnl_byos_reauth_${schedule.id}`,
+  }, target)
+}
+
+/** Removes a sign-in notice after authentication or delivery succeeds. */
+export async function clearReauthRequired(
+  schedule: Pick<Schedule, 'id'>,
+  target: HaTarget = {},
+): Promise<void> {
+  await callNotificationService('dismiss', {
     notification_id: `trmnl_byos_reauth_${schedule.id}`,
   }, target)
 }

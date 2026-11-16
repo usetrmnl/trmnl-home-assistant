@@ -28,6 +28,12 @@ import type { ByosAuthConfig, Schedule } from '../../types/domain.js'
 
 afterAll(restoreFetch)
 
+/** Synthetic JWTs only exercise expiry claims, not signature verification. */
+function jwt(claims: unknown): string {
+  const payload = Buffer.from(JSON.stringify(claims)).toString('base64url')
+  return `eyJhbGciOiJIUzI1NiJ9.${payload}.signature`
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -140,26 +146,43 @@ describe('byos-auth', () => {
   })
 
   describe('#isRefreshable', () => {
-    it('returns true while the access token is within its 30 min lifetime', () => {
+    it.each([31, 30 * 24 * 60])('keeps a long-lived JWT refreshable after %i minutes', (ageMinutes) => {
       const auth: ByosAuthConfig = {
         enabled: true,
-        access_token: 'token',
+        access_token: jwt({ exp: Date.now() / 1000 + 365 * 24 * 60 * 60 }),
         refresh_token: 'refresh',
-        obtained_at: Date.now() - 26 * 60 * 1000,
+        obtained_at: Date.now() - ageMinutes * 60 * 1000,
       }
 
       expect(isRefreshable(auth)).toBe(true)
     })
 
-    it('returns false once the access token has expired server-side', () => {
+    it.each([0, Date.now() / 1000])('rejects a JWT whose exp claim has reached %i', (exp) => {
       const auth: ByosAuthConfig = {
         enabled: true,
-        access_token: 'token',
+        access_token: jwt({ exp }),
         refresh_token: 'refresh',
-        obtained_at: Date.now() - 31 * 60 * 1000,
+        obtained_at: Date.now(),
       }
 
       expect(isRefreshable(auth)).toBe(false)
+    })
+
+    it.each([
+      'opaque-token',
+      'header.not-json.signature',
+      jwt(null),
+      jwt({}),
+      jwt({ exp: '1' }),
+      jwt({ exp: true }),
+      jwt({ exp: null }),
+    ])('attempts refresh when expiry cannot be read from %s', (accessToken) => {
+      expect(isRefreshable({
+        enabled: true,
+        access_token: accessToken,
+        refresh_token: 'refresh',
+        obtained_at: Date.now() - 31 * 60 * 1000,
+      })).toBe(true)
     })
 
     it('returns false when tokens are missing', () => {
@@ -168,14 +191,14 @@ describe('byos-auth', () => {
       expect(isRefreshable(auth)).toBe(false)
     })
 
-    it('returns false when obtained_at is missing', () => {
+    it('allows refresh when obtained_at is missing', () => {
       const auth: ByosAuthConfig = {
         enabled: true,
         access_token: 'token',
         refresh_token: 'refresh',
       }
 
-      expect(isRefreshable(auth)).toBe(false)
+      expect(isRefreshable(auth)).toBe(true)
     })
   })
 
@@ -210,6 +233,36 @@ describe('byos-auth', () => {
       const result = await getValidAccessToken('https://host.com/api', auth)
 
       expect(result).toBe('valid-token')
+    })
+
+    it('refreshes an expired JWT even when obtained_at is recent', async () => {
+      const auth: ByosAuthConfig = {
+        enabled: true,
+        access_token: jwt({ exp: Date.now() / 1000 - 1 }),
+        refresh_token: 'refresh',
+        obtained_at: Date.now(),
+      }
+      mockFetch({
+        json: async () => ({ access_token: 'fresh-token', refresh_token: 'new-refresh' }),
+      })
+
+      expect(await getValidAccessToken('https://host.com/api', auth)).toBe('fresh-token')
+      expect(auth.access_token).toBe('fresh-token')
+    })
+
+    it('keeps renewing long-lived JWTs after ten minutes', async () => {
+      const auth: ByosAuthConfig = {
+        enabled: true,
+        access_token: jwt({ exp: Date.now() / 1000 + 365 * 24 * 60 * 60 }),
+        refresh_token: 'refresh',
+        obtained_at: Date.now() - 11 * 60 * 1000,
+      }
+      mockFetch({
+        json: async () => ({ access_token: 'fresh-token', refresh_token: 'new-refresh' }),
+      })
+
+      expect(await getValidAccessToken('https://host.com/api', auth)).toBe('fresh-token')
+      expect(auth.refresh_token).toBe('new-refresh')
     })
 
     it('posts the refresh request to /api/jwt with the stored credentials', async () => {
