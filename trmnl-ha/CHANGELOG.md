@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-11-16
+
+### Security
+
+- As a Home Assistant app, port 10000 no longer serves the settings page or saved schedules to anything on the network. The settings page now opens only from the Home Assistant sidebar, and the API on port 10000 needs the new `direct_access_secret` option. Fetch URL images keep working as before until you set a secret; with one set, every request to port 10000 needs it, as `?secret=` or an `Authorization: Bearer` header. Standalone Docker has no sidebar and is unchanged. Thanks to @jkufner for raising it (#106, #167)
+
+### Changed
+
+- **Action needed** if a `rest_command` or script calls `/api/` on port 10000 (for example `/api/schedules/<id>/send`): set `direct_access_secret` and send it as an `Authorization: Bearer` header. The docs have an updated `rest_command` example.
+
 ## [0.14.8] - 2026-11-16
 
 ### Fixed
@@ -510,4 +520,5 @@ Based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main
 [0.14.6]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.14.5...v0.14.6
 [0.14.7]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.14.6...v0.14.7
 [0.14.8]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.14.7...v0.14.8
+[0.15.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.14.8...v0.15.0
 [0.2.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.1.0...v0.2.0
