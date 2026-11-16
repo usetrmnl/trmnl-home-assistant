@@ -21,6 +21,7 @@ import type {
   Frame,
   Page,
   Viewport,
+  LaunchOptions,
 } from 'puppeteer'
 import {
   TIMESTAMP_OVERLAY,
@@ -175,12 +176,7 @@ interface NavigateResult {
 
 /** Injectable dependencies for testability without global mock.module() */
 export interface BrowserDeps {
-  launchBrowser: (options: {
-    headless: boolean | 'shell'
-    executablePath?: string
-    args: string[]
-    acceptInsecureCerts?: boolean
-  }) => Promise<PuppeteerBrowser>
+  launchBrowser: (options: LaunchOptions) => Promise<PuppeteerBrowser>
   processImage: typeof defaultProcessImage
   chromiumExecutable: string | undefined
   debugLogging: boolean
@@ -301,6 +297,10 @@ export class Browser {
             executablePath: this.#deps.chromiumExecutable,
             args: PUPPETEER_ARGS,
             acceptInsecureCerts: true,
+            // Our shutdown handler closes the browser; Puppeteer's own one races it and hangs page.close()
+            handleSIGTERM: false,
+            handleSIGINT: false,
+            handleSIGHUP: false,
           }),
         )
 
