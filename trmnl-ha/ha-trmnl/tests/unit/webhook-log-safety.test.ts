@@ -12,6 +12,7 @@ import { Scheduler } from '../../scheduler.js'
 import * as scheduleStore from '../../lib/scheduleStore.js'
 import { ScheduleExecutor } from '../../lib/scheduler/schedule-executor.js'
 import { captureLogs, type LogCapture } from '../helpers/log-capture.js'
+import * as notifications from '../../lib/ha-notify.js'
 import { restoreFetch } from '../helpers/fetch-mock.js'
 import { buildByosSchedule, buildSchedule } from '../helpers/schedule-fixtures.js'
 
@@ -21,9 +22,11 @@ const url = `https://example.invalid/api/plugin_settings/${credential}/image`
 const echo = `Rejected ${url}; credential=${credential}; Authorization: ${bearer}`
 let logs: LogCapture | undefined
 let outputDir: string | undefined
+const notificationSpies: { mockRestore(): void }[] = []
 
 afterEach(async () => {
   restoreFetch()
+  for (const spy of notificationSpies.splice(0)) spy.mockRestore()
   await logs?.stop()
   logs = undefined
   if (outputDir) fs.rmSync(outputDir, { recursive: true, force: true })
@@ -32,6 +35,10 @@ afterEach(async () => {
 
 async function setup() {
   logs = await captureLogs('trace')
+  // Delivery mocks count BYOS requests only, independent of HA credentials.
+  for (const name of ['notifyUploadRefused', 'clearUploadRefused', 'notifyReauthRequired', 'clearReauthRequired'] as const) {
+    notificationSpies.push(spyOn(notifications, name).mockResolvedValue(undefined))
+  }
   outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trmnl-log-safety-'))
   return new ScheduleExecutor(async () => Buffer.from('png'), outputDir)
 }

@@ -33,17 +33,6 @@ export interface TokenResponse {
 const ACCESS_TOKEN_VALIDITY_MS = 10 * 60 * 1000
 
 /**
- * Access token hard expiry on the BYOS server when session expiration is
- * enabled (rodauth's jwt_access_token_period, 1800s). Terminus enables session
- * expiration by default; the Terminus add-on turns it off, which makes tokens
- * ~100-year, so this window matters for any install that keeps it on.
- *
- * NOTE: Rodauth rejects refresh requests once the access token has expired,
- * so past this window the only recovery is re-authentication.
- */
-const ACCESS_TOKEN_EXPIRY_MS = 30 * 60 * 1000
-
-/**
  * Extracts base URL from webhook URL.
  * e.g., "https://example.com/api/screens" → "https://example.com"
  */
@@ -53,23 +42,39 @@ export function getBaseUrl(webhookUrl: string): string {
 }
 
 /**
- * Checks if stored token is still valid (not expired).
+ * Checks if a stored token is fresh enough to use without renewal.
  */
 function isTokenValid(auth: ByosAuthConfig): boolean {
-  if (!auth.obtained_at || !auth.access_token) return false
+  if (!auth.obtained_at || !auth.access_token || isAccessTokenExpired(auth)) return false
   const elapsed = Date.now() - auth.obtained_at
   return elapsed < ACCESS_TOKEN_VALIDITY_MS
 }
 
 /**
- * Checks whether stored tokens can still be refreshed. The BYOS server
- * rejects refresh requests once the access token itself has expired, so
- * callers should skip refresh attempts (and prompt re-auth) past this window.
+ * Checks a JWT's expiry claim without assuming a fixed server lifetime.
+ * Decoding is only an expiry hint, not proof that the server accepts a token.
+ * Unknown expiry must not prevent renewal or claim authentication failed.
+ */
+export function isAccessTokenExpired(auth: ByosAuthConfig): boolean {
+  if (!auth.access_token) return false
+
+  try {
+    const parts = auth.access_token.split('.')
+    if (parts.length !== 3 || !parts[1]) return false
+    const claims: unknown = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
+    if (!claims || typeof claims !== 'object' || !('exp' in claims)) return false
+    return typeof claims.exp === 'number' && Number.isFinite(claims.exp) && claims.exp <= Date.now() / 1000
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Checks whether the stored pair can be renewed. Rodauth rejects an expired
+ * access token, but an old obtained_at alone does not mean it has expired.
  */
 export function isRefreshable(auth: ByosAuthConfig): boolean {
-  if (!auth.access_token || !auth.refresh_token || !auth.obtained_at)
-    return false
-  return Date.now() - auth.obtained_at < ACCESS_TOKEN_EXPIRY_MS
+  return Boolean(auth.access_token && auth.refresh_token) && !isAccessTokenExpired(auth)
 }
 
 /**
@@ -231,12 +236,12 @@ export async function getValidAccessToken(
     return null
   }
 
-  // Token still valid - use it
+  // Token still fresh - use it
   if (isTokenValid(auth)) {
     return auth.access_token
   }
 
-  // Token expired - try to refresh
+  // Token needs renewal - try to refresh
   try {
     const baseUrl = getBaseUrl(webhookUrl)
     const newTokens = await refreshToken(baseUrl, auth)

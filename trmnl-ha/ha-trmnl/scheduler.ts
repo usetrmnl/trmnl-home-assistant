@@ -29,8 +29,9 @@ import {
   canRelogin,
   getValidAccessToken,
   isRefreshable,
+  isAccessTokenExpired,
 } from './lib/scheduler/byos-auth.js'
-import { notifyReauthRequired } from './lib/ha-notify.js'
+import { notifyReauthRequired, clearReauthRequired } from './lib/ha-notify.js'
 import { errorKind } from './lib/error-kind.js'
 import { sleep } from './lib/sleep.js'
 import {
@@ -200,9 +201,8 @@ export class Scheduler {
    * Proactively refreshes BYOS tokens before they expire.
    *
    * Disabled schedules are included so paused schedules keep working auth.
-   * Tokens already past the server's expiry are skipped — the server would
-   * reject the refresh, and the send path surfaces the re-auth error once
-   * instead of every tick.
+   * Known-expired tokens need a saved login to recover. Unknown expiry still
+   * allows refresh, including long-lived sessions after an add-on restart.
    */
   async #keepByosTokensFresh(): Promise<void> {
     if (this.#refreshingTokens) return
@@ -213,27 +213,32 @@ export class Scheduler {
         const auth = schedule.webhook_format?.byosConfig?.auth
         if (!schedule.webhook_url || !auth?.enabled) continue
 
-        // A saved login recovers past the refresh window, so only a schedule
-        // without one is genuinely stuck.
-        if (!isRefreshable(auth) && !canRelogin(auth)) {
-          if (auth.access_token && !this.#deadTokensWarned.has(schedule.id)) {
+        if (isRefreshable(auth) || canRelogin(auth)) {
+          await getValidAccessToken(schedule.webhook_url, auth, (newTokens) => {
+            log.info`Refreshed BYOS tokens for schedule "${schedule.name}"`
+            this.#deadTokensWarned.delete(schedule.id)
+            // Persistent HA notices survive add-on restarts.
+            void clearReauthRequired(schedule)
+            const updates = buildRefreshedAuthUpdate(schedule, newTokens)
+            if (!updates) return
+
+            void updateSchedule(schedule.id, updates).catch((err: unknown) => {
+              log.error`Failed to persist refreshed BYOS tokens: ${(err as Error).message}`
+            })
+          })
+        }
+
+        // A saved login may also fail. Only known expiry proves that the
+        // cached token cannot recover without authentication.
+        if (isAccessTokenExpired(auth)) {
+          if (!this.#deadTokensWarned.has(schedule.id)) {
             this.#deadTokensWarned.add(schedule.id)
-            log.warn`BYOS tokens for "${schedule.name}" expired beyond the refresh window — re-authenticate in the schedule settings`
+            log.warn`BYOS token for "${schedule.name}" has expired — re-authenticate in the schedule settings`
             void notifyReauthRequired(schedule)
           }
-          continue
+        } else {
+          this.#deadTokensWarned.delete(schedule.id)
         }
-        this.#deadTokensWarned.delete(schedule.id)
-
-        await getValidAccessToken(schedule.webhook_url, auth, (newTokens) => {
-          log.info`Refreshed BYOS tokens for schedule "${schedule.name}"`
-          const updates = buildRefreshedAuthUpdate(schedule, newTokens)
-          if (!updates) return
-
-          void updateSchedule(schedule.id, updates).catch((err: unknown) => {
-            log.error`Failed to persist refreshed BYOS tokens: ${(err as Error).message}`
-          })
-        })
       }
     } catch (err) {
       log.error`BYOS token keepalive failed: ${errorKind(err)}`

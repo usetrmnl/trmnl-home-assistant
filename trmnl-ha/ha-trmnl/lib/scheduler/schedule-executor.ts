@@ -24,7 +24,7 @@ import {
 import { loadSchedules, updateSchedule } from '../scheduleStore.js'
 import { buildRefreshedAuthUpdate } from './byos-auth.js'
 import { errorKind } from '../error-kind.js'
-import { notifyUploadRefused, clearUploadRefused } from '../ha-notify.js'
+import { notifyUploadRefused, clearUploadRefused, notifyReauthRequired, clearReauthRequired } from '../ha-notify.js'
 import type {
   Schedule,
   ScreenshotParams,
@@ -47,10 +47,12 @@ export interface ExecutionResult {
   durationMs?: number
 }
 
-/** Home Assistant notices for an image the server refused */
-interface UploadRefusalNotifier {
+/** Home Assistant notices for delivery and authentication failures */
+interface ScheduleNotifier {
   notifyUploadRefused(schedule: Schedule, reason: string): Promise<void>
   clearUploadRefused(schedule: Schedule): Promise<void>
+  notifyReauthRequired(schedule: Schedule): Promise<void>
+  clearReauthRequired(schedule: Schedule): Promise<void>
 }
 
 /**
@@ -59,12 +61,12 @@ interface UploadRefusalNotifier {
 export class ScheduleExecutor {
   #screenshotFn: ScreenshotFunction
   #outputDir: string
-  #notifier: UploadRefusalNotifier
+  #notifier: ScheduleNotifier
 
   constructor(
     screenshotFn: ScreenshotFunction,
     outputDir: string,
-    notifier: UploadRefusalNotifier = { notifyUploadRefused, clearUploadRefused },
+    notifier: ScheduleNotifier = { notifyUploadRefused, clearUploadRefused, notifyReauthRequired, clearReauthRequired },
   ) {
     this.#screenshotFn = screenshotFn
     this.#outputDir = outputDir
@@ -190,6 +192,7 @@ export class ScheduleExecutor {
 
     const webhookUrl = schedule.webhook_url
     const screenshotUrl = this.#buildScreenshotUrl(schedule, filename)
+    let authRenewed = false
 
     try {
       const result = await timed('webhook.upload', () =>
@@ -201,6 +204,8 @@ export class ScheduleExecutor {
           webhookFormat: schedule.webhook_format,
           screenshotUrl,
         onTokenRefresh: (newTokens) => {
+          authRenewed = true
+          void this.#notifier.clearReauthRequired(schedule)
           const updates = buildRefreshedAuthUpdate(schedule, newTokens)
           if (!updates) return
 
@@ -213,6 +218,9 @@ export class ScheduleExecutor {
 
       log.info`Schedule "${schedule.name}" webhook success: HTTP ${result.status}`
       void this.#notifier.clearUploadRefused(schedule)
+      if (!authRenewed && schedule.webhook_format?.byosConfig?.auth?.enabled) {
+        void this.#notifier.clearReauthRequired(schedule)
+      }
 
       return {
         attempted: true,
@@ -239,7 +247,11 @@ export class ScheduleExecutor {
       // Keep details for the UI, but log only the numeric status.
       log.error`Schedule "${schedule.name}" webhook failed: ${statusCode ? `HTTP ${statusCode}` : errorKind(err)}`
 
-      if (this.#isRefusal(schedule, statusCode)) void this.#notifier.notifyUploadRefused(schedule, errorMessage)
+      if (statusCode === 401 && schedule.webhook_format?.byosConfig?.auth?.enabled) {
+        void this.#notifier.notifyReauthRequired(schedule)
+      } else if (this.#isRefusal(statusCode)) {
+        void this.#notifier.notifyUploadRefused(schedule, errorMessage)
+      }
 
       return {
         attempted: true,
@@ -253,8 +265,7 @@ export class ScheduleExecutor {
   }
 
   /** A 4xx other than a rate limit: sending the same image again will not help. A lapsed BYOS login has its own sign-in notice. */
-  #isRefusal(schedule: Schedule, statusCode: number | undefined): boolean {
-    if (statusCode === 401 && schedule.webhook_format?.byosConfig?.auth?.enabled) return false
+  #isRefusal(statusCode: number | undefined): boolean {
     return statusCode !== undefined && statusCode >= 400 && statusCode < 500 && statusCode !== 429
   }
 
