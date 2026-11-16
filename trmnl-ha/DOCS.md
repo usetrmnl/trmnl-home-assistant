@@ -161,6 +161,7 @@ bun run dev
 | `keep_browser_open` | bool | `false` | Keep browser alive between requests (faster, more memory) |
 | `timestamp_overlay` | bool | `false` | Stamp the capture time in the bottom-right corner of every screenshot. Can also be enabled per schedule ("Show Capture Time") or per request with the `timestamp` URL parameter. |
 | `timestamp_12h` | bool | `false` | Render the capture-time overlay in 12-hour format (`2026-07-16 2:30 PM`) instead of the 24-hour default (`TIMESTAMP_12H` environment variable in standalone). |
+| `direct_access_secret` | password | (empty) | Guards port 10000. Empty: Fetch URL images still work there, but the settings page and `/api/` only open from the Home Assistant sidebar. Set: every request to port 10000 needs it, as `?secret=<secret>` or an `Authorization: Bearer <secret>` header, and the copyable Fetch URL includes it. The sidebar never needs it. Standalone Docker has no sidebar and stays open. |
 | `navigation_timeout_ms` | int | `30000` | Maximum time in ms puppeteer will wait for a page navigation to complete before erroring. Matches puppeteer's default; bump to `60000`, `90000`, or `120000` if your Home Assistant dashboard takes longer than 30s to load on your hardware (e.g. Pi 4 with many custom Lovelace cards). Min `10000`, max `180000`. |
 
 > **Timezone Note:** Without a timezone set, scheduled captures run in UTC. Use an [IANA timezone name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) like `America/New_York`, `Europe/London`, or `Asia/Tokyo`. Invalid values silently fall back to UTC (check logs for warnings).
@@ -169,7 +170,7 @@ bun run dev
 
 ## Web UI
 
-Access via **Ingress** (recommended) or directly at `http://homeassistant.local:10000/`
+Open it from the Home Assistant sidebar. Port 10000 serves images and, with `direct_access_secret`, the `/api/` endpoints, but not this page.
 
 **Features:**
 
@@ -251,7 +252,13 @@ rest_command:
   trmnl_capture:
     url: "http://local-trmnl-ha:10000/api/schedules/{{ schedule_id }}/send"
     method: POST
+    headers:
+      Authorization: !secret trmnl_direct_access_secret
 ```
+
+Set `direct_access_secret` in the app's Configuration tab first, and put
+`trmnl_direct_access_secret: "Bearer <your secret>"` in `secrets.yaml`. Without
+it the app refuses API calls on port 10000.
 
 The host is the app's hostname on the Supervisor network: `local-trmnl-ha`
 for a locally built app, or the slug of the app from the app store with underscores
@@ -474,8 +481,9 @@ The Web UI shows diagnostic banner with status, URL, and masked token. Add `?ref
 
 | Recommendation | Reason |
 |----------------|--------|
-| Use Ingress | Port 10000 has no authentication |
-| Never expose port 10000 | No rate limiting or auth |
+| Use Ingress | The settings page only opens from the sidebar |
+| Set `direct_access_secret` | Without it, port 10000 serves dashboard images to anyone who can reach it |
+| Never expose port 10000 | No rate limiting |
 | Use dedicated token | Revoke to disable access |
 
 **Token handling:** Stored in HA config, passed in-memory only.

@@ -136,6 +136,14 @@ describe('ScreenshotParamsParser', () => {
       expect(result?.pagePath).toBe('/lovelace/0')
     })
 
+    it('keeps the direct access secret out of the dashboard URL', () => {
+      const url = createUrl('/lovelace/0', { viewport: '800x480', secret: 's3cret' })
+
+      const result = parser.call(url)
+
+      expect(result?.pagePath).toBe('/lovelace/0')
+    })
+
     it('leaves pagePath untouched without unknown params', () => {
       const url = createUrl('/lovelace/0', { viewport: '800x480' })
 

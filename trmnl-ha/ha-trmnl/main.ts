@@ -27,7 +27,9 @@ import {
   MAX_SCREENSHOTS_BEFORE_RESTART,
   MAX_NEXT_REQUESTS,
   SERVER_PORT,
+  DIRECT_ACCESS_SECRET,
 } from './const.js'
+import { directAccessRefusal } from './lib/direct-access.js'
 import {
   CannotOpenPageError,
   BrowserCrashError,
@@ -196,6 +198,13 @@ class RequestHandler {
     response: ServerResponse
   ): Promise<void> {
     const requestUrl = new URL(request.url || '/', 'http://localhost')
+
+    const refusal = directAccessRefusal(request, requestUrl, { isAddOn, secret: DIRECT_ACCESS_SECRET })
+    if (refusal) {
+      response.writeHead(403, { 'Content-Type': 'text/plain' })
+      response.end(refusal)
+      return
+    }
 
     const routed = await this.#router.route(request, response, requestUrl)
     if (routed) return

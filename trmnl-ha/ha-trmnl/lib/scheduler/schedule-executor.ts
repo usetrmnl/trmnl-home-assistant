@@ -24,6 +24,8 @@ import {
 import { loadSchedules, updateSchedule } from '../scheduleStore.js'
 import { buildRefreshedAuthUpdate } from './byos-auth.js'
 import { errorKind } from '../error-kind.js'
+import { withDirectAccessSecret } from '../direct-access.js'
+import { DIRECT_ACCESS_SECRET } from '../../const.js'
 import { notifyUploadRefused, clearUploadRefused, notifyReauthRequired, clearReauthRequired } from '../ha-notify.js'
 import type {
   Schedule,
@@ -178,7 +180,8 @@ export class ScheduleExecutor {
     if (!byos?.addon_base_url) return undefined
     if (byos.delivery_mode === 'data') return undefined
 
-    return `${byos.addon_base_url.replace(/\/+$/, '')}/output/${encodeURIComponent(filename)}`
+    const url = `${byos.addon_base_url.replace(/\/+$/, '')}/output/${encodeURIComponent(filename)}`
+    return withDirectAccessSecret(url, DIRECT_ACCESS_SECRET)
   }
 
   /** Uploads to webhook if configured, returns result for UI feedback */
