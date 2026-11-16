@@ -476,17 +476,6 @@ export class WaitForPaintStability {
   }
 }
 
-/**
- * Waits for the Home Assistant websocket to go quiet.
- *
- * Energy and history cards render a plain "Loading" string with no element to
- * match on while they fetch their data over the websocket, which an HTTP
- * network-idle check cannot see. Watching the frames covers every such card
- * without depending on card internals.
- *
- * Entity updates are ignored: a busy home sends them without pause, which held
- * every capture to `timeout` (#128). `quietMs` must span a card's fetch.
- */
 /** True for a frame of only subscribe_entities pushes: `{ type: 'event', event: { a | c | r } }`, alone or coalesced. */
 function isOnlyEntityUpdates(payloadData: string): boolean {
   try {
@@ -502,6 +491,17 @@ function isOnlyEntityUpdates(payloadData: string): boolean {
   }
 }
 
+/**
+ * Waits for the Home Assistant websocket to go quiet.
+ *
+ * Energy and history cards render a plain "Loading" string with no element to
+ * match on while they fetch their data over the websocket, which an HTTP
+ * network-idle check cannot see. Watching the frames covers every such card
+ * without depending on card internals.
+ *
+ * Entity updates are ignored: a busy home sends them without pause, which held
+ * every capture to `timeout` (#128). `quietMs` must span a card's fetch.
+ */
 export class WaitForWebSocketIdle {
   #page: Page
   #quietMs: number
