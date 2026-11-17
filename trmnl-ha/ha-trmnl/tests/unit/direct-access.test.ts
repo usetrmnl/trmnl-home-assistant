@@ -26,7 +26,7 @@ describe('directAccessRefusal', () => {
     const policy = { isAddOn: true }
 
     it.each(['/api/schedules', '/api/schedules/abc', '/'])('refuses %s from the network', (path) => {
-      expect(refusal(path, request(LAN_ADDRESS), policy)).toContain('sidebar')
+      expect(refusal(path, request(LAN_ADDRESS), policy)).toContain('Show in sidebar')
     })
 
     it.each(['/lovelace/0?viewport=800x480', '/?url=https%3A%2F%2Fexample.com', '/output/kitchen.png', '/health'])(
