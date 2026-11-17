@@ -22,7 +22,10 @@ const gm = gmLib.subClass({ imageMagick: true })
 /** Generate real PNG encodings; metadata and compression deliberately differ. */
 async function png(color: string, comment = '', size = 8): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    gm(size, size, color).out('-set', 'comment', comment).out('-define', `png:compression-level=${comment ? 9 : 0}`)
+    const image = gm(size, size, color)
+    // gm drops empty arguments; passing an empty comment consumes -define on IM 7.1.1.
+    if (comment) image.out('-set', 'comment', comment)
+    image.out('-define', `png:compression-level=${comment ? 9 : 0}`)
       .toBuffer('PNG', (err, buffer) => err ? reject(err) : resolve(buffer))
   })
 }
@@ -32,13 +35,14 @@ describe('unchanged raw uploads', () => {
   let image: Buffer
   let executor: ScheduleExecutor
   let requests: ReturnType<typeof captureFetch>
-  let restoreStore: () => void
+  let restoreStore: (() => void) | undefined
   const schedule = () => buildSchedule({
     webhook_url: 'https://example.com/image/test', skip_unchanged: true,
     interval_minutes: 30,
   })
 
   beforeEach(async () => {
+    restoreStore = undefined
     output = fs.mkdtempSync(path.join(os.tmpdir(), 'trmnl-unchanged-'))
     image = await png('white')
     executor = new ScheduleExecutor(async () => image, output)
@@ -48,7 +52,7 @@ describe('unchanged raw uploads', () => {
   })
 
   afterEach(() => {
-    restoreStore()
+    restoreStore?.()
     restoreFetch()
     fs.rmSync(output, { recursive: true, force: true })
   })
