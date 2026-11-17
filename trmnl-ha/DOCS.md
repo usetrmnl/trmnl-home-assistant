@@ -170,7 +170,7 @@ bun run dev
 
 ## Web UI
 
-Open it from the Home Assistant sidebar. Port 10000 serves images and, with `direct_access_secret`, the `/api/` endpoints, but not this page.
+Open it from the Home Assistant sidebar. If TRMNL HA is not there, turn on **Show in sidebar** on the app's Info tab. Port 10000 serves images and, with `direct_access_secret`, the `/api/` endpoints, but not this page.
 
 **Features:**
 

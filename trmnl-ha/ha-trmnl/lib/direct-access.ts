@@ -10,6 +10,10 @@ import type { IncomingMessage } from 'node:http'
 /** Supervisor's address on the hassio network; ingress requests come from it. */
 const SUPERVISOR_ADDRESS = '172.30.32.2'
 
+/** Home Assistant OS installs the app with its sidebar entry turned off. */
+const OPEN_FROM_SIDEBAR =
+  'Open TRMNL HA from the Home Assistant sidebar (if it is not there, turn on "Show in sidebar" on the app\'s Info tab)'
+
 export interface DirectAccessPolicy {
   isAddOn: boolean
   secret?: string
@@ -26,7 +30,7 @@ export function directAccessRefusal(
 ): string | null {
   if (!isAddOn || requestUrl.pathname === '/health' || isFromSupervisor(request)) return null
 
-  if (isSettingsPage(requestUrl)) return 'Open TRMNL HA from the Home Assistant sidebar.'
+  if (isSettingsPage(requestUrl)) return `${OPEN_FROM_SIDEBAR}.`
 
   if (secret) {
     return hasSecret(request, requestUrl, secret)
@@ -35,7 +39,7 @@ export function directAccessRefusal(
   }
 
   return requestUrl.pathname.startsWith('/api/')
-    ? 'Open TRMNL HA from the Home Assistant sidebar, or set direct_access_secret to use the API on this port.'
+    ? `${OPEN_FROM_SIDEBAR}, or set direct_access_secret to use the API on this port.`
     : null
 }
 
