@@ -473,6 +473,7 @@ class App {
       interval_minutes: intervalMinutes,
       webhook_url: input('s_webhook') || null,
       align_to_check_in: checkbox('s_align_check_in'),
+      skip_unchanged: checkbox('s_skip_unchanged'),
       webhook_format: webhookFormat,
       viewport: {
         width: parseIntOrDefault(input('s_width'), schedule.viewport.width),

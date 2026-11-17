@@ -256,6 +256,9 @@ export interface Schedule {
   /** Time captures to the TRMNL device's next check-in when the upload reply names it; undefined = on */
   align_to_check_in?: boolean
 
+  /** Skip automatic raw-webhook uploads when final pixels match the last successful send; default off */
+  skip_unchanged?: boolean
+
   /** Whether to use Home Assistant mode (true) or generic URL mode (false) */
   ha_mode: boolean
 
@@ -325,6 +328,8 @@ export type ScheduleUpdate = Partial<Omit<Schedule, 'id'>>
 export interface WebhookResult {
   /** Whether webhook was attempted */
   attempted: boolean
+  /** No request was made because final pixels match a successful delivery */
+  skipped?: 'unchanged'
   /** Whether webhook succeeded */
   success: boolean
   /** HTTP status code from webhook (if attempted) */

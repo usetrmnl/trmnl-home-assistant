@@ -13,6 +13,7 @@ import {
   WebhookHttpError,
   buildParams,
 } from './services.js'
+import { UnchangedUploads, contextDigest, pixelSignature } from './unchanged-upload.js'
 import { sleep } from '../sleep.js'
 import {
   SCHEDULER_MAX_RETRIES,
@@ -64,6 +65,7 @@ export class ScheduleExecutor {
   #screenshotFn: ScreenshotFunction
   #outputDir: string
   #notifier: ScheduleNotifier
+  #unchanged = new UnchangedUploads()
 
   constructor(
     screenshotFn: ScreenshotFunction,
@@ -76,11 +78,11 @@ export class ScheduleExecutor {
   }
 
   /** Executes schedule with automatic retry on network failures */
-  async call(schedule: Schedule): Promise<ExecutionResult> {
+  async call(schedule: Schedule, options: { force?: boolean } = {}): Promise<ExecutionResult> {
     const startTime = Date.now()
     log.info`Running: ${schedule.name}`
 
-    const result = await this.#executeWithRetry(schedule)
+    const result = await this.#executeWithRetry(schedule, options.force === true)
     result.durationMs = Date.now() - startTime
 
     this.#logResult(schedule.name, result, result.durationMs)
@@ -96,15 +98,16 @@ export class ScheduleExecutor {
   /** Formats webhook status for logging */
   #formatWebhookStatus(webhook: WebhookResult | undefined): string {
     if (!webhook) return 'not configured'
+    if (webhook.skipped) return 'skipped (unchanged pixels)'
     if (webhook.success) return `${webhook.statusCode} OK`
     return `FAILED (HTTP ${webhook.statusCode ?? 'unknown'})`
   }
 
   /** Retry wrapper for network failures */
-  async #executeWithRetry(schedule: Schedule): Promise<ExecutionResult> {
+  async #executeWithRetry(schedule: Schedule, force: boolean): Promise<ExecutionResult> {
     for (let attempt = 1; attempt <= SCHEDULER_MAX_RETRIES; attempt++) {
       try {
-        return await this.#executeOnce(schedule)
+        return await this.#executeOnce(schedule, force)
       } catch (err) {
         if (!this.#shouldRetry(err as Error, attempt)) throw err
         this.#logRetry(schedule.name, err as Error, attempt)
@@ -115,7 +118,7 @@ export class ScheduleExecutor {
   }
 
   /** Single execution attempt */
-  async #executeOnce(schedule: Schedule): Promise<ExecutionResult> {
+  async #executeOnce(schedule: Schedule, force: boolean): Promise<ExecutionResult> {
     const params = buildParams(schedule)
     const imageBuffer = await this.#screenshotFn(params)
     const { savedPath, filename } = await this.#saveAndCleanup(
@@ -123,13 +126,53 @@ export class ScheduleExecutor {
       imageBuffer,
       params.format,
     )
-    const webhook = await this.#uploadIfConfigured(
+    const webhook = await this.#deliver(
       schedule,
       imageBuffer,
       params.format,
       filename,
+      force,
     )
     return { success: true, savedPath, webhook }
+  }
+
+  /** Compare inside the destination lock so concurrent schedules cannot skip stale pixels. */
+  async #deliver(
+    schedule: Schedule,
+    imageBuffer: Buffer,
+    format: string,
+    filename: string,
+    force: boolean,
+  ): Promise<WebhookResult | undefined> {
+    if (!schedule.webhook_url) return undefined
+    const destination = contextDigest(schedule.webhook_url)
+    return this.#unchanged.run(destination, async () => {
+      // URI deliveries also depend on saved-file lifetime and screen metadata.
+      // Keep their existing behavior; this option applies only to raw images.
+      const eligible = schedule.skip_unchanged === true &&
+        (!schedule.webhook_format || schedule.webhook_format.format === 'raw')
+      let signature: string | undefined
+      if (eligible) {
+        try {
+          signature = contextDigest({
+            pixels: await pixelSignature(imageBuffer),
+            params: buildParams(schedule),
+            headers: Object.entries(schedule.webhook_headers ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+          })
+        } catch {
+          // A comparison failure must never prevent a needed upload.
+          log.warn`Could not compare final pixels for "${schedule.name}"; uploading`
+        }
+      }
+      if (!force && signature && this.#unchanged.matches(destination, signature)) {
+        return { attempted: false, success: true, skipped: 'unchanged' }
+      }
+      // Invalidate for every send, including non-opted-in schedules and failures.
+      this.#unchanged.forget(destination)
+      const result = await this.#uploadIfConfigured(schedule, imageBuffer, format, filename)
+      if (result?.success && signature) this.#unchanged.remember(destination, signature)
+      return result
+    })
   }
 
   /** Saves screenshot and runs LRU cleanup */
