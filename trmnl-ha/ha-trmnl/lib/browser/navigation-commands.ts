@@ -664,7 +664,7 @@ export class UpdateTheme {
           type: string
           [k: string]: unknown
         }
-        type SendFn = (msg: WsMsg) => void
+        type SendFn = (msg: WsMsg, commandId?: number) => void
         type SendPromiseFn = (msg: WsMsg) => Promise<unknown>
         interface HAConn {
           sendMessage?: SendFn
@@ -692,9 +692,10 @@ export class UpdateTheme {
 
         if (conn?.sendMessage) {
           origSendMessage = conn.sendMessage.bind(conn)
-          conn.sendMessage = (msg: WsMsg) => {
+          // Every request and subscription carries its id here; without it the reply matches nothing
+          conn.sendMessage = (msg: WsMsg, commandId?: number) => {
             if (isThemeSave(msg)) return
-            origSendMessage!(msg)
+            origSendMessage!(msg, commandId)
           }
         }
 

@@ -971,6 +971,51 @@ describe('UpdateTheme', () => {
       dark: false,
     })
   })
+
+  describe('while the theme save is blocked', () => {
+    interface Sent {
+      msg: { type: string; key?: string }
+      commandId?: number
+    }
+    const globals = globalThis as unknown as { document?: unknown }
+    let sent: Sent[]
+    let conn: {
+      sendMessage: (msg: Sent['msg'], commandId?: number) => void
+      sendMessagePromise: (msg: Sent['msg']) => Promise<unknown>
+    }
+
+    beforeEach(async () => {
+      sent = []
+      conn = {
+        sendMessage: (msg, commandId) => void sent.push({ msg, commandId }),
+        sendMessagePromise: async (msg) => void sent.push({ msg }),
+      }
+      const haEl = { hass: { connection: conn }, dispatchEvent: () => true }
+      const mockPage = createMockPage()
+      await new UpdateTheme(mockPage).call('midnight', true)
+      const applyInBrowser = mockPage.calls.evaluate[0]!.fn as (args: unknown) => void
+
+      globals.document = { querySelector: () => haEl }
+      try {
+        applyInBrowser(mockPage.calls.evaluate[0]!.args[0])
+      } finally {
+        delete globals.document
+      }
+    })
+
+    // Home Assistant sends every request and subscription as sendMessage(message, commandId).
+    it('keeps the command id of other messages', () => {
+      conn.sendMessage({ type: 'weather/subscribe_forecast' }, 46)
+
+      expect(sent).toEqual([{ msg: { type: 'weather/subscribe_forecast' }, commandId: 46 }])
+    })
+
+    it('drops the theme save', () => {
+      conn.sendMessage({ type: 'frontend/set_user_data', key: 'theme' }, 47)
+
+      expect(sent).toEqual([])
+    })
+  })
 })
 
 // =============================================================================
