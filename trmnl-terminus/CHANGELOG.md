@@ -7,6 +7,12 @@ The version mirrors the [Terminus](https://github.com/usetrmnl/terminus) release
 the add-on bundles, so add-on 0.66.0 ships Terminus 0.66.0. A wrapper-only fix
 between upstream releases takes a `-1`, `-2` suffix.
 
+## [0.84.0] - 2026-11-20
+
+### Changed
+
+- Updated Terminus to 0.84.0
+
 ## [0.83.0] - 2026-11-19
 
 ### Changed
