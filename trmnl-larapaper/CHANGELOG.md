@@ -10,6 +10,31 @@ between upstream releases takes a `-1`, `-2` suffix.
 Each entry starts with the bundled LaraPaper release's own notes (on the version that
 first bundles it), followed by the add-on's own changes under "Home Assistant add-on".
 
+## [0.48.0] - 2026-11-20
+
+### LaraPaper 0.48.0
+
+From the [LaraPaper 0.48.0 release](https://github.com/usetrmnl/larapaper/releases/tag/0.48.0):
+
+#### SECURITY RELEASE 🚨
+
+* Critical PHP and nginx security release 2026-11-19 (#336)
+  * Bumps the Docker base image to PHP 8.4.28
+  * Bumps the Docker base image to nginx 1.30.7
+
+Updating is recommended for Docker Image deployments. Bare-metal deployments should upgrade PHP and nginx.
+
+##### Other changes
+
+* feat: share Chromium's HTTP disk cache between renders by [@BartSchuurmans](https://github.com/BartSchuurmans) in [#332](https://github.com/usetrmnl/larapaper/pull/332)
+* feat: per-device scale and per-playlist-item text scale setting by [@BartSchuurmans](https://github.com/BartSchuurmans) in [#309](https://github.com/usetrmnl/larapaper/pull/309)
+* feat(models): add TRMNL Frame
+* fix: framework_version `latest` failing validation
+
+### Home Assistant add-on
+
+- Updated LaraPaper to 0.48.0
+
 ## [0.47.0-3] - 2026-11-15
 
 ### Home Assistant add-on
