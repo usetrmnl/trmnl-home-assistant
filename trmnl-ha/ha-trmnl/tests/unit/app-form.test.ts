@@ -311,3 +311,12 @@ for (const outcome of ['success', 'webhook failure', 'capture failure']) {
     }
   })
 }
+
+ it('saves the opt-in unchanged-upload setting through the schedule form', async () => {
+  inputs.set('s_skip_unchanged', { checked: true })
+  await app.updateScheduleFromForm()
+  expect(saves.at(-1)?.skip_unchanged).toBe(true)
+  inputs.set('s_skip_unchanged', { checked: false })
+  await app.updateScheduleFromForm()
+  expect(saves.at(-1)?.skip_unchanged).toBe(false)
+})

@@ -154,7 +154,7 @@ export class Scheduler {
 
     log.info`Manual execution: ${schedule.name}`
 
-    return await this.#executor.call(schedule)
+    return await this.#executor.call(schedule, { force: true })
   }
 
   /**

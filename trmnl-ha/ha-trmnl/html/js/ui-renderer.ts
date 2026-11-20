@@ -247,6 +247,12 @@ export class RenderScheduleContent {
               Capture just before the TRMNL device checks in
             </label>
             <p class="text-xs text-gray-500 mt-1">When TRMNL tells us when the device will next ask for this image, the next capture is timed to land just before it. The schedule above only runs when it does not. Uncheck to always run on the schedule.</p>
+            <label class="flex items-center gap-2 mt-2 text-sm text-gray-700">
+              <input type="checkbox" id="s_skip_unchanged" ${s.skip_unchanged === true ? 'checked' : ''}
+                onchange="window.app.updateScheduleFromForm()" />
+              Skip uploads when the image is unchanged (raw webhooks only)
+            </label>
+            <p class="text-xs text-gray-500 mt-1">Compare final pixels with the last successful upload. Send Now always sends; restarting the app sends once again. Skipped uploads use the schedule above until a new upload provides a check-in time. This does not change the device's check-in interval.</p>
             ${
               s.webhook_url
                 ? `
