@@ -96,6 +96,36 @@ describe('redactWebhookUrl', () => {
 })
 
 describe('uploadToWebhook — HTTP error details', () => {
+  function mockRefusal(body: unknown) {
+    mockFetch({
+      ok: false,
+      status: 422,
+      statusText: 'Unprocessable Content',
+      text: async () => JSON.stringify(body),
+    })
+  }
+
+  it('shows the detail of a Problem Details response', async () => {
+    mockRefusal({ title: 'Unprocessable Content', status: 422, detail: 'Image is too large.' })
+
+    await expect(upload()).rejects.toThrow('HTTP 422: Unprocessable Content - Image is too large.')
+  })
+
+  it('removes URLs from a Problem Details detail', async () => {
+    mockRefusal({ detail: 'Could not fetch http://app.local:10000/output/a.png?secret=abc123 for screen.' })
+
+    const error = await upload().catch((err: unknown) => err as Error)
+    expect((error as Error).message).toContain('Could not fetch [redacted URL] for screen.')
+    expect((error as Error).message).not.toContain('abc123')
+  })
+
+  it('ignores a detail that is not text', async () => {
+    mockRefusal({ detail: { field: 'uri' } })
+
+    const error = await upload().catch((err: unknown) => err as Error)
+    expect((error as Error).message).toBe('HTTP 422: Unprocessable Content')
+  })
+
   it('redacts the configured URL from response details that callers may log', async () => {
     const url = 'https://trmnl.example/api/plugin_settings/private-id/image?token=private'
     mockFetch({
