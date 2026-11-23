@@ -7,9 +7,10 @@
  * @module tests/unit/webhook-delivery
  */
 
-import { describe, it, expect, afterAll, mock } from 'bun:test'
+import { describe, it, expect, afterAll, beforeEach, mock } from 'bun:test'
 import {
   uploadToWebhook,
+  clearKnownByosScreenIds,
   WebhookHttpError,
   redactWebhookUrl,
 } from '../../lib/scheduler/webhook-delivery.js'
@@ -186,5 +187,142 @@ describe('uploadToWebhook — BYOS 422 fallback', () => {
 
     await expect(result).rejects.toThrow(/HTTP 422/)
     expect(responses).toHaveLength(0) // Both POST and GET were attempted
+  })
+})
+
+describe('uploadToWebhook — known BYOS screen ids', () => {
+  const screensUrl = 'http://byos.local/api/screens'
+  const screenList = () =>
+    Response.json({ data: [{ id: 7, model_id: 1, label: 'Test', name: 'test-screen' }] })
+
+  /** Queues responses and records each request as "METHOD /path". */
+  function queue(responses: (Response | Error)[]): string[] {
+    const calls: string[] = []
+    globalThis.fetch = mock(async (url: string | URL, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${new URL(url).pathname}`)
+      const next = responses.shift()!
+      if (next instanceof Error) throw next
+      return next
+    }) as unknown as typeof fetch
+    return calls
+  }
+
+  function byosUpload(name = 'test-screen', webhookUrl = screensUrl) {
+    return uploadToWebhook({
+      webhookUrl,
+      imageBuffer: Buffer.from('png'),
+      format: 'png',
+      webhookFormat: {
+        format: 'byos-hanami',
+        byosConfig: {
+          label: 'Test',
+          name,
+          model_id: '1',
+          preprocessed: true,
+          auth: {
+            enabled: true,
+            access_token: 'Bearer token',
+            refresh_token: 'refresh',
+            obtained_at: Date.now(),
+          },
+        },
+      },
+    })
+  }
+
+  /** Teaches the module screen id 7 through the normal 422 flow. */
+  async function learnScreenId() {
+    queue([
+      new Response('{"error":"exists"}', { status: 422 }),
+      screenList(),
+      new Response('{}', { status: 200 }),
+    ])
+    await byosUpload()
+  }
+
+  beforeEach(() => clearKnownByosScreenIds())
+
+  it('sends a single PATCH once the id was learned from the 422 flow', async () => {
+    await learnScreenId()
+    const calls = queue([new Response('{}', { status: 200 })])
+
+    const result = await byosUpload()
+
+    expect(result.success).toBe(true)
+    expect(calls).toEqual(['PATCH /api/screens/7'])
+  })
+
+  it('remembers the id from a successful create', async () => {
+    queue([Response.json({ data: { id: 9 } }, { status: 201 })])
+    await byosUpload()
+    const calls = queue([new Response('{}', { status: 200 })])
+
+    await byosUpload()
+
+    expect(calls).toEqual(['PATCH /api/screens/9'])
+  })
+
+  it('keeps ids separate per screen name and server', async () => {
+    await learnScreenId()
+
+    let calls = queue([Response.json({ data: { id: 8 } }, { status: 201 })])
+    await byosUpload('other-screen')
+    expect(calls).toEqual(['POST /api/screens'])
+
+    calls = queue([Response.json({ data: { id: 3 } }, { status: 201 })])
+    await byosUpload('test-screen', 'http://other.local/api/screens')
+    expect(calls).toEqual(['POST /api/screens'])
+  })
+
+  for (const status of [404, 422]) {
+    it(`falls back to create when the known screen is gone (${status})`, async () => {
+      await learnScreenId()
+      const calls = queue([
+        new Response('{"error":"Unable to find screen"}', { status }),
+        Response.json({ data: { id: 11 } }, { status: 201 }),
+        new Response('{}', { status: 200 }),
+      ])
+
+      await byosUpload()
+      await byosUpload()
+
+      expect(calls).toEqual([
+        'PATCH /api/screens/7',
+        'POST /api/screens',
+        'PATCH /api/screens/11',
+      ])
+    })
+  }
+
+  it('surfaces other HTTP errors without a POST and keeps the id', async () => {
+    await learnScreenId()
+    const calls = queue([
+      new Response('{"error":"slow down"}', {
+        status: 429,
+        headers: { 'Retry-After': '30' },
+      }),
+      new Response('{}', { status: 200 }),
+    ])
+
+    const error = await byosUpload().catch((err: unknown) => err)
+    expect(error).toBeInstanceOf(WebhookHttpError)
+    expect((error as WebhookHttpError).status).toBe(429)
+    expect((error as WebhookHttpError).retryAfterMs).toBe(30_000)
+
+    await byosUpload()
+    expect(calls).toEqual(['PATCH /api/screens/7', 'PATCH /api/screens/7'])
+  })
+
+  it('reports a connection failure by host and keeps the id', async () => {
+    await learnScreenId()
+    const calls = queue([
+      new Error('Unable to connect'),
+      new Response('{}', { status: 200 }),
+    ])
+
+    await expect(byosUpload()).rejects.toThrow(/Could not reach byos\.local/)
+    await byosUpload()
+
+    expect(calls).toEqual(['PATCH /api/screens/7', 'PATCH /api/screens/7'])
   })
 })
