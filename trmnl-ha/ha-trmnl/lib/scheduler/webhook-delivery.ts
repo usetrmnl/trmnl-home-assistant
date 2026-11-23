@@ -66,6 +66,29 @@ interface ByosScreensResponse {
 }
 
 /**
+ * BYOS screen ids learned from earlier deliveries, keyed by server + model_id +
+ * name. With a known id an update is a single PATCH instead of a POST that the
+ * server rejects with 422, a full screen list, and then a PATCH. Kept in memory
+ * only: after a restart the first delivery learns the id again.
+ */
+const knownScreenIds = new Map<string, number>()
+
+/** Forgets all learned BYOS screen ids. */
+export function clearKnownByosScreenIds(): void {
+  knownScreenIds.clear()
+}
+
+/** Reads the screen id from a BYOS create response ({ data: { id } }). */
+function parseCreatedScreenId(responseText: string): number | null {
+  try {
+    const id = (JSON.parse(responseText) as { data?: { id?: unknown } }).data?.id
+    return typeof id === 'number' ? id : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Finds existing BYOS screen by composite key (model_id + name).
  *
  * BYOS uses a composite unique constraint - a model can have multiple screens.
@@ -198,10 +221,17 @@ class DeliverWebhook {
   async call(): Promise<WebhookDeliveryResult> {
     const { body, contentType } = this.#buildPayload()
     const headers = await this.#buildHeaders(contentType)
+
+    const updated = await this.#patchKnownScreen(body, headers)
+    if (updated) return updated
+
     const response = await this.#send(body, headers)
     const responseText = await response.text()
 
-    if (response.ok) return this.#successResult(response, responseText)
+    if (response.ok) {
+      this.#rememberScreenId(parseCreatedScreenId(responseText))
+      return this.#successResult(response, responseText)
+    }
     return this.#recoverOrThrow(response, responseText, body, headers)
   }
 
@@ -210,6 +240,61 @@ class DeliverWebhook {
     return webhookFormat?.format === 'byos-hanami'
       ? webhookFormat.byosConfig
       : undefined
+  }
+
+  /** Cache key for this delivery's BYOS screen; null when not BYOS. */
+  get #screenKey(): string | null {
+    const byos = this.#byosConfig
+    if (!byos) return null
+    try {
+      return `${getBaseUrl(this.#options.webhookUrl)}|${byos.model_id}|${byos.name}`
+    } catch {
+      return null
+    }
+  }
+
+  #rememberScreenId(screenId: number | null): void {
+    const key = this.#screenKey
+    if (key && screenId !== null) knownScreenIds.set(key, screenId)
+  }
+
+  /**
+   * Updates a screen whose id is already known. Returns null when there is no
+   * known id, or the server no longer has that screen (Terminus answers 422 for
+   * an unknown id), so the normal create-or-find flow runs. Other HTTP errors
+   * keep the id and throw, so auth and rate-limit handling still see them.
+   */
+  async #patchKnownScreen(
+    body: BodyInit,
+    headers: Record<string, string>,
+  ): Promise<WebhookDeliveryResult | null> {
+    const key = this.#screenKey
+    const authToken = headers['Authorization']
+    if (!key || !authToken) return null
+
+    const screenId = knownScreenIds.get(key)
+    if (screenId === undefined) return null
+
+    let response: Response
+    try {
+      response = await patchByosScreen(this.#options.webhookUrl, screenId, body, authToken)
+    } catch (err) {
+      throw this.#connectionError(err)
+    }
+
+    if (response.ok) {
+      log.info`PATCH successful: HTTP ${response.status}`
+      return this.#result(response)
+    }
+
+    if (response.status === 404 || response.status === 422) {
+      log.warn`PATCH of known screen failed: HTTP ${response.status}; finding it again`
+      knownScreenIds.delete(key)
+      return null
+    }
+
+    log.error`PATCH failed: HTTP ${response.status}`
+    throw this.#httpError(response, await response.text())
   }
 
   #buildPayload(): { body: BodyInit; contentType: string } {
@@ -266,18 +351,24 @@ class DeliverWebhook {
         body,
       })
     } catch (err) {
-      // Bun's raw connect errors ("Unable to connect...") don't say which
-      // host failed or why. Most reports trace to hostnames that don't
-      // resolve from inside the add-on container (#71), so name the host
-      // and the likely fix.
-      const host = this.#hostname()
-      const detail = redactWebhookUrl((err as Error).message, this.#options.webhookUrl)
-      throw new Error(
-        `Could not reach ${host}: ${detail}. ` +
-          `If ${host} is a local hostname, it may not resolve inside the app container — try the server's IP address instead.`,
-        { cause: err },
-      )
+      throw this.#connectionError(err)
     }
+  }
+
+  /**
+   * Bun's raw connect errors ("Unable to connect...") don't say which
+   * host failed or why. Most reports trace to hostnames that don't
+   * resolve from inside the add-on container (#71), so name the host
+   * and the likely fix.
+   */
+  #connectionError(err: unknown): Error {
+    const host = this.#hostname()
+    const detail = redactWebhookUrl((err as Error).message, this.#options.webhookUrl)
+    return new Error(
+      `Could not reach ${host}: ${detail}. ` +
+        `If ${host} is a local hostname, it may not resolve inside the app container — try the server's IP address instead.`,
+      { cause: err },
+    )
   }
 
   /** The webhook host for error messages; never echo a malformed URL. */
@@ -308,7 +399,11 @@ class DeliverWebhook {
       if (patched) return patched
     }
 
-    throw new WebhookHttpError(
+    throw this.#httpError(response, responseText)
+  }
+
+  #httpError(response: Response, responseText: string): WebhookHttpError {
+    return new WebhookHttpError(
       `HTTP ${response.status}: ${response.statusText}${this.#errorDetail(responseText)}`,
       response.status,
       parseRetryAfterMs(response.headers.get('Retry-After')),
@@ -342,6 +437,7 @@ class DeliverWebhook {
       return null
     }
 
+    this.#rememberScreenId(screenId)
     log.info`PATCH successful: HTTP ${patchResponse.status}`
     return this.#result(patchResponse)
   }
