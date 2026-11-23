@@ -19,6 +19,24 @@ export interface HaTarget {
   token?: string
 }
 
+/**
+ * Notification ids known to be dismissed, per Home Assistant URL. Every
+ * successful upload clears its notices, so without this each upload makes a
+ * service call for a notice that is almost never there. The first clear after
+ * start still calls Home Assistant, because a notice can outlive an app
+ * restart; after that, only a create makes the next clear call again.
+ */
+const knownDismissed = new Set<string>()
+
+/** The latest call per notification, so a slow dismiss can't hide a newer create. */
+const latestCall = new Map<string, symbol>()
+
+/** Forgets which notices are dismissed (tests). */
+export function resetNotificationState(): void {
+  knownDismissed.clear()
+  latestCall.clear()
+}
+
 /** Calls a persistent_notification service. Never throws - a failed notice must not take the scheduler tick with it. */
 async function callNotificationService(
   service: 'create' | 'dismiss',
@@ -26,6 +44,13 @@ async function callNotificationService(
   { url = hassUrl, token = hassToken }: HaTarget,
 ): Promise<void> {
   if (!token) return
+
+  const key = `${url}|${payload.notification_id}`
+  if (service === 'dismiss' && knownDismissed.has(key)) return
+  // A create (even one that fails) means the next clear must really call
+  knownDismissed.delete(key)
+  const call = Symbol(service)
+  latestCall.set(key, call)
 
   try {
     const response = await fetch(`${url}/api/services/persistent_notification/${service}`, {
@@ -36,6 +61,8 @@ async function callNotificationService(
 
     if (!response.ok) {
       log.warn`Could not ${service} Home Assistant notification ${payload.notification_id}: HTTP ${response.status}`
+    } else if (service === 'dismiss' && latestCall.get(key) === call) {
+      knownDismissed.add(key)
     }
   } catch (err) {
     log.warn`Could not ${service} Home Assistant notification ${payload.notification_id}: ${(err as Error).message}`
