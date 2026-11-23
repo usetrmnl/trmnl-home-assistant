@@ -156,7 +156,7 @@ Two ways to avoid that:
 
 ## If the screen already exists
 
-Terminus answers `422` when a screen with that model is already there. The app handles it: it looks up the existing screens, removes the one with the same Model ID, and sends again. You do not need to do anything.
+Terminus answers `422` when a screen with that model and name is already there. The app handles it: it finds that screen and updates it in place. It then remembers the screen, so later sends are a single update until the app restarts. You do not need to do anything.
 
 ---
 
