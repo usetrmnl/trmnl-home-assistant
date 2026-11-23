@@ -300,7 +300,10 @@ function configureOutputFormat(
       image = image.out('-type', 'Grayscale').out('-depth', String(bitDepth))
       log.debug`Outputting ${bitDepth}-bit grayscale PNG for e-ink`
     }
-    image = image.define(`png:compression-level=${compressionLevel}`)
+    // Dates only: firmware once rejected PNGs stripped to the bare chunks (#47).
+    image = image
+      .define(`png:compression-level=${compressionLevel}`)
+      .define('png:exclude-chunks=date,tIME')
     if (!isColorPalette) {
       image = image
         .define('png:compression-filter=5')
