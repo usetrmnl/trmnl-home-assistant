@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.3] - 2026-11-23
+
+### Fixed
+
+- A dashboard that has not changed no longer makes your TRMNL redraw on every send. Each picture carried the time it was made, so TRMNL saw new bytes every time and treated them as a new image (#177)
+- Sending to a BYOS server (Terminus) now takes one request instead of three once the screen exists, and no longer logs an error each time. The app remembers the screen after the first send (#175)
+
 ## [0.15.2] - 2026-11-19
 
 ### Fixed
