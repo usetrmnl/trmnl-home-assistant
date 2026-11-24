@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import gmLib from 'gm'
-import { pixelSignature } from '../../lib/scheduler/unchanged-upload.js'
+import { MAX_UNCHANGED_UPLOAD_AGE_MS, pixelSignature } from '../../lib/scheduler/unchanged-upload.js'
 import { ScheduleExecutor } from '../../lib/scheduler/schedule-executor.js'
 import { JobManager } from '../../lib/scheduler/job-manager.js'
 import { CheckInAligner } from '../../lib/scheduler/check-in-alignment.js'
@@ -36,6 +36,7 @@ describe('unchanged raw uploads', () => {
   let executor: ScheduleExecutor
   let requests: ReturnType<typeof captureFetch>
   let restoreStore: (() => void) | undefined
+  let clock: ReturnType<typeof spyOn<typeof Date, 'now'>> | undefined
   const schedule = () => buildSchedule({
     webhook_url: 'https://example.com/image/test', skip_unchanged: true,
     interval_minutes: 30,
@@ -43,6 +44,7 @@ describe('unchanged raw uploads', () => {
 
   beforeEach(async () => {
     restoreStore = undefined
+    clock = undefined
     output = fs.mkdtempSync(path.join(os.tmpdir(), 'trmnl-unchanged-'))
     image = await png('white')
     executor = new ScheduleExecutor(async () => image, output)
@@ -52,6 +54,7 @@ describe('unchanged raw uploads', () => {
   })
 
   afterEach(() => {
+    clock?.mockRestore()
     restoreStore?.()
     restoreFetch()
     fs.rmSync(output, { recursive: true, force: true })
@@ -79,6 +82,91 @@ describe('unchanged raw uploads', () => {
     expect(requests.length).toBe(2)
   })
 
+  it('bounds skips from the last acknowledged upload, without sliding the deadline', async () => {
+    const start = Date.parse('2030-01-01T00:00:00Z')
+    let now = start
+    clock = spyOn(Date, 'now').mockImplementation(() => now)
+    const s = schedule()
+    await executor.call(s)
+    for (const elapsed of [60_000, MAX_UNCHANGED_UPLOAD_AGE_MS - 1]) {
+      now = start + elapsed
+      expect((await executor.call(s)).webhook?.skipped).toBe('unchanged')
+    }
+    now = start + MAX_UNCHANGED_UPLOAD_AGE_MS
+    expect((await executor.call(s)).webhook?.attempted).toBe(true)
+    now += MAX_UNCHANGED_UPLOAD_AGE_MS - 1
+    expect((await executor.call(s)).webhook?.skipped).toBe('unchanged')
+    now += 1
+    expect((await executor.call(s)).webhook?.attempted).toBe(true)
+    expect(requests.length).toBe(3)
+  })
+
+  it('starts the age at acknowledgment rather than capture start', async () => {
+    let now = Date.parse('2030-01-01T00:00:00Z')
+    clock = spyOn(Date, 'now').mockImplementation(() => now)
+    const okFetch = globalThis.fetch
+    globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+      now += 120_000
+      return okFetch(...args)
+    }) as unknown as typeof fetch
+    await executor.call(schedule())
+    globalThis.fetch = okFetch
+    now += MAX_UNCHANGED_UPLOAD_AGE_MS - 1
+    expect((await executor.call(schedule())).webhook?.skipped).toBe('unchanged')
+    expect(requests.length).toBe(1)
+  })
+
+  it('resets the age after successful manual and changed-image sends', async () => {
+    let now = Date.parse('2030-01-01T00:00:00Z')
+    clock = spyOn(Date, 'now').mockImplementation(() => now)
+    await executor.call(schedule())
+    now += MAX_UNCHANGED_UPLOAD_AGE_MS - 1
+    await executor.call(schedule(), { force: true })
+    now += MAX_UNCHANGED_UPLOAD_AGE_MS - 1
+    expect((await executor.call(schedule())).webhook?.skipped).toBe('unchanged')
+    image = await png('red')
+    await executor.call(schedule())
+    now += MAX_UNCHANGED_UPLOAD_AGE_MS - 1
+    expect((await executor.call(schedule())).webhook?.skipped).toBe('unchanged')
+    expect(requests.length).toBe(3)
+  })
+
+  it('does not extend suppression after the clock moves backwards', async () => {
+    let now = Date.parse('2030-01-01T00:00:00Z')
+    clock = spyOn(Date, 'now').mockImplementation(() => now)
+    await executor.call(schedule())
+    now -= 1
+    expect((await executor.call(schedule())).webhook?.attempted).toBe(true)
+  })
+
+  it('retains only a still-future check-in, without predicting the next one', async () => {
+    const start = Date.parse('2030-01-01T00:00:00Z')
+    let now = start
+    clock = spyOn(Date, 'now').mockImplementation(() => now)
+    globalThis.fetch = (async () => Response.json({ data: {
+      next_check_in_at: new Date(start + 30 * 60_000).toISOString(),
+    } })) as unknown as typeof fetch
+    await executor.call(schedule())
+    now += 60_000
+    expect((await executor.call(schedule())).webhook?.nextCheckInAt).toBe(start + 30 * 60_000)
+    now = start + 30 * 60_000
+    const expired = (await executor.call(schedule())).webhook
+    expect(expired?.skipped).toBe('unchanged')
+    expect(expired?.nextCheckInAt).toBeUndefined()
+  })
+
+  it('retries an expired baseline after a refused refresh instead of suppressing it', async () => {
+    let now = Date.parse('2030-01-01T00:00:00Z')
+    clock = spyOn(Date, 'now').mockImplementation(() => now)
+    await executor.call(schedule())
+    now += MAX_UNCHANGED_UPLOAD_AGE_MS
+    const okFetch = globalThis.fetch
+    globalThis.fetch = (async () => new Response('', { status: 429 })) as unknown as typeof fetch
+    expect((await executor.call(schedule())).webhook?.success).toBe(false)
+    globalThis.fetch = okFetch
+    expect((await executor.call(schedule())).webhook?.attempted).toBe(true)
+  })
+
   it('keeps existing schedules opted out and local captures local', async () => {
     const s = schedule()
     delete s.skip_unchanged
@@ -99,7 +187,7 @@ describe('unchanged raw uploads', () => {
     } finally { scheduler.stop() }
   })
 
-  it('falls back to the unchanged 30-minute job after a skip, then resumes server alignment', async () => {
+  it('preserves the server check-in on skipped runs, then accepts fresh alignment', async () => {
     let tick: (() => void | Promise<void>) | undefined
     const job = spyOn(JobManager.prototype, 'upsertJob').mockImplementation((s, callback) => {
       expect(s.interval_minutes).toBe(30)
@@ -119,7 +207,7 @@ describe('unchanged raw uploads', () => {
       await tick!()
       expect(alignment.mock.calls.at(-1)?.[1]).toBe(Date.parse('2030-01-01T12:00:00Z'))
       await tick!()
-      expect(alignment.mock.calls.at(-1)?.[1]).toBeUndefined()
+      expect(alignment.mock.calls.at(-1)?.[1]).toBe(Date.parse('2030-01-01T12:00:00Z'))
       image = await png('red')
       await tick!()
       expect(alignment.mock.calls.at(-1)?.[1]).toBe(Date.parse('2030-01-01T12:00:00Z'))

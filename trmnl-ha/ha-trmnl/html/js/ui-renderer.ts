@@ -252,7 +252,7 @@ export class RenderScheduleContent {
                 onchange="window.app.updateScheduleFromForm()" />
               Skip uploads when the image is unchanged (raw webhooks only)
             </label>
-            <p class="text-xs text-gray-500 mt-1">Compare final pixels with the last successful upload. Send Now always sends; restarting the app sends once again. Skipped uploads use the schedule above until a new upload provides a check-in time. This does not change the device's check-in interval.</p>
+            <p class="text-xs text-gray-500 mt-1">Compare final pixels with the last successful upload, sending again on the first capture four hours after the last upload. Send Now and restarting the app send again. Skipped uploads keep a known future check-in time; once it passes, the schedule above is used until a new upload provides another time. This does not change the device's check-in interval.</p>
             ${
               s.webhook_url
                 ? `

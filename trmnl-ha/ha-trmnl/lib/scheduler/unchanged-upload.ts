@@ -29,9 +29,18 @@ export function contextDigest(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
 }
 
+/** Refresh the server baseline periodically, even when every capture is identical. */
+export const MAX_UNCHANGED_UPLOAD_AGE_MS = 4 * 60 * 60 * 1000
+
+interface DeliveredImage {
+  signature: string
+  uploadedAt: number
+  nextCheckInAt?: number
+}
+
 /** Serializes deliveries sharing a URL, including manual and non-opted-in sends. */
 export class UnchangedUploads {
-  #delivered = new Map<string, string>()
+  #delivered = new Map<string, DeliveredImage>()
   #pending = new Map<string, Promise<unknown>>()
 
   /** Runs a delivery decision exclusively for this destination. */
@@ -47,8 +56,12 @@ export class UnchangedUploads {
   }
 
   /** Only an acknowledged successful upload establishes a comparison baseline. */
-  matches(destination: string, signature: string): boolean {
-    return this.#delivered.get(destination) === signature
+  matchingDelivery(destination: string, signature: string, now: number = Date.now()): Readonly<DeliveredImage> | undefined {
+    const delivered = this.#delivered.get(destination)
+    if (delivered?.signature !== signature) return undefined
+    const age = now - delivered.uploadedAt
+    // A backwards clock change must not extend suppression indefinitely either.
+    return age >= 0 && age < MAX_UNCHANGED_UPLOAD_AGE_MS ? delivered : undefined
   }
 
   /** Invalidate before a send: even a failed response may have changed the server. */
@@ -57,7 +70,7 @@ export class UnchangedUploads {
   }
 
   /** Remember a successful delivery, without keeping image bytes or credentials. */
-  remember(destination: string, signature: string): void {
-    this.#delivered.set(destination, signature)
+  remember(destination: string, signature: string, nextCheckInAt?: number): void {
+    this.#delivered.set(destination, { signature, uploadedAt: Date.now(), nextCheckInAt })
   }
 }

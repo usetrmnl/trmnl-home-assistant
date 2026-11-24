@@ -164,13 +164,18 @@ export class ScheduleExecutor {
           log.warn`Could not compare final pixels for "${schedule.name}"; uploading`
         }
       }
-      if (!force && signature && this.#unchanged.matches(destination, signature)) {
-        return { attempted: false, success: true, skipped: 'unchanged' }
+      const previous = signature ? this.#unchanged.matchingDelivery(destination, signature) : undefined
+      if (!force && previous) {
+        // Keep a still-future server observation; never extrapolate device timing.
+        const nextCheckInAt = previous.nextCheckInAt !== undefined && previous.nextCheckInAt > Date.now()
+          ? previous.nextCheckInAt : undefined
+        return { attempted: false, success: true, skipped: 'unchanged',
+          ...(nextCheckInAt !== undefined ? { nextCheckInAt } : {}) }
       }
       // Invalidate for every send, including non-opted-in schedules and failures.
       this.#unchanged.forget(destination)
       const result = await this.#uploadIfConfigured(schedule, imageBuffer, format, filename)
-      if (result?.success && signature) this.#unchanged.remember(destination, signature)
+      if (result?.success && signature) this.#unchanged.remember(destination, signature, result.nextCheckInAt)
       return result
     })
   }
