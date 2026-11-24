@@ -32,6 +32,7 @@ import {
   uploadToWebhook as webhookDelivery,
   type WebhookDeliveryOptions,
 } from '../../lib/scheduler/services.js'
+import { clearKnownByosScreenIds } from '../../lib/scheduler/webhook-delivery.js'
 import { ScheduleExecutor } from '../../lib/scheduler/schedule-executor.js'
 import type {
   Schedule,
@@ -508,6 +509,8 @@ describe('Webhook Integration', () => {
   // ==========================================================================
 
   describe('BYOS 422 Error Handling', () => {
+    beforeEach(() => clearKnownByosScreenIds())
+
     /**
      * Helper to call webhookDelivery directly with BYOS format config.
      * This bypasses the schedule-based wrapper to test the raw 422 handling.

@@ -947,5 +947,17 @@ describeDithering('Dithering Module', () => {
         })
       })
     }
+
+    // The server redraws the device whenever the uploaded bytes change, so a
+    // timestamp chunk turned every unchanged dashboard into a refresh.
+    it('gives the same bytes for the same image a second later, keeping bKGD', async () => {
+      const options = { method: 'floyd-steinberg', palette: 'gray-4', format: 'png' } as const
+      const first = await applyDithering(testImageBuffer, options)
+      await new Promise((resolve) => setTimeout(resolve, 1100))
+      const second = await applyDithering(testImageBuffer, options)
+
+      expect({ equal: first.equals(second), bKGD: parsePngChunks(second).includes('bKGD') })
+        .toEqual({ equal: true, bKGD: true })
+    })
   })
 })
