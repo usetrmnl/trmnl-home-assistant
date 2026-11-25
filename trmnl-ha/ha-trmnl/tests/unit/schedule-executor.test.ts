@@ -276,3 +276,94 @@ describe('ScheduleExecutor — refused upload notification', () => {
     expect(notifier.reauth).not.toHaveBeenCalled()
   })
 })
+
+describe('ScheduleExecutor — unchanged image', () => {
+  const trmnlSchedule = () =>
+    buildSchedule({ webhook_url: 'https://trmnl.com/api/plugin_settings/uuid/image' })
+
+  let requests: ReturnType<typeof captureFetch>
+  let image: string
+
+  beforeEach(() => {
+    requests = captureFetch()
+    image = 'dashboard-a'
+  })
+
+  afterEach(() => {
+    mock.restore()
+  })
+
+  const createImageExecutor = () => createExecutor(async () => Buffer.from(image))
+
+  it('skips a scheduled upload when the image matches the last one sent', async () => {
+    const executor = createImageExecutor()
+
+    await executor.call(trmnlSchedule())
+    const result = await executor.call(trmnlSchedule())
+
+    expect(requests).toHaveLength(1)
+    expect(result.webhook).toEqual({ attempted: false, success: true })
+  })
+
+  it('uploads when the image changes', async () => {
+    const executor = createImageExecutor()
+
+    await executor.call(trmnlSchedule())
+    image = 'dashboard-b'
+    await executor.call(trmnlSchedule())
+
+    expect(requests).toHaveLength(2)
+  })
+
+  it('uploads an unchanged image when forced, as Send Now does', async () => {
+    const executor = createImageExecutor()
+
+    await executor.call(trmnlSchedule())
+    await executor.call(trmnlSchedule(), { force: true })
+
+    expect(requests).toHaveLength(2)
+  })
+
+  it('uploads an unchanged image again four hours after the last upload', async () => {
+    const executor = createImageExecutor()
+    const start = Date.now()
+    const clock = spyOn(Date, 'now').mockReturnValue(start)
+
+    await executor.call(trmnlSchedule())
+    clock.mockReturnValue(start + 4 * 60 * 60 * 1000 - 1)
+    await executor.call(trmnlSchedule())
+    clock.mockReturnValue(start + 4 * 60 * 60 * 1000)
+    await executor.call(trmnlSchedule())
+
+    expect(requests).toHaveLength(2)
+  })
+
+  it('uploads an unchanged image again after a failed upload', async () => {
+    mockFetch({ ok: false, status: 503, statusText: 'Service Unavailable' })
+    const executor = createImageExecutor()
+    await executor.call(trmnlSchedule())
+
+    requests = captureFetch()
+    await executor.call(trmnlSchedule())
+
+    expect(requests).toHaveLength(1)
+  })
+
+  it('uploads when the same image goes to a different webhook', async () => {
+    const executor = createImageExecutor()
+
+    await executor.call(trmnlSchedule())
+    await executor.call(buildSchedule({ webhook_url: 'https://trmnl.com/api/plugin_settings/other/image' }))
+
+    expect(requests).toHaveLength(2)
+  })
+
+  it('always uploads to a BYOS server', async () => {
+    const executor = createImageExecutor()
+
+    await executor.call(buildByosSchedule())
+    await executor.call(buildByosSchedule())
+
+    expect(requests.filter((r) => r.url.endsWith('/api/screens'))).toHaveLength(2)
+  })
+})

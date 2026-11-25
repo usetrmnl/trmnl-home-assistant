@@ -360,7 +360,9 @@ Create cron-based schedules via the Web UI for automatic captures.
 
 **Storage:** `schedules.json` in the data directory (persists across restarts when a volume is mounted — see [Data Persistence](#home-assistant-container-docker))
 
-**Manual Trigger:** Click **Send Now** to execute immediately.
+**Unchanged images:** A scheduled capture that gives the same image as the last one sent to that webhook URL is saved but not uploaded, so it does not use up TRMNL's limit of 12 uploads an hour. The same image is uploaded anyway once four hours have passed since the last upload, and after the app restarts. BYOS servers always receive every capture. While the image stays the same, TRMNL sends no check-in time, so the schedule runs on its own interval until the image changes.
+
+**Manual Trigger:** Click **Send Now** to execute immediately. It always uploads, even when the image has not changed.
 
 **Export / Import:** Use the **Export** and **Import** buttons in the Schedules tab to back up or restore schedules as JSON files. Import replaces all existing schedules.
 

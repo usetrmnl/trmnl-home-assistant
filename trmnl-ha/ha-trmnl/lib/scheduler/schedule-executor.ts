@@ -6,6 +6,7 @@
  * @module lib/scheduler/schedule-executor
  */
 
+import { createHash } from 'node:crypto'
 import {
   saveScreenshot,
   cleanupOldScreenshots,
@@ -37,6 +38,9 @@ import { timed } from '../metrics.js'
 
 const log = schedulerLogger()
 
+/** Resend an unchanged image this often anyway: the server queues an upload before storing it, so a 200 can still be lost. */
+const UNCHANGED_RESEND_MS = 4 * 60 * 60 * 1000
+
 /** Function type for screenshot capture */
 export type ScreenshotFunction = (params: ScreenshotParams) => Promise<Buffer>
 
@@ -64,6 +68,8 @@ export class ScheduleExecutor {
   #screenshotFn: ScreenshotFunction
   #outputDir: string
   #notifier: ScheduleNotifier
+  /** Last image hash each webhook URL accepted, and when */
+  #lastSent = new Map<string, { hash: string; at: number }>()
 
   constructor(
     screenshotFn: ScreenshotFunction,
@@ -76,11 +82,11 @@ export class ScheduleExecutor {
   }
 
   /** Executes schedule with automatic retry on network failures */
-  async call(schedule: Schedule): Promise<ExecutionResult> {
+  async call(schedule: Schedule, { force = false } = {}): Promise<ExecutionResult> {
     const startTime = Date.now()
     log.info`Running: ${schedule.name}`
 
-    const result = await this.#executeWithRetry(schedule)
+    const result = await this.#executeWithRetry(schedule, force)
     result.durationMs = Date.now() - startTime
 
     this.#logResult(schedule.name, result, result.durationMs)
@@ -96,15 +102,16 @@ export class ScheduleExecutor {
   /** Formats webhook status for logging */
   #formatWebhookStatus(webhook: WebhookResult | undefined): string {
     if (!webhook) return 'not configured'
+    if (!webhook.attempted) return 'skipped, image unchanged'
     if (webhook.success) return `${webhook.statusCode} OK`
     return `FAILED (HTTP ${webhook.statusCode ?? 'unknown'})`
   }
 
   /** Retry wrapper for network failures */
-  async #executeWithRetry(schedule: Schedule): Promise<ExecutionResult> {
+  async #executeWithRetry(schedule: Schedule, force: boolean): Promise<ExecutionResult> {
     for (let attempt = 1; attempt <= SCHEDULER_MAX_RETRIES; attempt++) {
       try {
-        return await this.#executeOnce(schedule)
+        return await this.#executeOnce(schedule, force)
       } catch (err) {
         if (!this.#shouldRetry(err as Error, attempt)) throw err
         this.#logRetry(schedule.name, err as Error, attempt)
@@ -115,7 +122,7 @@ export class ScheduleExecutor {
   }
 
   /** Single execution attempt */
-  async #executeOnce(schedule: Schedule): Promise<ExecutionResult> {
+  async #executeOnce(schedule: Schedule, force: boolean): Promise<ExecutionResult> {
     const params = buildParams(schedule)
     const imageBuffer = await this.#screenshotFn(params)
     const { savedPath, filename } = await this.#saveAndCleanup(
@@ -123,13 +130,28 @@ export class ScheduleExecutor {
       imageBuffer,
       params.format,
     )
+    const hash = createHash('sha256').update(imageBuffer).digest('hex')
+    if (!force && this.#alreadySent(schedule, hash)) {
+      return { success: true, savedPath, webhook: { attempted: false, success: true } }
+    }
+
+    const url = schedule.webhook_url
+    if (url) this.#lastSent.delete(url)
     const webhook = await this.#uploadIfConfigured(
       schedule,
       imageBuffer,
       params.format,
       filename,
     )
+    if (url && webhook?.success) this.#lastSent.set(url, { hash, at: Date.now() })
     return { success: true, savedPath, webhook }
+  }
+
+  /** BYOS is left out: a URI upload names a saved file the server may fetch after cleanup has deleted it. */
+  #alreadySent(schedule: Schedule, hash: string): boolean {
+    if (!schedule.webhook_url || schedule.webhook_format?.byosConfig) return false
+    const last = this.#lastSent.get(schedule.webhook_url)
+    return last?.hash === hash && Date.now() - last.at < UNCHANGED_RESEND_MS
   }
 
   /** Saves screenshot and runs LRU cleanup */

@@ -16,6 +16,7 @@ import {
 import * as scheduleStore from '../../lib/scheduleStore.js'
 import * as notifications from '../../lib/ha-notify.js'
 import { captureFetch, restoreFetch } from '../helpers/fetch-mock.js'
+import { ScheduleExecutor } from '../../lib/scheduler/schedule-executor.js'
 import type { Schedule } from '../../types/domain.js'
 
 /** A BYOS schedule whose stored tokens carry the given rotation stamp. */
@@ -200,5 +201,21 @@ describe('Scheduler BYOS authentication notices', () => {
     const requests = captureFetch()
     await start(scheduleWithExpiry(Date.now() / 1000 + 3600, 1))
     expect(requests).toHaveLength(0)
+  })
+})
+
+describe('Scheduler Send Now', () => {
+  afterEach(() => {
+    mock.restore()
+  })
+
+  it('uploads even when the image is unchanged', async () => {
+    const schedule = buildSchedule()
+    spyOn(scheduleStore, 'loadSchedules').mockResolvedValue([schedule])
+    const call = spyOn(ScheduleExecutor.prototype, 'call').mockResolvedValue({ success: true, savedPath: '' })
+
+    await new Scheduler(async () => Buffer.from('unused')).executeNow(schedule.id)
+
+    expect(call).toHaveBeenCalledWith(schedule, { force: true })
   })
 })
