@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.4] - 2026-11-25
+
+### Changed
+
+- A scheduled capture that gives the same image as the last one sent is no longer uploaded, so an unchanged dashboard does not use up TRMNL's 12 uploads an hour. The same image is still sent every four hours, and Send Now always sends (#180)
+
 ## [0.15.3] - 2026-11-23
 
 ### Fixed
