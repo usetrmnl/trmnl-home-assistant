@@ -10,6 +10,36 @@ between upstream releases takes a `-1`, `-2` suffix.
 Each entry starts with the bundled LaraPaper release's own notes (on the version that
 first bundles it), followed by the add-on's own changes under "Home Assistant add-on".
 
+## [0.49.0] - 2026-11-25
+
+### LaraPaper 0.49.0
+
+From the [LaraPaper 0.49.0 release](https://github.com/usetrmnl/larapaper/releases/tag/0.49.0):
+
+LaraPaper 0.49 upgrades the Docker base image to PHP 8.5 and Node.js 26, introduces support for field groups and conditional visibility in recipe configurations, as well as support for private certificates. It also includes improvements to transforms, markup rendering, and boolean configuration values. The open source catalog continues to grow, now featuring over 300 LaraPaper-compatible recipes.
+
+#### What's Changed
+* feat(#335): Support private/internal CA for Chromium renders (SPKI pinning) by [@Z0nd0R](https://github.com/Z0nd0R) in [#337](https://github.com/usetrmnl/larapaper/pull/337)
+* feat(#318): add support for recipe field groups
+* feat: add support for conditional visibility in recipe configuration
+* feat(transform): add support for URL, URLSearchParams
+* refactor: markup rendering
+* fix: inject boolean configuration values as string into Liquid templates
+* fix: boolean does not need to be optional in recipe configuration; default: false
+* fix: recipes with only shared template should render
+* chore: bump default versions: PHP 8.5; node 26
+* chore: bump TRMNL_BLADE_FRAMEWORK_VERSION to 3.4.7
+* chore: move playlist item text scale into submenu
+
+#### New Contributors
+* [@Z0nd0R](https://github.com/Z0nd0R) made their first contribution in [#337](https://github.com/usetrmnl/larapaper/pull/337)
+
+**Full Changelog**: [0.48.0...0.49.0](https://github.com/usetrmnl/larapaper/compare/0.48.0...0.49.0)
+
+### Home Assistant add-on
+
+- Updated LaraPaper to 0.49.0
+
 ## [0.48.0] - 2026-11-20
 
 ### LaraPaper 0.48.0

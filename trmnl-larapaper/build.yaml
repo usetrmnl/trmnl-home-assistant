@@ -1,4 +1,4 @@
 ---
 build_from:
-  aarch64: ghcr.io/usetrmnl/larapaper:0.48.0
-  amd64: ghcr.io/usetrmnl/larapaper:0.48.0
+  aarch64: ghcr.io/usetrmnl/larapaper:0.49.0
+  amd64: ghcr.io/usetrmnl/larapaper:0.49.0
