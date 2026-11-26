@@ -18,6 +18,7 @@ import { describe, it, expect, beforeEach, afterAll, mock } from 'bun:test'
 import {
   buildRefreshedAuthUpdate,
   canRelogin,
+  forgetRefusedRefreshTokens,
   getBaseUrl,
   getValidAccessToken,
   isRefreshable,
@@ -39,7 +40,10 @@ function jwt(claims: unknown): string {
 // ---------------------------------------------------------------------------
 
 describe('byos-auth', () => {
-  beforeEach(restoreFetch)
+  beforeEach(() => {
+    restoreFetch()
+    forgetRefusedRefreshTokens()
+  })
 
   // -------------------------------------------------------------------------
   // getBaseUrl
@@ -370,6 +374,36 @@ describe('byos-auth', () => {
       const result = await getValidAccessToken('https://host.com/api', auth)
 
       expect(result).toBe('old')
+    })
+
+    it('does not send a refresh token the server already refused', async () => {
+      const auth: ByosAuthConfig = {
+        enabled: true,
+        access_token: 'old',
+        refresh_token: 'refused',
+        obtained_at: Date.now() - 30 * 60 * 1000,
+      }
+      mockFetch({ ok: false, status: 400 })
+
+      await getValidAccessToken('https://host.com/api', auth)
+
+      expect(await getValidAccessToken('https://host.com/api', auth)).toBe('old')
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+    })
+
+    it('tries the refresh again after a server error', async () => {
+      const auth: ByosAuthConfig = {
+        enabled: true,
+        access_token: 'old',
+        refresh_token: 'refresh',
+        obtained_at: Date.now() - 30 * 60 * 1000,
+      }
+      mockFetch({ ok: false, status: 503 })
+
+      await getValidAccessToken('https://host.com/api', auth)
+      await getValidAccessToken('https://host.com/api', auth)
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2)
     })
 
     it('does not persist tokens when refresh fails', async () => {

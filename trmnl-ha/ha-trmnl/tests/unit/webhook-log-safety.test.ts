@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { getValidAccessToken, login } from '../../lib/scheduler/byos-auth.js'
+import { forgetRefusedRefreshTokens, getValidAccessToken, login } from '../../lib/scheduler/byos-auth.js'
 import { Scheduler } from '../../scheduler.js'
 import * as scheduleStore from '../../lib/scheduleStore.js'
 import { ScheduleExecutor } from '../../lib/scheduler/schedule-executor.js'
@@ -26,6 +26,7 @@ const notificationSpies: { mockRestore(): void }[] = []
 
 afterEach(async () => {
   restoreFetch()
+  forgetRefusedRefreshTokens()
   for (const spy of notificationSpies.splice(0)) spy.mockRestore()
   await logs?.stop()
   logs = undefined

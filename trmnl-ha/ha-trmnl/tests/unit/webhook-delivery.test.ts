@@ -247,6 +247,37 @@ describe('uploadToWebhook — BYOS 422 fallback', () => {
   })
 })
 
+describe('uploadToWebhook — BYOS server error', () => {
+  function uploadAfterServerError(screenshotUrl?: string) {
+    mockFetch({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      text: async () => `<!DOCTYPE html><title>500: Internal Server Error</title>${' '.repeat(1000)}`,
+    })
+    return uploadToWebhook({
+      webhookUrl: 'http://byos.local/api/screens',
+      imageBuffer: Buffer.from('png'),
+      format: 'png',
+      screenshotUrl,
+      webhookFormat: {
+        format: 'byos-hanami',
+        byosConfig: { label: 'Test', name: 'test-screen', model_id: '1', preprocessed: true },
+      },
+    })
+  }
+
+  it('points at the App URL when Terminus could not load the screenshot', async () => {
+    await expect(uploadAfterServerError('http://app.local:10000/output/a.png')).rejects.toThrow(
+      'HTTP 500: Internal Server Error - Terminus could not load the screenshot. Check that Terminus can open the App URL in the schedule settings.',
+    )
+  })
+
+  it('adds no hint when the image is sent as data', async () => {
+    await expect(uploadAfterServerError()).rejects.toThrow(/^HTTP 500: Internal Server Error$/)
+  })
+})
+
 describe('uploadToWebhook — known BYOS screen ids', () => {
   const screensUrl = 'http://byos.local/api/screens'
   const screenList = () =>

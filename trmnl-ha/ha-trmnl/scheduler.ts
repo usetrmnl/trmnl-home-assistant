@@ -29,6 +29,7 @@ import {
   canRelogin,
   getValidAccessToken,
   isRefreshable,
+  isRefreshTokenRefused,
   isAccessTokenExpired,
 } from './lib/scheduler/byos-auth.js'
 import { notifyReauthRequired, clearReauthRequired } from './lib/ha-notify.js'
@@ -213,6 +214,9 @@ export class Scheduler {
         const auth = schedule.webhook_format?.byosConfig?.auth
         if (!schedule.webhook_url || !auth?.enabled) continue
 
+        // One refusal can be the race in issue #75; the same token refused
+        // on an earlier tick proves the session is gone.
+        const refusedOnEarlierTick = isRefreshTokenRefused(auth)
         if (isRefreshable(auth) || canRelogin(auth)) {
           await getValidAccessToken(schedule.webhook_url, auth, (newTokens) => {
             log.info`Refreshed BYOS tokens for schedule "${schedule.name}"`
@@ -228,12 +232,11 @@ export class Scheduler {
           })
         }
 
-        // A saved login may also fail. Only known expiry proves that the
-        // cached token cannot recover without authentication.
-        if (isAccessTokenExpired(auth)) {
+        // A saved login may also fail, so check again after it ran.
+        if (isAccessTokenExpired(auth) || (refusedOnEarlierTick && isRefreshTokenRefused(auth))) {
           if (!this.#deadTokensWarned.has(schedule.id)) {
             this.#deadTokensWarned.add(schedule.id)
-            log.warn`BYOS token for "${schedule.name}" has expired — re-authenticate in the schedule settings`
+            log.warn`BYOS sign-in for "${schedule.name}" has expired or was refused — re-authenticate in the schedule settings`
             void notifyReauthRequired(schedule)
           }
         } else {

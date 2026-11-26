@@ -15,6 +15,7 @@ import {
 } from '../helpers/schedule-fixtures.js'
 import * as scheduleStore from '../../lib/scheduleStore.js'
 import * as notifications from '../../lib/ha-notify.js'
+import { forgetRefusedRefreshTokens } from '../../lib/scheduler/byos-auth.js'
 import { captureFetch, restoreFetch } from '../helpers/fetch-mock.js'
 import { ScheduleExecutor } from '../../lib/scheduler/schedule-executor.js'
 import type { Schedule } from '../../types/domain.js'
@@ -98,6 +99,7 @@ describe('Scheduler BYOS authentication notices', () => {
     scheduler?.stop()
     for (const spy of spies.splice(0)) spy.mockRestore()
     restoreFetch()
+    forgetRefusedRefreshTokens()
   })
 
   function scheduleWithExpiry(exp: number | undefined, ageMinutes = 31): Schedule {
@@ -163,6 +165,24 @@ describe('Scheduler BYOS authentication notices', () => {
     const requests = captureResponses({}, 400)
     await start(scheduleWithExpiry(undefined))
     expect(requests.map((r) => new URL(r.url).pathname)).toEqual(['/api/jwt'])
+  })
+
+  it('notifies once and stops refreshing when the same refresh token is refused on a later tick', async () => {
+    const requests = captureResponses({}, 400)
+    let tick = () => {}
+    spies.push(spyOn(globalThis, 'setInterval').mockImplementation(
+      ((callback: () => void) => { tick = callback }) as unknown as typeof setInterval,
+    ))
+
+    await start(scheduleWithExpiry(undefined))
+    for (let ticks = 0; ticks < 3; ticks++) {
+      tick()
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+
+    expect(requests.map((r) => new URL(r.url).pathname)).toEqual([
+      '/api/jwt', '/api/services/persistent_notification/create',
+    ])
   })
 
   it('warns if a stored login cannot recover an expired token', async () => {

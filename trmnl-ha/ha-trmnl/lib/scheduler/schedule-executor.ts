@@ -274,7 +274,7 @@ export class ScheduleExecutor {
 
       if (statusCode === 401 && schedule.webhook_format?.byosConfig?.auth?.enabled) {
         void this.#notifier.notifyReauthRequired(schedule)
-      } else if (this.#isRefusal(statusCode)) {
+      } else if (this.#isRefusal(statusCode) || (statusCode === 500 && screenshotUrl)) {
         void this.#notifier.notifyUploadRefused(schedule, errorMessage)
       }
 

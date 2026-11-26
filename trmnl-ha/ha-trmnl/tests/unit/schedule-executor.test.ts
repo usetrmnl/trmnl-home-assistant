@@ -207,6 +207,26 @@ describe('ScheduleExecutor — refused upload notification', () => {
     expect(notifier.refused.mock.calls[0]![1]).toContain('BMP images are no longer supported.')
   })
 
+  it('notifies Home Assistant when Terminus cannot load the screenshot URL', async () => {
+    mockFetch({ ok: false, status: 500, statusText: 'Internal Server Error' })
+    const { executor, notifier } = createNotifyingExecutor()
+
+    await executor.call(buildByosSchedule())
+
+    expect(notifier.refused.mock.calls[0]![1]).toContain('Check that Terminus can open the App URL')
+  })
+
+  it('stays quiet on a server error when the image is sent as data', async () => {
+    mockFetch({ ok: false, status: 500, statusText: 'Internal Server Error' })
+    const { executor, notifier } = createNotifyingExecutor()
+    const schedule = buildByosSchedule()
+    schedule.webhook_format!.byosConfig!.delivery_mode = 'data'
+
+    await executor.call(schedule)
+
+    expect(notifier.refused).not.toHaveBeenCalled()
+  })
+
   it('stays quiet on a rate limit, which clears by itself', async () => {
     mockFetch({ ok: false, status: 429, statusText: 'Too Many Requests' })
     const { executor, notifier } = createNotifyingExecutor()
