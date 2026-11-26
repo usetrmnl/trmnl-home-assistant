@@ -32,6 +32,19 @@ export interface TokenResponse {
  */
 const ACCESS_TOKEN_VALIDITY_MS = 10 * 60 * 1000
 
+/** Rodauth never accepts a refresh token again once it has refused it. */
+const refusedRefreshTokens = new Set<string>()
+
+/** Clears the refused refresh tokens. For tests only. */
+export function forgetRefusedRefreshTokens(): void {
+  refusedRefreshTokens.clear()
+}
+
+/** Whether the server already refused this stored refresh token. */
+export function isRefreshTokenRefused(auth: ByosAuthConfig): boolean {
+  return Boolean(auth.refresh_token && refusedRefreshTokens.has(auth.refresh_token))
+}
+
 /**
  * Extracts base URL from webhook URL.
  * e.g., "https://example.com/api/screens" → "https://example.com"
@@ -74,7 +87,9 @@ export function isAccessTokenExpired(auth: ByosAuthConfig): boolean {
  * access token, but an old obtained_at alone does not mean it has expired.
  */
 export function isRefreshable(auth: ByosAuthConfig): boolean {
-  return Boolean(auth.access_token && auth.refresh_token) && !isAccessTokenExpired(auth)
+  return Boolean(auth.access_token && auth.refresh_token) &&
+    !isAccessTokenExpired(auth) &&
+    !isRefreshTokenRefused(auth)
 }
 
 /**
@@ -168,6 +183,7 @@ async function refreshToken(
 
   if (!response.ok) {
     log.warn`BYOS auth: refresh failed (HTTP ${response.status})`
+    if (response.status === 400 || response.status === 401) refusedRefreshTokens.add(auth.refresh_token!)
     throw new Error(`BYOS token refresh failed: ${response.status}`)
   }
 
@@ -241,9 +257,11 @@ export async function getValidAccessToken(
     return auth.access_token
   }
 
+  const baseUrl = getBaseUrl(webhookUrl)
+  if (isRefreshTokenRefused(auth)) return (await relogin(baseUrl, auth, onTokenRefresh)) ?? auth.access_token
+
   // Token needs renewal - try to refresh
   try {
-    const baseUrl = getBaseUrl(webhookUrl)
     const newTokens = await refreshToken(baseUrl, auth)
 
     adoptTokens(auth, newTokens, onTokenRefresh)
@@ -263,7 +281,7 @@ export async function getValidAccessToken(
     // fails no worse than one with none.
     log.warn`BYOS auth: refresh failed: ${errorKind(err)}`
     return (
-      (await relogin(getBaseUrl(webhookUrl), auth, onTokenRefresh)) ??
+      (await relogin(baseUrl, auth, onTokenRefresh)) ??
       auth.access_token
     )
   }
