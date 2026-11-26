@@ -434,7 +434,7 @@ class DeliverWebhook {
     )
     if (!patchResponse.ok) {
       log.error`PATCH failed: HTTP ${patchResponse.status}`
-      return null
+      throw this.#httpError(patchResponse, await patchResponse.text())
     }
 
     this.#rememberScreenId(screenId)
@@ -452,9 +452,15 @@ class DeliverWebhook {
       const parsed = JSON.parse(safeText) as {
         error?: string
         message?: string
+        detail?: unknown
       }
       if (parsed.error) return ` - ${parsed.error}`
       if (parsed.message) return ` - ${parsed.message}`
+      // Problem Details (RFC 9457), used by Terminus. The detail can quote the
+      // screenshot URL, which may carry an access secret, so drop any URL.
+      if (typeof parsed.detail === 'string' && parsed.detail) {
+        return ` - ${parsed.detail.replace(/https?:\/\/\S+/gi, '[redacted URL]')}`
+      }
       return ''
     } catch {
       // Not JSON; short bodies are safe to show raw

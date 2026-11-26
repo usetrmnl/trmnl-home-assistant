@@ -96,6 +96,36 @@ describe('redactWebhookUrl', () => {
 })
 
 describe('uploadToWebhook — HTTP error details', () => {
+  function mockRefusal(body: unknown) {
+    mockFetch({
+      ok: false,
+      status: 422,
+      statusText: 'Unprocessable Content',
+      text: async () => JSON.stringify(body),
+    })
+  }
+
+  it('shows the detail of a Problem Details response', async () => {
+    mockRefusal({ title: 'Unprocessable Content', status: 422, detail: 'Image is too large.' })
+
+    await expect(upload()).rejects.toThrow('HTTP 422: Unprocessable Content - Image is too large.')
+  })
+
+  it('removes URLs from a Problem Details detail', async () => {
+    mockRefusal({ detail: 'Could not fetch http://app.local:10000/output/a.png?secret=abc123 for screen.' })
+
+    const error = await upload().catch((err: unknown) => err as Error)
+    expect((error as Error).message).toContain('Could not fetch [redacted URL] for screen.')
+    expect((error as Error).message).not.toContain('abc123')
+  })
+
+  it('ignores a detail that is not text', async () => {
+    mockRefusal({ detail: { field: 'uri' } })
+
+    const error = await upload().catch((err: unknown) => err as Error)
+    expect((error as Error).message).toBe('HTTP 422: Unprocessable Content')
+  })
+
   it('redacts the configured URL from response details that callers may log', async () => {
     const url = 'https://trmnl.example/api/plugin_settings/private-id/image?token=private'
     mockFetch({
@@ -187,6 +217,33 @@ describe('uploadToWebhook — BYOS 422 fallback', () => {
 
     await expect(result).rejects.toThrow(/HTTP 422/)
     expect(responses).toHaveLength(0) // Both POST and GET were attempted
+  })
+
+  it('shows the reason of a refused PATCH, not of the create', async () => {
+    const responses = [
+      Response.json({ detail: 'Screen exists with name ("test-screen") and model ID (1).' }, { status: 422 }),
+      Response.json({ data: [{ id: 7, model_id: 1, name: 'test-screen' }] }),
+      Response.json({ detail: 'magick: improper image header.' }, { status: 422 }),
+    ]
+    globalThis.fetch = mock(async () => responses.shift()!) as unknown as typeof fetch
+
+    const result = uploadToWebhook({
+      webhookUrl: 'http://byos.local/api/screens',
+      imageBuffer: Buffer.from('png'),
+      format: 'png',
+      webhookFormat: {
+        format: 'byos-hanami',
+        byosConfig: {
+          label: 'Test',
+          name: 'test-screen',
+          model_id: '1',
+          preprocessed: true,
+          auth: { enabled: true, access_token: 'Bearer token', refresh_token: 'refresh', obtained_at: Date.now() },
+        },
+      },
+    })
+
+    await expect(result).rejects.toThrow(/^HTTP 422: .* - magick: improper image header\.$/)
   })
 })
 
