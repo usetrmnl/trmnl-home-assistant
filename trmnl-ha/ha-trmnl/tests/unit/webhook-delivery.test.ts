@@ -218,6 +218,33 @@ describe('uploadToWebhook — BYOS 422 fallback', () => {
     await expect(result).rejects.toThrow(/HTTP 422/)
     expect(responses).toHaveLength(0) // Both POST and GET were attempted
   })
+
+  it('shows the reason of a refused PATCH, not of the create', async () => {
+    const responses = [
+      Response.json({ detail: 'Screen exists with name ("test-screen") and model ID (1).' }, { status: 422 }),
+      Response.json({ data: [{ id: 7, model_id: 1, name: 'test-screen' }] }),
+      Response.json({ detail: 'magick: improper image header.' }, { status: 422 }),
+    ]
+    globalThis.fetch = mock(async () => responses.shift()!) as unknown as typeof fetch
+
+    const result = uploadToWebhook({
+      webhookUrl: 'http://byos.local/api/screens',
+      imageBuffer: Buffer.from('png'),
+      format: 'png',
+      webhookFormat: {
+        format: 'byos-hanami',
+        byosConfig: {
+          label: 'Test',
+          name: 'test-screen',
+          model_id: '1',
+          preprocessed: true,
+          auth: { enabled: true, access_token: 'Bearer token', refresh_token: 'refresh', obtained_at: Date.now() },
+        },
+      },
+    })
+
+    await expect(result).rejects.toThrow(/^HTTP 422: .* - magick: improper image header\.$/)
+  })
 })
 
 describe('uploadToWebhook — known BYOS screen ids', () => {

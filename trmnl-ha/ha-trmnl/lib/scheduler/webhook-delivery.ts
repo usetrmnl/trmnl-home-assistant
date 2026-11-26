@@ -434,7 +434,7 @@ class DeliverWebhook {
     )
     if (!patchResponse.ok) {
       log.error`PATCH failed: HTTP ${patchResponse.status}`
-      return null
+      throw this.#httpError(patchResponse, await patchResponse.text())
     }
 
     this.#rememberScreenId(screenId)
