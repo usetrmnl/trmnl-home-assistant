@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.5] - 2026-11-26
+
+### Fixed
+
+- When a BYOS server (Terminus) refuses a screen, the "screen not delivered" notice now says why, for example "Unable to find model for model ID (99999)" or that the server could not read the image. Before, it said only "HTTP 422: Unprocessable Content", and once the screen existed it could blame a name clash instead of the real cause. Any address in the reason is left out, because it can carry the app's access secret. Thanks to @d01 (#178)
+- A successful send no longer asks Home Assistant each time to remove notices that are not there, so a home with many schedules makes far fewer Home Assistant calls and recorder database rows. Thanks to @d01 (#179)
+
 ## [0.15.4] - 2026-11-25
 
 ### Changed
