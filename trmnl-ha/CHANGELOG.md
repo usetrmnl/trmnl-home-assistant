@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.6] - 2026-11-26
+
+### Fixed
+
+- When a BYOS server (Terminus) has forgotten your sign-in, for example after a reinstall, the app no longer tries the same refresh every minute forever with two warnings each time. It stops, and shows the "sign in to your BYOS server" notice once (#183)
+- When Terminus cannot load the screenshot from the App URL, the "screen not delivered" notice now says so and points at the App URL setting. Before, the upload failed with only "HTTP 500" in the app and no notice (#183)
+
 ## [0.15.5] - 2026-11-26
 
 ### Fixed
