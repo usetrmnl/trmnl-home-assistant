@@ -404,7 +404,7 @@ class DeliverWebhook {
 
   #httpError(response: Response, responseText: string): WebhookHttpError {
     return new WebhookHttpError(
-      `HTTP ${response.status}: ${response.statusText}${this.#errorDetail(responseText)}`,
+      `HTTP ${response.status}: ${response.statusText}${this.#errorDetail(responseText) || this.#imageFetchHint(response.status)}`,
       response.status,
       parseRetryAfterMs(response.headers.get('Retry-After')),
     )
@@ -440,6 +440,13 @@ class DeliverWebhook {
     this.#rememberScreenId(screenId)
     log.info`PATCH successful: HTTP ${patchResponse.status}`
     return this.#result(patchResponse)
+  }
+
+  /** Terminus answers a bare HTML 500 when it cannot fetch or read the image URL. */
+  #imageFetchHint(status: number): string {
+    return status === 500 && this.#byosConfig && this.#options.screenshotUrl
+      ? ' - Terminus could not load the screenshot. Check that Terminus can open the App URL in the schedule settings.'
+      : ''
   }
 
   /** Extracts a human-readable detail from an error response body. */
