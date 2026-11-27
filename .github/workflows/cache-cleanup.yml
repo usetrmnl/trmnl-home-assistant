@@ -1,7 +1,8 @@
 name: Cache Cleanup
 
 on:
-  pull_request:
+  # NOTE: pull_request_target so fork PRs get a write token; never check out PR code here.
+  pull_request_target:
     types: [closed]
 
 jobs:
@@ -16,15 +17,16 @@ jobs:
         with:
           script: |
             const ref = `refs/pull/${context.issue.number}/merge`;
-            const caches = await github.rest.actions.getActionsCacheList({
+            const caches = await github.paginate(github.rest.actions.getActionsCacheList, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               ref: ref,
+              per_page: 100,
             });
 
-            console.log(`Found ${caches.data.total_count} cache(s) for PR #${context.issue.number}`);
+            console.log(`Found ${caches.length} cache(s) for PR #${context.issue.number}`);
 
-            for (const cache of caches.data.actions_caches) {
+            for (const cache of caches) {
               console.log(`Deleting cache: ${cache.key} (${cache.size_in_bytes} bytes)`);
               await github.rest.actions.deleteActionsCacheById({
                 owner: context.repo.owner,
