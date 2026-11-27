@@ -461,6 +461,37 @@ describe('ScheduleExecutor — upload retry on connection errors', () => {
     expect(sleepSpy.mock.calls.map((c: unknown[]) => c[0])).toEqual([5000, 15000, 40000])
   })
 
+  it('stops retrying once the executor is stopped', async () => {
+    const fetchState = failingFetch(Infinity)
+    const executor = createExecutor(async () => Buffer.from('fake-png'))
+    sleepSpy.mockImplementation(() => {
+      executor.stop()
+      return new Promise<void>(() => {})
+    })
+
+    const result = await executor.call(webhookSchedule())
+
+    expect(result.webhook).toMatchObject({ attempted: true, success: false })
+    expect(fetchState.calls).toBe(1)
+  })
+
+  it('drops a retry once a newer upload of the same schedule starts', async () => {
+    const fetchState = failingFetch(1)
+    const schedule = webhookSchedule()
+    const executor = createExecutor(async () => Buffer.from('fake-png'))
+    let newer: ReturnType<typeof executor.call> | undefined
+    sleepSpy.mockImplementation(async () => {
+      newer = executor.call(schedule)
+      await newer
+    })
+
+    const older = await executor.call(schedule)
+
+    expect(older.webhook).toMatchObject({ attempted: true, success: false })
+    expect((await newer!).webhook).toMatchObject({ attempted: true, success: true })
+    expect(fetchState.calls).toBe(2)
+  })
+
   it('does not retry an HTTP error', async () => {
     mockFetch({ ok: false, status: 500, statusText: 'Server Error' })
     const executor = createExecutor(async () => Buffer.from('fake-png'))
