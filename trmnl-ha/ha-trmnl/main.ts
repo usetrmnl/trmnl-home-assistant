@@ -207,10 +207,17 @@ class RequestHandler {
       return
     }
 
-    const routed = await this.#router.route(request, response, requestUrl)
-    if (routed) return
+    try {
+      const routed = await this.#router.route(request, response, requestUrl)
+      if (routed) return
 
-    await this.#handleScreenshotRequest(request, response, requestUrl)
+      await this.#handleScreenshotRequest(request, response, requestUrl)
+    } catch (err) {
+      // Answer before rethrowing, or the client waits forever; the
+      // unhandledRejection handler still decides whether to restart
+      if (!response.headersSent) this.#sendError(response, 500, `Request failed: ${(err as Error).message}`)
+      throw err
+    }
   }
 
   /**
