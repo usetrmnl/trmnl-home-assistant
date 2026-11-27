@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.7] - 2026-11-27
+
+### Fixed
+
+- While Home Assistant restarts or updates, the app no longer sends the "Home Assistant is starting, please wait" screen to your display. The capture is skipped and the display keeps its last screen until the next run. Thanks to @d01 for the report (#184, #187)
+- When a webhook or BYOS server cannot be reached for a moment, for example while it restarts, the upload now tries again after 5, 15 and 40 seconds instead of failing at once. A newer capture of the same schedule replaces a send still waiting to retry, so an older image never lands after a newer one. Thanks to @d01 (#186)
+- Stopping or restarting the app no longer cuts off a capture that is uploading, and no longer hangs when the browser will not close. Thanks to @d01 (#185)
+
 ## [0.15.6] - 2026-11-26
 
 ### Fixed
