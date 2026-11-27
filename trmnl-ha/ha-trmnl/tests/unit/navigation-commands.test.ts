@@ -22,7 +22,7 @@ import {
   readinessInternalsPresent,
   type AuthStorage,
 } from '../../lib/browser/navigation-commands.js'
-import { CannotOpenPageError } from '../../error.js'
+import { CannotOpenPageError, HassStartingError } from '../../error.js'
 import type { Page } from 'puppeteer'
 
 // =============================================================================
@@ -862,11 +862,37 @@ describe('WaitForHassReady', () => {
     expect(called).toBe(true)
   })
 
-  it('resolves when the wait times out', async () => {
+  it('resolves when the wait times out and Home Assistant reports no state', async () => {
     const mockPage = {
       waitForFunction: async () => {
         throw new Error('Timeout')
       },
+      evaluate: async () => undefined,
+    } as unknown as Page
+
+    const cmd = new WaitForHassReady(mockPage)
+    await cmd.call()
+  })
+
+  it('fails when Home Assistant is still starting, so no half-loaded screen is captured', async () => {
+    const mockPage = {
+      waitForFunction: async () => {
+        throw new Error('Timeout')
+      },
+      evaluate: async () => 'NOT_RUNNING',
+    } as unknown as Page
+
+    const cmd = new WaitForHassReady(mockPage)
+
+    await expect(cmd.call()).rejects.toThrow(new HassStartingError('NOT_RUNNING'))
+  })
+
+  it('resolves on timeout when Home Assistant is running', async () => {
+    const mockPage = {
+      waitForFunction: async () => {
+        throw new Error('Timeout')
+      },
+      evaluate: async () => 'RUNNING',
     } as unknown as Page
 
     const cmd = new WaitForHassReady(mockPage)

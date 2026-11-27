@@ -32,6 +32,7 @@ import {
 import { directAccessRefusal } from './lib/direct-access.js'
 import {
   CannotOpenPageError,
+  HassStartingError,
   BrowserCrashError,
   PageCorruptedError,
   BrowserHealthCheckError,
@@ -292,6 +293,10 @@ class RequestHandler {
   ): Promise<number | null> {
     if (err instanceof CannotOpenPageError) {
       this.#sendError(response, 404, `Cannot open page: ${err.message}`)
+      return null
+    }
+    if (err instanceof HassStartingError) {
+      this.#sendError(response, 503, err.message)
       return null
     }
 

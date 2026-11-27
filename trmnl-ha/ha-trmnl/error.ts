@@ -25,6 +25,17 @@ export class CannotOpenPageError extends Error {
 }
 
 /**
+ * Home Assistant Core serves its frontend before it is RUNNING, so a capture
+ * then shows blank or unavailable cards (#184)
+ */
+export class HassStartingError extends Error {
+  constructor(state: string) {
+    super(`Home Assistant is still starting (${state}); skipped the capture so the display keeps its last screen`)
+    this.name = 'HassStartingError'
+  }
+}
+
+/**
  * Error thrown when browser process crashes or becomes unresponsive
  * Triggers browser recovery without crashing the HTTP server
  */
