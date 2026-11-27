@@ -558,6 +558,13 @@ export const SCHEDULER_MAX_RETRIES: number = 3
 export const SCHEDULER_RETRY_DELAY_MS: number = 5000 // 5 seconds
 
 /**
+ * Waits between webhook upload attempts after a connection error (no HTTP
+ * status). A server that is restarting is often unreachable only briefly, so
+ * the tries span 60 s: 4 attempts in all.
+ */
+export const SCHEDULER_UPLOAD_RETRY_DELAYS_MS: readonly number[] = [5000, 15000, 40000]
+
+/**
  * Retention multiplier for screenshot files
  * Keep N times the number of enabled schedules
  */

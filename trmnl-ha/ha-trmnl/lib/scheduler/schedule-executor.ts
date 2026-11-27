@@ -12,12 +12,16 @@ import {
   cleanupOldScreenshots,
   uploadToWebhook,
   WebhookHttpError,
+  WebhookConnectionError,
   buildParams,
+  type WebhookDeliveryOptions,
+  type WebhookDeliveryResult,
 } from './services.js'
 import { sleep } from '../sleep.js'
 import {
   SCHEDULER_MAX_RETRIES,
   SCHEDULER_RETRY_DELAY_MS,
+  SCHEDULER_UPLOAD_RETRY_DELAYS_MS,
   SCHEDULER_RETENTION_MULTIPLIER,
   SCHEDULER_IMAGE_FILE_PATTERN,
   isSchedulerNetworkError,
@@ -221,7 +225,7 @@ export class ScheduleExecutor {
 
     try {
       const result = await timed('webhook.upload', () =>
-        uploadToWebhook({
+        this.#uploadWithRetry(schedule.name, {
           webhookUrl,
           webhookHeaders: schedule.webhook_headers,
           imageBuffer,
@@ -292,6 +296,29 @@ export class ScheduleExecutor {
   /** A 4xx other than a rate limit: sending the same image again will not help. A lapsed BYOS login has its own sign-in notice. */
   #isRefusal(statusCode: number | undefined): boolean {
     return statusCode !== undefined && statusCode >= 400 && statusCode < 500 && statusCode !== 429
+  }
+
+  /**
+   * Uploads, retrying only when the server could not be reached at all (for
+   * example while a BYOS server restarts). Retries log at info with the error
+   * kind only; the caller logs one error if every attempt fails. HTTP errors
+   * are not retried.
+   */
+  async #uploadWithRetry(
+    name: string,
+    options: WebhookDeliveryOptions,
+  ): Promise<WebhookDeliveryResult> {
+    const delays = SCHEDULER_UPLOAD_RETRY_DELAYS_MS
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await uploadToWebhook(options)
+      } catch (err) {
+        const delay = delays[attempt]
+        if (!(err instanceof WebhookConnectionError) || delay === undefined) throw err
+        log.info`Upload for "${name}" could not connect (attempt ${attempt + 1}/${delays.length + 1}), retrying in ${delay / 1000}s: ${errorKind(err)}`
+        await sleep(delay)
+      }
+    }
   }
 
   #shouldRetry(error: Error, attempt: number): boolean {

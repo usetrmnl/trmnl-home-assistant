@@ -12,6 +12,7 @@ import {
   uploadToWebhook,
   clearKnownByosScreenIds,
   WebhookHttpError,
+  WebhookConnectionError,
   redactWebhookUrl,
 } from '../../lib/scheduler/webhook-delivery.js'
 import { mockFetch, restoreFetch } from '../helpers/fetch-mock.js'
@@ -60,10 +61,22 @@ describe('uploadToWebhook — connection errors', () => {
     )
   })
 
+  it('marks an unreachable server as a WebhookConnectionError', async () => {
+    globalThis.fetch = mock(async () => {
+      throw new Error('The socket connection was closed unexpectedly.')
+    }) as unknown as typeof fetch
+
+    const error = await upload().then(() => null, (err: unknown) => err)
+    expect(error).toBeInstanceOf(WebhookConnectionError)
+  })
+
   it('passes HTTP errors through untouched', async () => {
     mockFetch({ ok: false, status: 500, text: async () => 'nope' })
 
-    expect(upload()).rejects.toThrow(/HTTP 500/)
+    const error = await upload().then(() => null, (err: unknown) => err)
+    expect(error).toBeInstanceOf(WebhookHttpError)
+    expect(error).not.toBeInstanceOf(WebhookConnectionError)
+    expect((error as Error).message).toMatch(/HTTP 500/)
   })
 
   it('does not echo a malformed webhook URL in a connection error', async () => {
@@ -408,7 +421,9 @@ describe('uploadToWebhook — known BYOS screen ids', () => {
       new Response('{}', { status: 200 }),
     ])
 
-    await expect(byosUpload()).rejects.toThrow(/Could not reach byos\.local/)
+    const error = await byosUpload().catch((err: unknown) => err)
+    expect(error).toBeInstanceOf(WebhookConnectionError)
+    expect((error as Error).message).toMatch(/Could not reach byos\.local/)
     await byosUpload()
 
     expect(calls).toEqual(['PATCH /api/screens/7', 'PATCH /api/screens/7'])
