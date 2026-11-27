@@ -12,6 +12,9 @@ hassio_api: true
 init: false # Image ships its own init (tini) to reap orphaned Chromium children (#72)
 apparmor: true
 watchdog: "http://[HOST]:10000/health"
+# Supervisor waits this long on stop before killing (default 10 s). The app
+# drains captures up to 20 s and forces its own exit at 40 s.
+timeout: 45
 arch:
   - aarch64
   - amd64

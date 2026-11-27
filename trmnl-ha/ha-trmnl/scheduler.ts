@@ -92,6 +92,12 @@ export class Scheduler {
   #deadTokensWarned = new Set<string>()
   #cooldowns = new CooldownTracker(SCHEDULER_COOLDOWN_DEFAULT_MS)
   #aligner = new CheckInAligner(SCHEDULER_CHECK_IN_LEAD_MS)
+  /** Runs started by cron or alignment, so a shutdown can let them finish */
+  #inFlight = new Set<Promise<void>>()
+  #stopped = false
+  /** Resolves on stop(), cutting short a jitter wait */
+  #stopSignal: Promise<void>
+  #signalStop: () => void = () => {}
 
   /**
    * Creates scheduler instance with injected screenshot function.
@@ -100,6 +106,9 @@ export class Scheduler {
    */
   constructor(screenshotFn: ScreenshotFunction) {
     this.#outputDir = path.join(DATA_DIR, SCHEDULER_OUTPUT_DIR_NAME)
+    this.#stopSignal = new Promise((resolve) => {
+      this.#signalStop = resolve
+    })
     this.#jobManager = new JobManager()
     this.#executor = new ScheduleExecutor(screenshotFn, this.#outputDir)
 
@@ -133,9 +142,31 @@ export class Scheduler {
    */
   stop(): void {
     log.info`Stopping scheduler...`
+    this.#stopped = true
+    this.#signalStop()
     clearInterval(this.#reloadInterval)
     this.#jobManager.stopAll()
     this.#aligner.stopAll()
+  }
+
+  /**
+   * Waits for runs already under way to finish, up to timeoutMs.
+   * Resolves true if they all did. Call after stop().
+   */
+  async drain(timeoutMs: number): Promise<boolean> {
+    if (this.#inFlight.size === 0) return true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timedOut = new Promise<false>((resolve) => {
+      timer = setTimeout(() => resolve(false), timeoutMs)
+    })
+    try {
+      return await Promise.race([
+        Promise.allSettled([...this.#inFlight]).then(() => true as const),
+        timedOut,
+      ])
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   /**
@@ -259,7 +290,15 @@ export class Scheduler {
    * The job closes over the id rather than the schedule so it survives a reload
    * without going stale.
    */
-  async #runSchedule(scheduleId: string, aligned = false): Promise<void> {
+  #runSchedule(scheduleId: string, aligned = false): Promise<void> {
+    const run: Promise<void> = this.#runScheduleNow(scheduleId, aligned).finally(
+      () => this.#inFlight.delete(run),
+    )
+    this.#inFlight.add(run)
+    return run
+  }
+
+  async #runScheduleNow(scheduleId: string, aligned: boolean): Promise<void> {
     const schedules = await loadSchedules()
     const schedule = schedules.find((s) => s.id === scheduleId)
     if (!schedule?.enabled) {
@@ -283,8 +322,9 @@ export class Scheduler {
     const delay = aligned ? 0 : jitterMs(SCHEDULER_JITTER_MAX_MS)
     if (delay > 0) {
       log.debug`Jittering ${delay}ms before "${schedule.name}"`
-      await sleep(delay)
+      await Promise.race([sleep(delay), this.#stopSignal])
     }
+    if (this.#stopped) return
 
     log.info`${aligned ? 'Check-in aligned capture' : 'Cron triggered'}: ${schedule.name}`
     try {
@@ -300,7 +340,11 @@ export class Scheduler {
         log.info`Next capture for "${schedule.name}" aligned to the device check-in: ${new Date(captureAt).toISOString()}`
       }
     } catch (err) {
-      log.error`Schedule "${schedule.name}" failed: ${(err as Error).message}`
+      if (this.#stopped) {
+        log.info`"${schedule.name}" did not finish before shutdown: ${(err as Error).message}`
+      } else {
+        log.error`Schedule "${schedule.name}" failed: ${(err as Error).message}`
+      }
     }
   }
 }
