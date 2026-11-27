@@ -135,3 +135,85 @@ describe('Browser navigation when the dashboard reloads', () => {
     expect(logs.contains(RESETTLE_MESSAGE)).toBe(false)
   })
 })
+
+describe('Browser close time limits', () => {
+  let logs: LogCapture
+
+  beforeEach(async () => {
+    logs = await captureLogs()
+  })
+
+  afterEach(async () => {
+    await logs.stop()
+  })
+
+  const never = () => new Promise<void>(() => {})
+
+  it('moves on from a page that will not close, and still closes the browser', async () => {
+    const fake = createFakeBrowser((page) => {
+      ;(page.page as unknown as { close: () => Promise<void> }).close = never
+    })
+    const browser = new Browser('http://ha.test', 'token', {
+      launchBrowser: async () => fake.browser,
+      closeTimeoutMs: 20,
+    })
+    await browser.triggerInit()
+
+    await browser.cleanup()
+
+    expect(fake.closeCount).toBe(1)
+    expect(logs.contains('Page did not close within', 'warning')).toBe(true)
+  })
+
+  it('kills a browser that will not close', async () => {
+    const fake = createFakeBrowser()
+    const killed: string[] = []
+    Object.assign(fake.browser, {
+      close: never,
+      process: () => ({ kill: (sig: string) => killed.push(sig) }),
+    })
+    const browser = new Browser('http://ha.test', 'token', {
+      launchBrowser: async () => fake.browser,
+      closeTimeoutMs: 20,
+    })
+    await browser.triggerInit()
+
+    await browser.cleanup()
+
+    expect(killed).toEqual(['SIGKILL'])
+    expect(logs.contains('Browser did not close within', 'warning')).toBe(true)
+    expect(logs.contains('Browser closed', 'info')).toBe(true)
+  })
+
+  it('logs nothing above info for a normal close', async () => {
+    const fake = createFakeBrowser()
+    const browser = new Browser('http://ha.test', 'token', {
+      launchBrowser: async () => fake.browser,
+      closeTimeoutMs: 20,
+    })
+    await browser.triggerInit()
+
+    await browser.cleanup()
+
+    expect(logs.messagesAt('warning')).toEqual([])
+    expect(logs.messagesAt('error')).toEqual([])
+  })
+
+  it('launches no new browser after shutdown', async () => {
+    const fake = createFakeBrowser()
+    let launches = 0
+    const browser = new Browser('http://ha.test', 'token', {
+      launchBrowser: async () => {
+        launches++
+        return fake.browser
+      },
+    })
+    await browser.triggerInit()
+
+    await browser.shutdown()
+
+    await expect(browser.triggerInit()).rejects.toThrow(/shutting down/)
+    expect(launches).toBe(1)
+    expect(fake.closeCount).toBe(1)
+  })
+})
