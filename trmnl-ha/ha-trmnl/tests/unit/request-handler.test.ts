@@ -22,15 +22,15 @@ function failingBrowser(error: Error): Browser {
 
 /** Response that records what was sent */
 function recordingResponse(): ServerResponse & { body?: string } {
-  const response = {
+  const sent: { statusCode: number; headersSent: boolean; body?: string; end(body?: string): void } = {
     statusCode: 200,
     headersSent: false,
-    end(body?: string) {
-      response.body = body
-      response.headersSent = true
+    end(body) {
+      sent.body = body
+      sent.headersSent = true
     },
-  } as ServerResponse & { body?: string }
-  return response
+  }
+  return sent as unknown as ServerResponse & { body?: string }
 }
 
 const request = {
