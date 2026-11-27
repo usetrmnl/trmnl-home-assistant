@@ -18,7 +18,7 @@ import {
   COLD_START_EXTRA_WAIT,
   NAVIGATION_TIMEOUT,
 } from '../../const.js'
-import { CannotOpenPageError } from '../../error.js'
+import { CannotOpenPageError, HassStartingError } from '../../error.js'
 import type { NavigationResult } from '../../types/domain.js'
 import { navigationLogger } from '../logger.js'
 
@@ -610,6 +610,14 @@ export class WaitForHassReady {
         { timeout: this.#timeout, polling: 100 },
       )
     } catch (_err) {
+      const state = await this.#page
+        .evaluate(() => (document.querySelector('home-assistant') as
+          | (Element & { hass?: { config?: { state?: string } } })
+          | null)?.hass?.config?.state)
+        .catch(() => undefined)
+      if (typeof state === 'string' && state !== 'RUNNING') {
+        throw new HassStartingError(state)
+      }
       // A readiness check that never passes adds this full timeout to every
       // screenshot, so the timeout must stay visible above debug level (#57)
       log.warn`Home Assistant readiness check timed out after ${this.#timeout}ms — hass state never fully populated; capture continues but adds ${this.#timeout}ms to every screenshot`
