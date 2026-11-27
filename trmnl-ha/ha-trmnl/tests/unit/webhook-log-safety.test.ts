@@ -100,6 +100,8 @@ describe('credential-safe webhook logs', () => {
     })
   }
 
+  // BYOS updates look the screen up first (GET), then PATCH; a POST is only
+  // sent when no screen matches, and answers 422 here (screen exists).
   for (const stage of ['list error', 'list failure', 'patch error', 'patch failure', 'patch success']) {
     it(`keeps BYOS ${stage} logs free of echoed remote details`, async () => {
       const executor = await setup()
@@ -107,24 +109,30 @@ describe('credential-safe webhook logs', () => {
       globalThis.fetch = mock(async (_input: unknown, init?: RequestInit) => {
         calls++
         const method = init?.method ?? 'GET'
-        if (method === 'POST') return new Response(echo, { status: 422, statusText: echo })
         if (method === 'GET') {
           if (stage === 'list error') throw new Error(echo)
           if (stage === 'list failure') return new Response(echo, { status: 503, statusText: echo })
           return new Response(JSON.stringify({ data: [{ id: credential, model_id: 1, name: 'trmnl_screen' }] }))
         }
+        if (method === 'POST') return new Response(echo, { status: 422, statusText: echo })
         if (stage === 'patch error') throw new Error(echo)
         return new Response(echo, { status: stage === 'patch success' ? 200 : 503, statusText: echo })
       }) as unknown as typeof fetch
       const schedule = buildByosSchedule({ webhook_url: url })
       schedule.webhook_format!.byosConfig!.auth!.access_token = bearer
       const result = await executor.call(schedule)
-      const expectedCalls = stage.startsWith('list') ? 2 : stage === 'patch error' ? 12 : 3
+      const expectedCalls = {
+        'list error': 4,
+        'list failure': 3,
+        'patch error': 8,
+        'patch failure': 2,
+        'patch success': 2,
+      }[stage]!
       expect(calls).toBe(expectedCalls)
       expect(result.webhook?.success).toBe(stage === 'patch success')
       expectSafeLogs()
       const expectedLog = {
-        'list error': 'Error finding screen',
+        'list error': 'webhook failed: WebhookConnectionError',
         'list failure': 'Failed to list screens: HTTP 503',
         'patch error': 'webhook failed: WebhookConnectionError',
         'patch failure': 'PATCH failed: HTTP 503',

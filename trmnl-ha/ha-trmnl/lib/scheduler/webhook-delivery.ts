@@ -78,9 +78,9 @@ interface ByosScreensResponse {
 
 /**
  * BYOS screen ids learned from earlier deliveries, keyed by server + model_id +
- * name. With a known id an update is a single PATCH instead of a POST that the
- * server rejects with 422, a full screen list, and then a PATCH. Kept in memory
- * only: after a restart the first delivery learns the id again.
+ * name. With a known id an update is a single PATCH without listing
+ * /api/screens first. Kept in memory only: after a restart the first delivery
+ * looks the id up again.
  */
 const knownScreenIds = new Map<string, number>()
 
@@ -99,58 +99,8 @@ function parseCreatedScreenId(responseText: string): number | null {
   }
 }
 
-/**
- * Finds existing BYOS screen by composite key (model_id + name).
- *
- * BYOS uses a composite unique constraint - a model can have multiple screens.
- *
- * @param webhookUrl - The webhook URL (used to derive base URL)
- * @param modelId - The model_id to search for (as string, compared to API's number)
- * @param screenName - The screen name to match (composite key with model_id)
- * @param authToken - Bearer token for authentication
- * @returns Screen ID if found, null otherwise
- */
-async function findExistingByosScreen(
-  webhookUrl: string,
-  modelId: string,
-  screenName: string,
-  authToken: string,
-): Promise<number | null> {
-  const baseUrl = getBaseUrl(webhookUrl)
-  const screensUrl = `${baseUrl}/api/screens`
-
-  try {
-    const listResponse = await fetch(screensUrl, {
-      method: 'GET',
-      headers: { Authorization: authToken },
-    })
-
-    if (!listResponse.ok) {
-      log.error`Failed to list screens: HTTP ${listResponse.status}`
-      return null
-    }
-
-    const response = (await listResponse.json()) as ByosScreensResponse
-    const screens = response.data
-
-    // Find screen with matching model_id AND name (composite unique constraint)
-    const targetModelId = parseInt(modelId, 10)
-    const existingScreen = screens.find(
-      (s) => s.model_id === targetModelId && s.name === screenName,
-    )
-
-    if (!existingScreen) {
-      log.debug`No existing screen found with model_id=${modelId} name=${screenName}`
-      return null
-    }
-
-    log.debug`Found existing screen with model_id=${modelId} name=${screenName}`
-    return existingScreen.id
-  } catch (err) {
-    log.error`Error finding screen: ${errorKind(err)}`
-    return null
-  }
-}
+/** A list refusal a create would get too, so the create is not sent. */
+const SCREEN_LIST_REFUSALS = new Set([400, 401, 403, 429])
 
 /**
  * Updates existing BYOS screen via PATCH.
@@ -270,10 +220,12 @@ class DeliverWebhook {
   }
 
   /**
-   * Updates a screen whose id is already known. Returns null when there is no
-   * known id, or the server no longer has that screen (Terminus answers 422 for
-   * an unknown id), so the normal create-or-find flow runs. Other HTTP errors
-   * keep the id and throw, so auth and rate-limit handling still see them.
+   * Updates an existing BYOS screen without sending a create request the
+   * server would reject with 422. Uses the cached id when known, otherwise
+   * looks the screen up by model_id + name first. Returns null when no
+   * matching screen exists so the caller creates one via POST. A cached id
+   * that returns 404 or 422 is cleared and looked up again; other HTTP errors
+   * keep the id and throw so auth and rate-limit handling still see them.
    */
   async #patchKnownScreen(
     body: BodyInit,
@@ -283,29 +235,31 @@ class DeliverWebhook {
     const authToken = headers['Authorization']
     if (!key || !authToken) return null
 
-    const screenId = knownScreenIds.get(key)
-    if (screenId === undefined) return null
+    const knownId = knownScreenIds.get(key)
+    if (knownId !== undefined) {
+      const response = await this.#patch(knownId, body, authToken)
+      if (response.ok) {
+        log.info`PATCH successful: HTTP ${response.status}`
+        return this.#result(response)
+      }
+      if (response.status !== 404 && response.status !== 422) {
+        log.error`PATCH failed: HTTP ${response.status}`
+        throw this.#httpError(response, await response.text())
+      }
+      log.warn`PATCH of known screen failed: HTTP ${response.status}; finding it again`
+      knownScreenIds.delete(key)
+    }
 
-    let response: Response
+    return this.#patchExistingScreen(body, authToken)
+  }
+
+  /** PATCH that reports an unreachable server as a retryable connection error. */
+  async #patch(screenId: number, body: BodyInit, authToken: string): Promise<Response> {
     try {
-      response = await patchByosScreen(this.#options.webhookUrl, screenId, body, authToken)
+      return await patchByosScreen(this.#options.webhookUrl, screenId, body, authToken)
     } catch (err) {
       throw this.#connectionError(err)
     }
-
-    if (response.ok) {
-      log.info`PATCH successful: HTTP ${response.status}`
-      return this.#result(response)
-    }
-
-    if (response.status === 404 || response.status === 422) {
-      log.warn`PATCH of known screen failed: HTTP ${response.status}; finding it again`
-      knownScreenIds.delete(key)
-      return null
-    }
-
-    log.error`PATCH failed: HTTP ${response.status}`
-    throw this.#httpError(response, await response.text())
   }
 
   #buildPayload(): { body: BodyInit; contentType: string } {
@@ -406,6 +360,7 @@ class DeliverWebhook {
 
     const authToken = headers['Authorization']
     if (response.status === 422 && this.#byosConfig && authToken) {
+      log.info`Got 422, attempting to find and update existing screen via PATCH...`
       const patched = await this.#patchExistingScreen(body, authToken)
       if (patched) return patched
     }
@@ -421,41 +376,60 @@ class DeliverWebhook {
     )
   }
 
+  /** Finds this delivery's screen and updates it; null when the server has no such screen. */
   async #patchExistingScreen(
     body: BodyInit,
     authToken: string,
   ): Promise<WebhookDeliveryResult | null> {
-    const { webhookUrl } = this.#options
-    const byos = this.#byosConfig!
-
-    log.info`Got 422, attempting to find and update existing screen via PATCH...`
-    const screenId = await findExistingByosScreen(
-      webhookUrl,
-      byos.model_id,
-      byos.name,
-      authToken,
-    )
+    const screenId = await this.#findScreenId(authToken)
     if (screenId === null) return null
 
-    let patchResponse: Response
-    try {
-      patchResponse = await patchByosScreen(
-        webhookUrl,
-        screenId,
-        body,
-        authToken,
-      )
-    } catch (err) {
-      throw this.#connectionError(err)
-    }
-    if (!patchResponse.ok) {
-      log.error`PATCH failed: HTTP ${patchResponse.status}`
-      throw this.#httpError(patchResponse, await patchResponse.text())
+    const response = await this.#patch(screenId, body, authToken)
+    if (!response.ok) {
+      log.error`PATCH failed: HTTP ${response.status}`
+      throw this.#httpError(response, await response.text())
     }
 
     this.#rememberScreenId(screenId)
-    log.info`PATCH successful: HTTP ${patchResponse.status}`
-    return this.#result(patchResponse)
+    log.info`PATCH successful: HTTP ${response.status}`
+    return this.#result(response)
+  }
+
+  /**
+   * Finds the screen by model_id + name (BYOS screens are unique per pair).
+   * Returns null when it is absent or the list fails, so a create is tried.
+   * An unreachable server or a refusal the create would get too throws.
+   */
+  async #findScreenId(authToken: string): Promise<number | null> {
+    const { model_id, name } = this.#byosConfig!
+    let listResponse: Response
+    try {
+      listResponse = await fetch(`${getBaseUrl(this.#options.webhookUrl)}/api/screens`, {
+        method: 'GET',
+        headers: { Authorization: authToken },
+      })
+    } catch (err) {
+      throw this.#connectionError(err)
+    }
+
+    if (!listResponse.ok) {
+      log.error`Failed to list screens: HTTP ${listResponse.status}`
+      if (SCREEN_LIST_REFUSALS.has(listResponse.status)) {
+        throw this.#httpError(listResponse, await listResponse.text())
+      }
+      return null
+    }
+
+    try {
+      const { data } = (await listResponse.json()) as ByosScreensResponse
+      const targetModelId = parseInt(model_id, 10)
+      const screen = data.find((s) => s.model_id === targetModelId && s.name === name)
+      log.debug`${screen ? 'Found' : 'No'} existing screen with model_id=${model_id} name=${name}`
+      return screen?.id ?? null
+    } catch (err) {
+      log.error`Error finding screen: ${errorKind(err)}`
+      return null
+    }
   }
 
   /** Terminus answers a bare HTML 500 when it cannot fetch or read the image URL. */

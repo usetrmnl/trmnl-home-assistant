@@ -27,6 +27,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { ScheduleExecutor } from '../../lib/scheduler/schedule-executor.js'
 import * as sleepModule from '../../lib/sleep.js'
+import { clearKnownByosScreenIds } from '../../lib/scheduler/webhook-delivery.js'
 import {
   captureFetch,
   mockFetch,
@@ -59,14 +60,18 @@ describe('ScheduleExecutor — BYOS URI delivery', () => {
       async () => Buffer.from('fake-png'),
       outputDir,
     )
+    clearKnownByosScreenIds()
     requests = captureFetch()
   })
+
+  /** The upload itself: BYOS delivery looks the screen up (GET) first */
+  const upload = () => requests.find((r) => r.init?.method === 'POST')!
 
   it('sends a URI pointing at the saved capture, not a render endpoint', async () => {
     const result = await executor.call(buildByosSchedule())
 
     // Payloads are JSON strings; anything else would be a test setup bug
-    const payload = JSON.parse(requests[0]!.init?.body as string) as {
+    const payload = JSON.parse(upload().init?.body as string) as {
       screen: { uri: string }
     }
     const savedFilename = path.basename(result.savedPath)
@@ -88,7 +93,7 @@ describe('ScheduleExecutor — BYOS URI delivery', () => {
 
     await executor.call(schedule)
 
-    const payload = JSON.parse(requests[0]!.init?.body as string) as {
+    const payload = JSON.parse(upload().init?.body as string) as {
       screen: { uri?: string; data?: string }
     }
 
@@ -403,7 +408,7 @@ describe('ScheduleExecutor — unchanged image', () => {
     await executor.call(buildByosSchedule())
     await executor.call(buildByosSchedule())
 
-    expect(requests.filter((r) => r.url.endsWith('/api/screens'))).toHaveLength(2)
+    expect(requests.filter((r) => r.init?.method === 'POST' && r.url.endsWith('/api/screens'))).toHaveLength(2)
   })
 })
 
