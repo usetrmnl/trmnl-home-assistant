@@ -581,11 +581,6 @@ export class Browser {
       this.#pageErrorDetected = false
 
       if (err instanceof BrowserCrashError) throw err
-      if (this.#pageErrorDetected) {
-        throw new PageCorruptedError(
-          `Navigation failed with page errors: ${(err as Error).message}`,
-        )
-      }
       if (err instanceof CannotOpenPageError) throw err
 
       if (
