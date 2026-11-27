@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.9] - 2026-11-27
+
+### Fixed
+
+- After the app restarts, the first upload to each BYOS (Terminus) screen no longer logs "Webhook failed: HTTP 422". The app now finds the existing screen and updates it, instead of first trying to create a screen that is already there. The same goes for a screen that was deleted and created again. Thanks to @d01 (#190)
+
 ## [0.15.8] - 2026-11-27
 
 ### Fixed
