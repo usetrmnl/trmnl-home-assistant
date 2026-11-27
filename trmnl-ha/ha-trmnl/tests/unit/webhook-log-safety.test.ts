@@ -14,6 +14,8 @@ import { ScheduleExecutor } from '../../lib/scheduler/schedule-executor.js'
 import { captureLogs, type LogCapture } from '../helpers/log-capture.js'
 import * as notifications from '../../lib/ha-notify.js'
 import { restoreFetch } from '../helpers/fetch-mock.js'
+import * as sleepModule from '../../lib/sleep.js'
+import { clearKnownByosScreenIds } from '../../lib/scheduler/webhook-delivery.js'
 import { buildByosSchedule, buildSchedule } from '../helpers/schedule-fixtures.js'
 
 const credential = 'SYNTHETIC-WRITE-CREDENTIAL'
@@ -27,6 +29,7 @@ const notificationSpies: { mockRestore(): void }[] = []
 afterEach(async () => {
   restoreFetch()
   forgetRefusedRefreshTokens()
+  clearKnownByosScreenIds()
   for (const spy of notificationSpies.splice(0)) spy.mockRestore()
   await logs?.stop()
   logs = undefined
@@ -40,6 +43,7 @@ async function setup() {
   for (const name of ['notifyUploadRefused', 'clearUploadRefused', 'notifyReauthRequired', 'clearReauthRequired'] as const) {
     notificationSpies.push(spyOn(notifications, name).mockResolvedValue(undefined))
   }
+  notificationSpies.push(spyOn(sleepModule, 'sleep').mockResolvedValue(undefined))
   outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trmnl-log-safety-'))
   return new ScheduleExecutor(async () => Buffer.from('png'), outputDir)
 }
@@ -91,7 +95,7 @@ describe('credential-safe webhook logs', () => {
       expect(result.webhook?.success).toBe(false)
       expect(result.webhook?.error).toContain(credential)
       expectSafeLogs()
-      expect(logs!.contains('webhook failed: Error', 'error')).toBe(true)
+      expect(logs!.contains(stage === 'fetch' ? 'webhook failed: WebhookConnectionError' : 'webhook failed: Error', 'error')).toBe(true)
       expect(logs!.contains('FAILED (HTTP unknown)')).toBe(true)
     })
   }
@@ -100,10 +104,11 @@ describe('credential-safe webhook logs', () => {
     it(`keeps BYOS ${stage} logs free of echoed remote details`, async () => {
       const executor = await setup()
       let calls = 0
-      globalThis.fetch = mock(async () => {
+      globalThis.fetch = mock(async (_input: unknown, init?: RequestInit) => {
         calls++
-        if (calls === 1) return new Response(echo, { status: 422, statusText: echo })
-        if (calls === 2) {
+        const method = init?.method ?? 'GET'
+        if (method === 'POST') return new Response(echo, { status: 422, statusText: echo })
+        if (method === 'GET') {
           if (stage === 'list error') throw new Error(echo)
           if (stage === 'list failure') return new Response(echo, { status: 503, statusText: echo })
           return new Response(JSON.stringify({ data: [{ id: credential, model_id: 1, name: 'trmnl_screen' }] }))
@@ -114,13 +119,14 @@ describe('credential-safe webhook logs', () => {
       const schedule = buildByosSchedule({ webhook_url: url })
       schedule.webhook_format!.byosConfig!.auth!.access_token = bearer
       const result = await executor.call(schedule)
-      expect(calls).toBe(stage.startsWith('list') ? 2 : 3)
+      const expectedCalls = stage.startsWith('list') ? 2 : stage === 'patch error' ? 12 : 3
+      expect(calls).toBe(expectedCalls)
       expect(result.webhook?.success).toBe(stage === 'patch success')
       expectSafeLogs()
       const expectedLog = {
         'list error': 'Error finding screen',
         'list failure': 'Failed to list screens: HTTP 503',
-        'patch error': 'webhook failed: Error',
+        'patch error': 'webhook failed: WebhookConnectionError',
         'patch failure': 'PATCH failed: HTTP 503',
         'patch success': 'PATCH successful: HTTP 200',
       }[stage]!

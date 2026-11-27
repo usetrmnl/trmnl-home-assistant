@@ -39,6 +39,17 @@ export class WebhookHttpError extends Error {
 }
 
 /**
+ * The webhook server could not be reached (refused, reset, DNS, timeout):
+ * no HTTP status came back. Safe to retry briefly.
+ */
+export class WebhookConnectionError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = 'WebhookConnectionError'
+  }
+}
+
+/**
  * Parses the Retry-After header into milliseconds. Only the delta-seconds form
  * is supported; an HTTP-date, missing, or unparseable header returns null so
  * the caller falls back to its default cooldown.
@@ -361,10 +372,10 @@ class DeliverWebhook {
    * resolve from inside the add-on container (#71), so name the host
    * and the likely fix.
    */
-  #connectionError(err: unknown): Error {
+  #connectionError(err: unknown): WebhookConnectionError {
     const host = this.#hostname()
     const detail = redactWebhookUrl((err as Error).message, this.#options.webhookUrl)
-    return new Error(
+    return new WebhookConnectionError(
       `Could not reach ${host}: ${detail}. ` +
         `If ${host} is a local hostname, it may not resolve inside the app container — try the server's IP address instead.`,
       { cause: err },
@@ -426,12 +437,17 @@ class DeliverWebhook {
     )
     if (screenId === null) return null
 
-    const patchResponse = await patchByosScreen(
-      webhookUrl,
-      screenId,
-      body,
-      authToken,
-    )
+    let patchResponse: Response
+    try {
+      patchResponse = await patchByosScreen(
+        webhookUrl,
+        screenId,
+        body,
+        authToken,
+      )
+    } catch (err) {
+      throw this.#connectionError(err)
+    }
     if (!patchResponse.ok) {
       log.error`PATCH failed: HTTP ${patchResponse.status}`
       throw this.#httpError(patchResponse, await patchResponse.text())

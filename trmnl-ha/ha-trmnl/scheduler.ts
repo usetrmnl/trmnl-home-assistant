@@ -144,6 +144,7 @@ export class Scheduler {
     log.info`Stopping scheduler...`
     this.#stopped = true
     this.#signalStop()
+    this.#executor.stop()
     clearInterval(this.#reloadInterval)
     this.#jobManager.stopAll()
     this.#aligner.stopAll()

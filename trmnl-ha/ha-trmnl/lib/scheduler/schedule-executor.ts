@@ -12,12 +12,16 @@ import {
   cleanupOldScreenshots,
   uploadToWebhook,
   WebhookHttpError,
+  WebhookConnectionError,
   buildParams,
+  type WebhookDeliveryOptions,
+  type WebhookDeliveryResult,
 } from './services.js'
 import { sleep } from '../sleep.js'
 import {
   SCHEDULER_MAX_RETRIES,
   SCHEDULER_RETRY_DELAY_MS,
+  SCHEDULER_UPLOAD_RETRY_DELAYS_MS,
   SCHEDULER_RETENTION_MULTIPLIER,
   SCHEDULER_IMAGE_FILE_PATTERN,
   isSchedulerNetworkError,
@@ -70,6 +74,14 @@ export class ScheduleExecutor {
   #notifier: ScheduleNotifier
   /** Last image hash each webhook URL accepted, and when */
   #lastSent = new Map<string, { hash: string; at: number }>()
+  /** Each schedule's newest upload; an older one still retrying gives up */
+  #latestUpload = new Map<string, object>()
+  #stopped = false
+  #signalStop: () => void = () => {}
+  /** Resolves on stop(), cutting short a retry wait */
+  #stopSignal = new Promise<void>((resolve) => {
+    this.#signalStop = resolve
+  })
 
   constructor(
     screenshotFn: ScreenshotFunction,
@@ -79,6 +91,12 @@ export class ScheduleExecutor {
     this.#screenshotFn = screenshotFn
     this.#outputDir = outputDir
     this.#notifier = notifier
+  }
+
+  /** Ends upload retries waiting to run; called when the app stops */
+  stop(): void {
+    this.#stopped = true
+    this.#signalStop()
   }
 
   /** Executes schedule with automatic retry on network failures */
@@ -221,7 +239,7 @@ export class ScheduleExecutor {
 
     try {
       const result = await timed('webhook.upload', () =>
-        uploadToWebhook({
+        this.#uploadWithRetry(schedule, {
           webhookUrl,
           webhookHeaders: schedule.webhook_headers,
           imageBuffer,
@@ -292,6 +310,34 @@ export class ScheduleExecutor {
   /** A 4xx other than a rate limit: sending the same image again will not help. A lapsed BYOS login has its own sign-in notice. */
   #isRefusal(statusCode: number | undefined): boolean {
     return statusCode !== undefined && statusCode >= 400 && statusCode < 500 && statusCode !== 429
+  }
+
+  /**
+   * Uploads, retrying only when the server could not be reached at all (for
+   * example while a BYOS server restarts). Retries log at info with the error
+   * kind only; the caller logs one error if every attempt fails. HTTP errors
+   * are not retried. Retries end when the app stops, or when a newer upload
+   * of the schedule starts, so an old image can't land after a newer one.
+   */
+  async #uploadWithRetry(
+    schedule: Schedule,
+    options: WebhookDeliveryOptions,
+  ): Promise<WebhookDeliveryResult> {
+    const { id, name } = schedule
+    const delays = SCHEDULER_UPLOAD_RETRY_DELAYS_MS
+    const upload = {}
+    this.#latestUpload.set(id, upload)
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await uploadToWebhook(options)
+      } catch (err) {
+        const delay = delays[attempt]
+        if (!(err instanceof WebhookConnectionError) || delay === undefined) throw err
+        log.info`Upload for "${name}" could not connect (attempt ${attempt + 1}/${delays.length + 1}), retrying in ${delay / 1000}s: ${errorKind(err)}`
+        await Promise.race([sleep(delay), this.#stopSignal])
+        if (this.#stopped || this.#latestUpload.get(id) !== upload) throw err
+      }
+    }
   }
 
   #shouldRetry(error: Error, attempt: number): boolean {

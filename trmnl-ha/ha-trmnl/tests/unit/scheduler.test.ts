@@ -277,6 +277,16 @@ describe('Scheduler shutdown and drain', () => {
     expect(await scheduler.drain(50)).toBe(true)
   })
 
+  it('ends upload retries on stop', () => {
+    const stopExecutor = spyOn(ScheduleExecutor.prototype, 'stop')
+    spies.push(stopExecutor)
+    scheduler = new Scheduler(async () => Buffer.from('unused'))
+
+    scheduler.stop()
+
+    expect(stopExecutor).toHaveBeenCalledTimes(1)
+  })
+
   it('waits for a capture already under way to finish', async () => {
     spies.push(spyOn(sleepModule, 'sleep').mockResolvedValue(undefined))
     let finishRun: () => void = () => {}
