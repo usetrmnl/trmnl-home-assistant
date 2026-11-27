@@ -78,9 +78,9 @@ interface ByosScreensResponse {
 
 /**
  * BYOS screen ids learned from earlier deliveries, keyed by server + model_id +
- * name. With a known id an update is a single PATCH instead of a POST that the
- * server rejects with 422, a full screen list, and then a PATCH. Kept in memory
- * only: after a restart the first delivery learns the id again.
+ * name. With a known id an update is a single PATCH without listing
+ * /api/screens first. Kept in memory only: after a restart the first delivery
+ * looks the id up again.
  */
 const knownScreenIds = new Map<string, number>()
 
@@ -270,42 +270,59 @@ class DeliverWebhook {
   }
 
   /**
-   * Updates a screen whose id is already known. Returns null when there is no
-   * known id, or the server no longer has that screen (Terminus answers 422 for
-   * an unknown id), so the normal create-or-find flow runs. Other HTTP errors
-   * keep the id and throw, so auth and rate-limit handling still see them.
+   * Updates an existing BYOS screen without sending a create request the
+   * server would reject with 422. Uses the cached id when known, otherwise
+   * looks the screen up by model_id + name first. Returns null when no
+   * matching screen exists so the caller creates one via POST. A cached id
+   * that returns 404 or 422 is cleared and looked up again; other HTTP errors
+   * keep the id and throw so auth and rate-limit handling still see them.
    */
   async #patchKnownScreen(
     body: BodyInit,
     headers: Record<string, string>,
   ): Promise<WebhookDeliveryResult | null> {
     const key = this.#screenKey
+    const byos = this.#byosConfig
     const authToken = headers['Authorization']
-    if (!key || !authToken) return null
+    if (!key || !byos || !authToken) return null
 
-    const screenId = knownScreenIds.get(key)
-    if (screenId === undefined) return null
+    const { webhookUrl } = this.#options
+    const knownId = knownScreenIds.get(key)
 
-    let response: Response
+    if (knownId !== undefined) {
+      const response = await this.#patch(knownId, body, authToken)
+      if (response.ok) {
+        log.info`PATCH successful: HTTP ${response.status}`
+        return this.#result(response)
+      }
+      if (response.status !== 404 && response.status !== 422) {
+        log.error`PATCH failed: HTTP ${response.status}`
+        throw this.#httpError(response, await response.text())
+      }
+      log.warn`PATCH of known screen failed: HTTP ${response.status}; finding it again`
+      knownScreenIds.delete(key)
+    }
+
+    const screenId = await findExistingByosScreen(webhookUrl, byos.model_id, byos.name, authToken)
+    if (screenId === null) return null
+
+    const response = await this.#patch(screenId, body, authToken)
+    if (!response.ok) {
+      log.error`PATCH failed: HTTP ${response.status}`
+      throw this.#httpError(response, await response.text())
+    }
+    knownScreenIds.set(key, screenId)
+    log.info`PATCH successful: HTTP ${response.status}`
+    return this.#result(response)
+  }
+
+  /** PATCH that reports an unreachable server as a retryable connection error. */
+  async #patch(screenId: number, body: BodyInit, authToken: string): Promise<Response> {
     try {
-      response = await patchByosScreen(this.#options.webhookUrl, screenId, body, authToken)
+      return await patchByosScreen(this.#options.webhookUrl, screenId, body, authToken)
     } catch (err) {
       throw this.#connectionError(err)
     }
-
-    if (response.ok) {
-      log.info`PATCH successful: HTTP ${response.status}`
-      return this.#result(response)
-    }
-
-    if (response.status === 404 || response.status === 422) {
-      log.warn`PATCH of known screen failed: HTTP ${response.status}; finding it again`
-      knownScreenIds.delete(key)
-      return null
-    }
-
-    log.error`PATCH failed: HTTP ${response.status}`
-    throw this.#httpError(response, await response.text())
   }
 
   #buildPayload(): { body: BodyInit; contentType: string } {

@@ -122,6 +122,7 @@ describe('Webhook Integration', () => {
     mockScreenshots = []
     webhookServer.clearRequests()
     webhookServer.reset()
+    clearKnownByosScreenIds()
     cleanupScheduleFile(testScheduleFile)
 
     // Ensure output directory exists (may not exist in CI)
@@ -526,7 +527,7 @@ describe('Webhook Integration', () => {
       }
     }
 
-    it('updates existing screen via PATCH after 422', async () => {
+    it('updates an existing screen via PATCH without a failing create', async () => {
       let postCount = 0
 
       // Mock BYOS screens endpoint - return 422 on POST (screen exists)
@@ -578,14 +579,56 @@ describe('Webhook Integration', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(postCount).toBe(1) // Only initial POST, then PATCH
+      expect(postCount).toBe(0) // Found by name first, so no create is tried
 
-      // Verify request sequence: POST (422) → GET → PATCH (200)
+      // Verify request sequence: GET → PATCH (200)
       const requests = webhookServer.getRequests()
-      expect(requests.length).toBeGreaterThanOrEqual(3)
-      expect(requests[0]!.method).toBe('POST')
-      expect(requests[1]!.method).toBe('GET')
-      expect(requests[2]!.method).toBe('PATCH')
+      expect(requests.map((r) => r.method)).toEqual(['GET', 'PATCH'])
+    })
+
+    it('still recovers via PATCH when the screen appears between lookup and create', async () => {
+      let listCount = 0
+
+      webhookServer.setRouteHandler('GET /api/screens', () => {
+        listCount++
+        const data = listCount === 1
+          ? []
+          : [{ id: 42, model_id: 1, label: 'Test', name: 'test-screen' }]
+        return { status: 200, body: JSON.stringify({ data }) }
+      })
+      webhookServer.setRouteHandler('POST /api/screens', () => ({
+        status: 422,
+        body: JSON.stringify({ error: 'Screen already exists' }),
+      }))
+      webhookServer.setRouteHandler('PATCH /api/screens/*', () => ({
+        status: 200,
+        body: JSON.stringify({ data: { id: 42, model_id: 1 } }),
+      }))
+
+      const result = await uploadByosWebhook({
+        webhookUrl: 'http://localhost:10002/api/screens',
+        imageBuffer: createPNGBuffer(),
+        format: 'png',
+        webhookFormat: {
+          format: 'byos-hanami',
+          byosConfig: {
+            label: 'Test',
+            name: 'test-screen',
+            model_id: '1',
+            preprocessed: true,
+            auth: {
+              enabled: true,
+              access_token: 'Bearer test-token',
+              refresh_token: 'refresh-token',
+              obtained_at: Date.now(),
+            },
+          },
+        },
+      })
+
+      expect(result.success).toBe(true)
+      const requests = webhookServer.getRequests()
+      expect(requests.map((r) => r.method)).toEqual(['GET', 'POST', 'GET', 'PATCH'])
     })
 
     it('fails gracefully when screen not found for PATCH', async () => {
@@ -679,7 +722,7 @@ describe('Webhook Integration', () => {
       })
 
       expect(result.success).toBe(false)
-      expect(postCount).toBe(1) // Only initial POST, no retry after failed PATCH
+      expect(postCount).toBe(0) // Screen found by name; a failed PATCH is not retried as a create
     })
 
     it('skips 422 handling for non-BYOS format', async () => {

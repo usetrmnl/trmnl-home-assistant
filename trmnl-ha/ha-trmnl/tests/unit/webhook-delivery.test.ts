@@ -197,9 +197,13 @@ describe('uploadToWebhook — HTTP error details', () => {
 })
 
 describe('uploadToWebhook — BYOS 422 fallback', () => {
+  beforeEach(clearKnownByosScreenIds)
+
   it('propagates the original 422 when the screen list fetch fails', async () => {
-    // POST → 422 (screen exists), then GET /api/screens → 500 (no PATCH target)
+    // GET list → 500 (lookup skipped), POST → 422 (screen exists),
+    // GET list → 500 again (no PATCH target)
     const responses = [
+      new Response('nope', { status: 500 }),
       new Response('{"error":"exists"}', { status: 422 }),
       new Response('nope', { status: 500 }),
     ]
@@ -229,11 +233,13 @@ describe('uploadToWebhook — BYOS 422 fallback', () => {
     })
 
     await expect(result).rejects.toThrow(/HTTP 422/)
-    expect(responses).toHaveLength(0) // Both POST and GET were attempted
+    expect(responses).toHaveLength(0) // Initial GET + POST + fallback GET attempted
   })
 
   it('shows the reason of a refused PATCH, not of the create', async () => {
+    // Empty initial lookup → POST 422 → fallback GET finds screen → PATCH 422
     const responses = [
+      Response.json({ data: [] }),
       Response.json({ detail: 'Screen exists with name ("test-screen") and model ID (1).' }, { status: 422 }),
       Response.json({ data: [{ id: 7, model_id: 1, name: 'test-screen' }] }),
       Response.json({ detail: 'magick: improper image header.' }, { status: 422 }),
@@ -331,10 +337,11 @@ describe('uploadToWebhook — known BYOS screen ids', () => {
     })
   }
 
-  /** Teaches the module screen id 7 through the normal 422 flow. */
+  const emptyList = () => Response.json({ data: [] })
+
+  /** Teaches the module screen id 7 through the initial lookup flow. */
   async function learnScreenId() {
     queue([
-      new Response('{"error":"exists"}', { status: 422 }),
       screenList(),
       new Response('{}', { status: 200 }),
     ])
@@ -343,7 +350,19 @@ describe('uploadToWebhook — known BYOS screen ids', () => {
 
   beforeEach(() => clearKnownByosScreenIds())
 
-  it('sends a single PATCH once the id was learned from the 422 flow', async () => {
+  it('looks up an existing screen on cold start and updates via PATCH without POST', async () => {
+    const calls = queue([
+      screenList(),
+      new Response('{}', { status: 200 }),
+    ])
+
+    const result = await byosUpload()
+
+    expect(result.success).toBe(true)
+    expect(calls).toEqual(['GET /api/screens', 'PATCH /api/screens/7'])
+  })
+
+  it('sends a single PATCH once the id was learned from the lookup', async () => {
     await learnScreenId()
     const calls = queue([new Response('{}', { status: 200 })])
 
@@ -354,7 +373,7 @@ describe('uploadToWebhook — known BYOS screen ids', () => {
   })
 
   it('remembers the id from a successful create', async () => {
-    queue([Response.json({ data: { id: 9 } }, { status: 201 })])
+    queue([emptyList(), Response.json({ data: { id: 9 } }, { status: 201 })])
     await byosUpload()
     const calls = queue([new Response('{}', { status: 200 })])
 
@@ -366,13 +385,13 @@ describe('uploadToWebhook — known BYOS screen ids', () => {
   it('keeps ids separate per screen name and server', async () => {
     await learnScreenId()
 
-    let calls = queue([Response.json({ data: { id: 8 } }, { status: 201 })])
+    let calls = queue([emptyList(), Response.json({ data: { id: 8 } }, { status: 201 })])
     await byosUpload('other-screen')
-    expect(calls).toEqual(['POST /api/screens'])
+    expect(calls).toEqual(['GET /api/screens', 'POST /api/screens'])
 
-    calls = queue([Response.json({ data: { id: 3 } }, { status: 201 })])
+    calls = queue([emptyList(), Response.json({ data: { id: 3 } }, { status: 201 })])
     await byosUpload('test-screen', 'http://other.local/api/screens')
-    expect(calls).toEqual(['POST /api/screens'])
+    expect(calls).toEqual(['GET /api/screens', 'POST /api/screens'])
   })
 
   for (const status of [404, 422]) {
@@ -380,6 +399,7 @@ describe('uploadToWebhook — known BYOS screen ids', () => {
       await learnScreenId()
       const calls = queue([
         new Response('{"error":"Unable to find screen"}', { status }),
+        emptyList(),
         Response.json({ data: { id: 11 } }, { status: 201 }),
         new Response('{}', { status: 200 }),
       ])
@@ -389,8 +409,29 @@ describe('uploadToWebhook — known BYOS screen ids', () => {
 
       expect(calls).toEqual([
         'PATCH /api/screens/7',
+        'GET /api/screens',
         'POST /api/screens',
         'PATCH /api/screens/11',
+      ])
+    })
+
+    it(`updates the replacement id without POST when a known screen was recreated (${status})`, async () => {
+      await learnScreenId()
+      const calls = queue([
+        new Response('{"error":"Unable to find screen"}', { status }),
+        Response.json({ data: [{ id: 12, model_id: 1, label: 'Test', name: 'test-screen' }] }),
+        new Response('{}', { status: 200 }),
+        new Response('{}', { status: 200 }),
+      ])
+
+      await byosUpload()
+      await byosUpload()
+
+      expect(calls).toEqual([
+        'PATCH /api/screens/7',
+        'GET /api/screens',
+        'PATCH /api/screens/12',
+        'PATCH /api/screens/12',
       ])
     })
   }
