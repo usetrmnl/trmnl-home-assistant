@@ -455,6 +455,28 @@ describe('uploadToWebhook — known BYOS screen ids', () => {
     expect(calls).toEqual(['PATCH /api/screens/7', 'PATCH /api/screens/7'])
   })
 
+  for (const status of [401, 429]) {
+    it(`surfaces a refused screen lookup (${status}) without a POST`, async () => {
+      const calls = queue([
+        new Response('{"error":"refused"}', { status, headers: { 'Retry-After': '30' } }),
+      ])
+
+      const error = await byosUpload().catch((err: unknown) => err)
+
+      expect(error).toMatchObject({ status, retryAfterMs: 30_000 })
+      expect(calls).toEqual(['GET /api/screens'])
+    })
+  }
+
+  it('reports an unreachable server during the lookup without a POST', async () => {
+    const calls = queue([new Error('Unable to connect')])
+
+    const error = await byosUpload().catch((err: unknown) => err)
+
+    expect(error).toBeInstanceOf(WebhookConnectionError)
+    expect(calls).toEqual(['GET /api/screens'])
+  })
+
   it('reports a connection failure by host and keeps the id', async () => {
     await learnScreenId()
     const calls = queue([

@@ -122,7 +122,7 @@ describe('credential-safe webhook logs', () => {
       schedule.webhook_format!.byosConfig!.auth!.access_token = bearer
       const result = await executor.call(schedule)
       const expectedCalls = {
-        'list error': 3,
+        'list error': 4,
         'list failure': 3,
         'patch error': 8,
         'patch failure': 2,
@@ -132,7 +132,7 @@ describe('credential-safe webhook logs', () => {
       expect(result.webhook?.success).toBe(stage === 'patch success')
       expectSafeLogs()
       const expectedLog = {
-        'list error': 'Error finding screen',
+        'list error': 'webhook failed: WebhookConnectionError',
         'list failure': 'Failed to list screens: HTTP 503',
         'patch error': 'webhook failed: WebhookConnectionError',
         'patch failure': 'PATCH failed: HTTP 503',
