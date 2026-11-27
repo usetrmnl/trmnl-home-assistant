@@ -546,25 +546,47 @@ function isBrowserRelatedError(error: unknown): boolean {
   )
 }
 
+/** Longest a shutdown waits for captures under way to finish uploading */
+const SHUTDOWN_DRAIN_MS = 20000
+/** Last resort; stays under the add-on's 45 s stop timeout in config.yaml */
+const SHUTDOWN_FORCE_MS = 40000
+let shuttingDown = false
+
 /**
  * Graceful shutdown handler for SIGTERM and SIGINT signals.
+ *
+ * Order matters: captures under way finish first, because a BYOS server
+ * fetches the uploaded image back from this server while answering the
+ * upload. Then the server closes, then the browser (each close step has its
+ * own time limit, see Browser.cleanup).
  */
 async function gracefulShutdown(signal: string): Promise<void> {
+  if (shuttingDown) return
+  shuttingDown = true
   log.info`${signal} received, shutting down gracefully...`
 
-  scheduler.stop()
-
-  server.close(async () => {
-    log.info`HTTP server closed`
-    await browser.cleanup()
-    log.info`Browser cleaned up`
-    process.exit(0)
-  })
-
-  setTimeout(() => {
+  const forced = setTimeout(() => {
     log.error`Forced shutdown after timeout`
     process.exit(1)
-  }, 30000)
+  }, SHUTDOWN_FORCE_MS)
+
+  scheduler.stop()
+  if (!(await scheduler.drain(SHUTDOWN_DRAIN_MS))) {
+    log.info`Captures still running after ${SHUTDOWN_DRAIN_MS / 1000}s; stopping anyway`
+  }
+
+  await new Promise<void>((resolve) => {
+    server.close(() => resolve())
+    // Idle keep-alive connections would otherwise hold close() open (Node)
+    server.closeIdleConnections()
+  })
+  log.info`HTTP server closed`
+
+  await browser.shutdown()
+  log.info`Browser cleaned up`
+
+  clearTimeout(forced)
+  process.exit(0)
 }
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))

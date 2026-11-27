@@ -180,6 +180,8 @@ export interface BrowserDeps {
   processImage: typeof defaultProcessImage
   chromiumExecutable: string | undefined
   debugLogging: boolean
+  /** How long page.close() or browser.close() may take before cleanup moves on */
+  closeTimeoutMs: number
 }
 
 const defaultDeps: BrowserDeps = {
@@ -187,6 +189,26 @@ const defaultDeps: BrowserDeps = {
   processImage: defaultProcessImage,
   chromiumExecutable: defaultChromiumExecutable,
   debugLogging: defaultDebugLogging,
+  closeTimeoutMs: 5000,
+}
+
+/**
+ * Runs one close step, giving up after timeoutMs. Resolves false on timeout;
+ * a rejection still propagates.
+ */
+async function closeWithin(
+  step: () => Promise<void>,
+  timeoutMs: number,
+): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), timeoutMs)
+  })
+  try {
+    return await Promise.race([step().then(() => true as const), timedOut])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 // =============================================================================
@@ -204,6 +226,8 @@ export class Browser {
   #busy: boolean = false
   #pageErrorDetected: boolean = false
   #deps: BrowserDeps
+  /** Set by shutdown(): no new browser may be launched after it */
+  #shutDown: boolean = false
 
   // Cache last requested values to avoid unnecessary page updates
   #lastRequestedLang: string | undefined
@@ -260,15 +284,23 @@ export class Browser {
     this.#lastRequestedDarkMode = undefined
     this.#pageErrorDetected = false
 
-    // Close page first, then browser
+    // Close page first, then browser. Either can hang when stopping the app,
+    // so each gets a time limit; a browser that won't close is killed so it
+    // cannot hold up a restart.
+    const limitS = this.#deps.closeTimeoutMs / 1000
     try {
-      if (page) await page.close()
+      if (page && !(await closeWithin(() => page.close(), this.#deps.closeTimeoutMs))) {
+        browserLog.warn`Page did not close within ${limitS}s; closing the browser anyway`
+      }
     } catch (err) {
       browserLog.error`Error closing page during cleanup: ${err}`
     }
 
     try {
-      if (browser) await browser.close()
+      if (browser && !(await closeWithin(() => browser.close(), this.#deps.closeTimeoutMs))) {
+        browserLog.warn`Browser did not close within ${limitS}s; killing its process`
+        browser.process()?.kill('SIGKILL')
+      }
     } catch (err) {
       browserLog.error`Error closing browser during cleanup: ${err}`
     }
@@ -277,10 +309,20 @@ export class Browser {
   }
 
   /**
+   * Final cleanup when the app stops: closes the browser and refuses to
+   * launch another, so a capture still finishing can't start a new one.
+   */
+  async shutdown(): Promise<void> {
+    this.#shutDown = true
+    await this.cleanup()
+  }
+
+  /**
    * Gets or creates Puppeteer page instance.
    * Separates browser launch from page creation to support per-request page recycling.
    */
   async #getPage(): Promise<Page> {
+    if (this.#shutDown) throw new Error('Browser is shutting down')
     if (this.#page) return this.#page
 
     // Launch browser if needed (reused across requests)

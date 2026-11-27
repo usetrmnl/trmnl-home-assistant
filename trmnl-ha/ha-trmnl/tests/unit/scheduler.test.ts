@@ -18,6 +18,8 @@ import * as notifications from '../../lib/ha-notify.js'
 import { forgetRefusedRefreshTokens } from '../../lib/scheduler/byos-auth.js'
 import { captureFetch, restoreFetch } from '../helpers/fetch-mock.js'
 import { ScheduleExecutor } from '../../lib/scheduler/schedule-executor.js'
+import { JobManager } from '../../lib/scheduler/job-manager.js'
+import * as sleepModule from '../../lib/sleep.js'
 import type { Schedule } from '../../types/domain.js'
 
 /** A BYOS schedule whose stored tokens carry the given rotation stamp. */
@@ -237,5 +239,95 @@ describe('Scheduler Send Now', () => {
     await new Scheduler(async () => Buffer.from('unused')).executeNow(schedule.id)
 
     expect(call).toHaveBeenCalledWith(schedule, { force: true })
+  })
+})
+
+describe('Scheduler shutdown and drain', () => {
+  let scheduler: Scheduler | undefined
+  const spies: { mockRestore(): void }[] = []
+
+  afterEach(() => {
+    scheduler?.stop()
+    for (const spy of spies.splice(0)) spy.mockRestore()
+  })
+
+  async function startCapturingCallback(
+    executorCall: () => Promise<{ success: boolean; savedPath: string }>,
+  ): Promise<() => Promise<void>> {
+    const schedule = buildSchedule()
+    spies.push(spyOn(scheduleStore, 'loadSchedules').mockResolvedValue([schedule]))
+    let fire: () => Promise<void> = async () => {}
+    spies.push(
+      spyOn(JobManager.prototype, 'upsertJob').mockImplementation((_sched, cb) => {
+        fire = () => Promise.resolve(cb())
+        return true
+      }),
+      spyOn(ScheduleExecutor.prototype, 'call').mockImplementation(executorCall),
+    )
+    scheduler = new Scheduler(async () => Buffer.from('unused'))
+    scheduler.start()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    return fire
+  }
+
+  it('resolves drain immediately when nothing is running', async () => {
+    scheduler = new Scheduler(async () => Buffer.from('unused'))
+    scheduler.stop()
+
+    expect(await scheduler.drain(50)).toBe(true)
+  })
+
+  it('waits for a capture already under way to finish', async () => {
+    spies.push(spyOn(sleepModule, 'sleep').mockResolvedValue(undefined))
+    let finishRun: () => void = () => {}
+    const fire = await startCapturingCallback(
+      () => new Promise((resolve) => {
+        finishRun = () => resolve({ success: true, savedPath: '' })
+      }),
+    )
+
+    void fire()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    scheduler!.stop()
+
+    let drained = false
+    const draining = scheduler!.drain(500).then((ok) => {
+      drained = ok
+    })
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(drained).toBe(false)
+
+    finishRun()
+    await draining
+    expect(drained).toBe(true)
+  })
+
+  it('moves on once the drain timeout expires', async () => {
+    spies.push(spyOn(sleepModule, 'sleep').mockResolvedValue(undefined))
+    const fire = await startCapturingCallback(() => new Promise(() => {}))
+
+    void fire()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    scheduler!.stop()
+
+    expect(await scheduler!.drain(20)).toBe(false)
+  })
+
+  it('cuts short a jitter wait on stop without starting the capture', async () => {
+    spies.push(spyOn(Math, 'random').mockReturnValue(0.5))
+    spies.push(spyOn(sleepModule, 'sleep').mockImplementation(() => new Promise(() => {})))
+    let started = false
+    const fire = await startCapturingCallback(async () => {
+      started = true
+      return { success: true, savedPath: '' }
+    })
+
+    const run = fire()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    scheduler!.stop()
+    await run
+
+    expect(started).toBe(false)
+    expect(await scheduler!.drain(20)).toBe(true)
   })
 })
